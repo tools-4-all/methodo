@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Study Planner — Profilo</title>
   <link rel="stylesheet" href="./styles.css" />
+
 </head>
 
 <body>
@@ -16,8 +17,33 @@
         <p id="user-line" class="meta">—</p>
       </div>
       <div class="toolbar">
-        <a class="btn ghost" href="./app.html">Torna alla dashboard</a>
-        <button class="btn" id="logout-btn" type="button">Logout</button>
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+                <span>Dashboard</span>
+              </a>
+      
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+                <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -180,5 +206,44 @@
   </div>
 
   <script type="module" src="./app.js"></script>
+  <script>
+
+  // ===== MENU TOGGLE  =====
+    const menuBtn = document.getElementById("menu-btn");
+    const menuPanel = document.getElementById("menu-panel");
+
+    function openMenu(){
+    menuPanel.classList.remove("hidden");
+    menuBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeMenu(){
+    menuPanel.classList.add("hidden");
+    menuBtn.setAttribute("aria-expanded", "false");
+    }
+    function toggleMenu(){
+    const isOpen = !menuPanel.classList.contains("hidden");
+    isOpen ? closeMenu() : openMenu();
+    }
+
+    menuBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMenu();
+    });
+
+    // click fuori -> chiudi
+    document.addEventListener("click", (e) => {
+    if (!menuPanel.classList.contains("hidden")) closeMenu();
+    });
+
+    // click dentro panel -> non chiudere
+    menuPanel.addEventListener("click", (e) => e.stopPropagation());
+
+    // ESC -> chiudi
+    document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+    });
+
+  </script>
 </body>
 </html>

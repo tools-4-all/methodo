@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Contattaci</title>
+  <link rel="stylesheet" href="./styles.css?v=12" />
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- Header coerente col sito -->
+    <header class="header">
+      <div class="title">
+        <h1>Contattaci</h1>
+        <p>Supporto, richieste e feedback prodotto.</p>
+      </div>
+
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+                <span>Dashboard</span>
+              </a>
+
+            <a class="menuItem" role="menuitem" href="./onboarding.html">
+              <span>Modifica profilo</span>
+            </a>
+      
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+                <span>Simulazioni</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid">
+
+      <!-- Contatto diretto -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Contatto diretto</h2>
+          <div class="meta">Risposta tipica: 24–72h</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <form id="contact-form" class="form">
+          <label>Email</label>
+          <input type="email" name="email" required placeholder="nome@email.com" />
+
+          <label>Oggetto</label>
+          <input type="text" name="subject" required placeholder="Motivo del contatto" />
+
+          <label>Messaggio</label>
+          <input type="text" name="message" required placeholder="Scrivi qui cosa ti serve (chiaro e conciso)" />
+
+          <button class="btn primary" type="submit">Invia</button>
+          <div id="contact-status" class="error"></div>
+        </form>
+
+        <div class="divider"></div>
+
+
+      </section>
+
+      <!-- Bug / suggerimenti -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Riporta bug o suggerimenti</h2>
+          <div class="meta">Aiuta a migliorare Methodo</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <form id="feedback-form" class="form">
+          <label>Tipo</label>
+          <select name="type" required>
+            <option value="bug">Bug</option>
+            <option value="suggestion">Suggerimento</option>
+            <option value="ux">Problema di usabilità</option>
+            <option value="other">Altro</option>
+          </select>
+
+          <label>Descrizione</label>
+          <input type="text" name="details" required placeholder="Descrivi in modo preciso: passi + risultato" />
+
+          <label>Pagina</label>
+          <input type="text" name="page" placeholder="Es: /simulations.html (auto se lasci vuoto)" />
+
+          <label style="display:flex; gap:10px; align-items:center;">
+            <input type="checkbox" name="canContact" style="width:auto; margin:0; transform: scale(1.1);" />
+            <span style="color: rgba(255,255,255,.78); font-size: 12px;">
+              Potete ricontattarmi per chiarimenti
+            </span>
+          </label>
+
+          <button class="btn" type="submit">Invia feedback</button>
+          <div id="feedback-status" class="error"></div>
+        </form>
+
+        <div class="divider"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <script>
+    // micro-logic: coerente col tuo stile (niente modali nuove)
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(el, msg, ok=false){
+      el.textContent = msg || "";
+      el.style.color = ok ? "rgba(34,197,94,.95)" : "rgba(251,113,133,.95)";
+    }
+
+    function getPageFallback(){
+      return location.pathname.split("/").pop() || "/";
+    }
+
+    $("contact-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      console.log("contact", data);
+      setStatus($("contact-status"), "Inviato ✓", true);
+      e.target.reset();
+    });
+
+    $("feedback-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      if(!fd.get("page")) fd.set("page", getPageFallback());
+      const data = Object.fromEntries(fd.entries());
+      console.log("feedback", data);
+      setStatus($("feedback-status"), "Feedback ricevuto ✓", true);
+      e.target.reset();
+    });
+
+    // ===== MENU TOGGLE  =====
+    const menuBtn = document.getElementById("menu-btn");
+    const menuPanel = document.getElementById("menu-panel");
+
+    function openMenu(){
+    menuPanel.classList.remove("hidden");
+    menuBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeMenu(){
+    menuPanel.classList.add("hidden");
+    menuBtn.setAttribute("aria-expanded", "false");
+    }
+    function toggleMenu(){
+    const isOpen = !menuPanel.classList.contains("hidden");
+    isOpen ? closeMenu() : openMenu();
+    }
+
+    menuBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMenu();
+    });
+
+    // click fuori -> chiudi
+    document.addEventListener("click", (e) => {
+    if (!menuPanel.classList.contains("hidden")) closeMenu();
+    });
+
+    // click dentro panel -> non chiudere
+    menuPanel.addEventListener("click", (e) => e.stopPropagation());
+
+    // ESC -> chiudi
+    document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+    });
+
+  </script>
+
+</body>
+</html>

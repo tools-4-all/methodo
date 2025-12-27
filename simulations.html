@@ -15,24 +15,30 @@
       </div>
 
       <div class="toolbar">
-        <a class="btn ghost" href="./app.html">Dashboard</a>
-
-        <!-- stesso menu (riusa il tuo) -->
         <div class="menu" id="menu">
           <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
             <span class="menuIcon">☰</span>
             <span class="menuText">Menu</span>
           </button>
+      
           <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
-            <a class="menuItem" role="menuitem" href="./onboarding.html">
-              <span>Modifica profilo</span><span class="menuHint">↵</span>
-            </a>
             <a class="menuItem" role="menuitem" href="./app.html">
-              <span>Dashboard</span><span class="menuHint">D</span>
+                <span>Dashboard</span>
+              </a>
+      
+
+            <a class="menuItem" role="menuitem" href="./onboarding.html">
+                <span>Modifica Profilo</span>
             </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
             <div class="menuSep"></div>
+      
             <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
-              <span>Logout</span><span class="menuHint">⎋</span>
+              <span>Logout</span>
             </button>
           </div>
         </div>
