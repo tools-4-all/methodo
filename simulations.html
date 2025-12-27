@@ -61,7 +61,7 @@
             <div class="paramHead">
               <div>
                 <div class="paramTitle">Base</div>
-                <div class="paramDesc">Dinamica della readiness nel tempo.</div>
+                <div class="paramDesc">Dinamica della preparazione nel tempo.</div>
               </div>
               <span class="pillLite">Baseline</span>
             </div>
@@ -112,7 +112,7 @@
       
             <div class="btnRow">
               <button class="btn primary" id="run-sim" type="button">Esegui</button>
-              <button class="btn" id="run-mc" type="button">Monte Carlo (20)</button>
+              <!-- <button class="btn" id="run-mc" type="button">Monte Carlo (20)</button> -->
             </div>
           </div>
       
@@ -121,15 +121,15 @@
             <div class="paramHead">
               <div>
                 <div class="paramTitle">What-if</div>
-                <div class="paramDesc">Confronta scenario vs baseline (linee tratteggiate).</div>
+                <div class="paramDesc">Confronta scenario vs baseline</div>
               </div>
               <span class="pillLite">Scenario</span>
             </div>
       
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Δ ore settimanali</div>
-                <div class="paramHelp">Aggiunge/toglie tempo su Lun–Sab.</div>
+                <div>ore settimanali aggiuntive</div>
+                <div class="paramHelp">Aggiunge/toglie tempo su Lun–Sab</div>
               </div>
               <div class="paramControl">
                 <input id="delta-hours" class="range" type="range" min="-10" max="30" step="0.5" value="0" />
@@ -139,8 +139,8 @@
       
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Goal mode</div>
-                <div class="paramHelp">Sovrascrive l’obiettivo (opzionale).</div>
+                <div>Obiettivo di studio</div>
+                <div class="paramHelp"></div>
               </div>
               <div class="paramControl">
                 <select id="goal-override" class="select">
@@ -155,7 +155,7 @@
             <div class="paramRow">
               <div class="paramLabel">
                 <div>Durata task</div>
-                <div class="paramHelp">Per future versioni (ora solo override profilo).</div>
+                <div class="paramHelp"></div>
               </div>
               <div class="paramControl">
                 <input id="task-override" class="num" type="number" min="15" max="120" step="5" placeholder="(vuoto)" />
@@ -191,13 +191,15 @@
       
             <div class="btnRow">
               <button class="btn primary" id="run-whatif" type="button">Confronta</button>
-              <button class="btn" id="run-whatif-mc" type="button">What-if MC (20)</button>
+              <!-- <button class="btn" id="run-whatif-mc" type="button">What-if MC (20)</button> -->
             </div>
       
+            <!--
             <div class="statusBox">
               <div class="statusTitle">Stato</div>
               <div class="statusText" id="sim-status">—</div>
             </div>
+            -->
           </div>
       
         </div>
@@ -207,7 +209,7 @@
         <div class="callout">
           <h3>Come leggerlo</h3>
           <p>
-            Readiness 0–100: cresce con lo studio e scende con decay/rumore.
+            Preparazione 0–100: cresce con lo studio e scende con decay/rumore.
             Linee piene = baseline, tratteggio = scenario.
           </p>
         </div>
@@ -217,7 +219,7 @@
       <!-- Chart -->
       <section class="card">
         <div class="cardHeader">
-          <h2>Readiness nel tempo</h2>
+          <h2>Preparazione nel tempo</h2>
           <div class="meta">una linea per esame</div>
         </div>
 
