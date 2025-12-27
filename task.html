@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Task</title>
+  <link rel="stylesheet" href="./styles.css" />
+
+  <style>
+    /* === TIMER RING FIX DEFINITIVO === */
+
+    .pie{
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      position: relative;
+      flex-shrink: 0;
+
+      /* anello esterno ROSSO */
+      background:
+        radial-gradient(circle at center, #ffffff 68%, transparent 69%),
+        conic-gradient(
+          #dc2626 0deg,           /* rosso */
+          #dc2626 var(--angle, 0deg),
+          #e5e7eb var(--angle, 0deg),
+          #e5e7eb 360deg
+        );
+    }
+
+    /* centro ASSOLUTO, NON FLEX */
+    .pieCenter{
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .piePct{
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+      margin: 0;
+      padding: 0;
+      color: #111827;
+    }
+
+    .pieLbl{
+      font-size: 12px;
+      margin-top: 4px;
+      color: #6b7280;
+      line-height: 1;
+    }
+
+    .barWrap{
+      margin-top: 14px;
+      height: 10px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+
+    .bar{
+      height: 100%;
+      width: 0%;
+      background: #dc2626; /* rosso coerente */
+      border-radius: 999px;
+      transition: width 120ms linear;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <header class="header">
+      <div class="title">
+        <h1 id="task-title">Task</h1>
+        <p id="task-subtitle" class="muted">—</p>
+      </div>
+
+      <div class="toolbar">
+        <a class="btn ghost" href="./app.html">Torna alla dashboard</a>
+
+        <div id="menu-panel" class="menuPanel hidden">
+          <button class="menuItem" id="go-today">Vai a oggi</button>
+          <button class="menuItem" id="regen-week-menu">Rigenera settimana</button>
+          <div class="menuSep"></div>
+          <button class="menuItem danger" id="logout-btn">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="taskGrid">
+      <!-- TIMER -->
+      <section class="card taskTimerCard">
+
+        <div class="timerViz">
+          <div id="pie" class="pie" style="--angle:0deg">
+            <div class="pieCenter">
+              <div id="piePct" class="piePct">0%</div>
+              <div id="pieLbl" class="pieLbl">pausa</div>
+            </div>
+          </div>
+
+          <div class="timerText">
+            <div class="muted small">Tempo rimanente</div>
+            <div id="timer-remaining" class="taskTimerBig">—</div>
+            <div id="timer-meta" class="muted small">—</div>
+          </div>
+        </div>
+
+        <div class="barWrap">
+          <div id="timer-bar" class="bar"></div>
+        </div>
+
+        <div class="taskTimerActions">
+          <button class="btn" id="timer-start">Start</button>
+          <button class="btn ghost" id="timer-pause">Pausa</button>
+          <button class="btn ghost" id="timer-reset">Reset</button>
+        </div>
+
+        <div class="taskTimerActions">
+          <button class="btn" id="mark-done">Segna completato</button>
+          <button class="btn ghost" id="mark-skip">Sotto target</button>
+        </div>
+
+        <p id="task-status" class="muted small" style="margin-top:10px">—</p>
+      </section>
+
+      <!-- INFO -->
+      <section class="card taskInfoCard">
+        <h2>Dettagli</h2>
+
+        <div class="infoRow"><div class="muted small">Esame</div><div id="info-exam">—</div></div>
+        <div class="infoRow"><div class="muted small">Task</div><div id="info-label">—</div></div>
+        <div class="infoRow"><div class="muted small">Tipo</div><div id="info-type">—</div></div>
+        <div class="infoRow"><div class="muted small">Pianificato</div><div id="info-minutes">—</div></div>
+        <div class="infoRow"><div class="muted small">Data</div><div id="info-date">—</div></div>
+      </section>
+    </main>
+
+    <div id="dbg" class="muted small"></div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
