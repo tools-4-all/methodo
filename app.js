@@ -913,7 +913,7 @@ function renderDashboard(plan, exams, profile) {
     const badge = readinessBadge(pct);
     safeText(
       "status-line",
-      `Prossimo: ${next.name}. Readiness stimata ${pct}% (${badge.text}). Se vuoi salire: aumenta ore o riduci esami attivi.`
+      `Prossimo: ${next.name}. Preparazione stimata ${pct}% (${badge.text}). Se vuoi salire: aumenta ore o riduci esami attivi.`
     );
   }
 }
