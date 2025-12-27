@@ -1107,3 +1107,44 @@ color: rgba(255,255,255,.92);
 .popTipBody{
   color: rgba(255,255,255,.88);
 }
+
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: min(560px, calc(100% - 24px));
+}
+
+.toast.hidden { display: none; }
+
+.toastInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  backdrop-filter: blur(10px);
+}
+
+.toastMsg {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.toastClose {
+  border: 0;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.toastClose:hover { background: rgba(255,255,255,0.18); }

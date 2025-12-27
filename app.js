@@ -1,21 +1,24 @@
-// app.js (single-file, GitHub Pages-friendly, Firebase via CDN)
+// app.js (single-file, GitHub Pages-friendly)
 // Works with: index.html, onboarding.html, app.html, task.html
 // Requires: planner.js (ES module) for generateWeeklyPlan/startOfWeekISO
+// Auth moved to: auth.js
 
 console.log("app.js loaded", location.href);
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  sendEmailVerification,
-  reload,
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+  auth,
+  db,
+  watchAuth,
+  loginWithEmail,
+  signupWithEmail,
+  logout,
+  ensureVerifiedOrBlock,
+  sendVerificationOrThrow,
+} from "./auth.js";
+
+import { reload } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
 import {
-  getFirestore,
   doc,
   getDoc,
   setDoc,
@@ -28,21 +31,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
-
-// ----------------- Firebase init -----------------
-const firebaseConfig = {
-  apiKey: "AIzaSyCh32lo8dxpQ3u0xf6FnadGtKYo5-kNDRk",
-  authDomain: "study-planner-80c7a.firebaseapp.com",
-  projectId: "study-planner-80c7a",
-  storageBucket: "study-planner-80c7a.firebasestorage.app",
-  messagingSenderId: "551672760618",
-  appId: "1:551672760618:web:b496e32ff8aea43d737653",
-  measurementId: "G-VSNL2PK1KN",
-};
-
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const db = getFirestore(fbApp);
 
 // ----------------- Utils -----------------
 function qs(id) {
@@ -89,34 +77,88 @@ function fmtMMSS(sec) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// Base URL robusta per GitHub Pages + path con repo
-function getBaseUrl(file = "index.html") {
-  const basePath = location.pathname.replace(/\/[^/]*$/, "/");
-  return `${location.origin}${basePath}${file}`;
-}
+// Toast (popup leggero)
+function showToast(msg, ms = 4500) {
+  const box = document.getElementById("toast");
+  const text = document.getElementById("toast-msg");
+  const close = document.getElementById("toast-close");
+  if (!box || !text) return;
 
-// ----------------- Email verification helpers -----------------
-async function sendVerificationOrThrow(user) {
-  await sendEmailVerification(user, { url: getBaseUrl("index.html") });
-}
+  text.textContent = msg ?? "";
+  box.classList.remove("hidden");
 
-async function ensureVerifiedOrBlock(user, setError) {
-  await reload(user);
-  if (user.emailVerified) return true;
+  const hide = () => box.classList.add("hidden");
 
-  try {
-    await sendVerificationOrThrow(user);
-  } catch (e) {
-    console.error("sendEmailVerification failed", e);
+  if (close && !close.dataset.bound) {
+    close.dataset.bound = "1";
+    close.addEventListener("click", hide);
   }
 
-  await signOut(auth);
-  if (typeof setError === "function") {
-    setError(
-      "Email non verificata. Ti ho (ri)inviato la mail di verifica. Controlla anche spam."
-    );
+  window.clearTimeout(showToast._t);
+  showToast._t = window.setTimeout(hide, ms);
+}
+
+// ----------------- Firestore helpers -----------------
+async function ensureUserDoc(user) {
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      email: user.email ?? "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
-  return false;
+}
+
+async function getProfile(uid) {
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data() : null;
+}
+
+async function setProfile(uid, data) {
+  const ref = doc(db, "users", uid);
+  await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+}
+
+async function listExams(uid) {
+  const col = collection(db, "users", uid, "exams");
+  const snap = await getDocs(col);
+  const exams = [];
+  snap.forEach((d) => exams.push({ id: d.id, ...d.data() }));
+  exams.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return exams;
+}
+
+async function addExam(uid, exam) {
+  const col = collection(db, "users", uid, "exams");
+  const ref = await addDoc(col, {
+    ...exam,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+async function removeExam(uid, examId) {
+  const ref = doc(db, "users", uid, "exams", examId);
+  await deleteDoc(ref);
+}
+
+async function saveWeeklyPlan(uid, weekStartISO, plan) {
+  const ref = doc(db, "users", uid, "plans", weekStartISO);
+  await setDoc(
+    ref,
+    { weekStart: weekStartISO, plan, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
+async function loadWeeklyPlan(uid, weekStartISO) {
+  const ref = doc(db, "users", uid, "plans", weekStartISO);
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data()?.plan : null;
 }
 
 // ----------------- Stime prodotto -----------------
@@ -218,69 +260,6 @@ function getStoredTaskPayload(tid) {
   return null;
 }
 
-// ----------------- Firestore helpers -----------------
-async function ensureUserDoc(user) {
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      email: user.email ?? "",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
-}
-
-async function getProfile(uid) {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-  return snap.exists() ? snap.data() : null;
-}
-
-async function setProfile(uid, data) {
-  const ref = doc(db, "users", uid);
-  await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
-}
-
-async function listExams(uid) {
-  const col = collection(db, "users", uid, "exams");
-  const snap = await getDocs(col);
-  const exams = [];
-  snap.forEach((d) => exams.push({ id: d.id, ...d.data() }));
-  exams.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return exams;
-}
-
-async function addExam(uid, exam) {
-  const col = collection(db, "users", uid, "exams");
-  const ref = await addDoc(col, {
-    ...exam,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
-}
-
-async function removeExam(uid, examId) {
-  const ref = doc(db, "users", uid, "exams", examId);
-  await deleteDoc(ref);
-}
-
-async function saveWeeklyPlan(uid, weekStartISO, plan) {
-  const ref = doc(db, "users", uid, "plans", weekStartISO);
-  await setDoc(
-    ref,
-    { weekStart: weekStartISO, plan, updatedAt: serverTimestamp() },
-    { merge: true }
-  );
-}
-
-async function loadWeeklyPlan(uid, weekStartISO) {
-  const ref = doc(db, "users", uid, "plans", weekStartISO);
-  const snap = await getDoc(ref);
-  return snap.exists() ? snap.data()?.plan : null;
-}
-
 async function reconstructTaskPayloadFromFirestore(user, tid) {
   const weekStart = startOfWeekISO(new Date());
   const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(
@@ -332,7 +311,7 @@ function mountIndex() {
   const signupErr = qs("signup-error");
 
   const loginBtn = qs("login-submit");
-  const signupBtn = qs("signup-submit");
+  const signupBtn = qs("signup-submit"); // potrebbe non esserci, ok
 
   const clearErrors = () => {
     setText(loginErr, "");
@@ -369,7 +348,7 @@ function mountIndex() {
     }
 
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      const cred = await loginWithEmail(email, pass);
       const ok = await ensureVerifiedOrBlock(cred.user, (msg) => setText(loginErr, msg));
       if (!ok) return;
       await routeAfterLogin(cred.user);
@@ -394,10 +373,20 @@ function mountIndex() {
     }
 
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const cred = await signupWithEmail(email, pass);
+
+      // invia mail verifica
       await sendVerificationOrThrow(cred.user);
-      await signOut(auth);
-      setText(signupErr, "Ti ho inviato una mail di verifica. Aprila e poi fai login.");
+
+      // popup immediato
+      showToast("Ti ho inviato una mail di verifica. Controlla inbox e spam.");
+
+      // logout: niente accesso finché non verifica
+      await logout();
+
+      // fallback messaggio inline
+      setText(signupErr, "Email inviata. Verifica e poi fai login.");
+
       activateTab("login");
     } catch (err) {
       console.error(err);
@@ -418,12 +407,15 @@ function mountIndex() {
     e.preventDefault();
     await doLogin();
   });
-  signupBtn?.addEventListener("click", async (e) => {
+
+  // Se esiste un bottone signup con id, ok; altrimenti il submit già copre
+  signupBtn?.addEventListener?.("click", async (e) => {
     e.preventDefault();
     await doSignup();
   });
 
-  onAuthStateChanged(auth, async (user) => {
+  // auto-route se già loggato
+  watchAuth(async (user) => {
     if (!user) return;
     const ok = await ensureVerifiedOrBlock(user, (msg) => setText(loginErr, msg));
     if (!ok) return;
@@ -434,7 +426,7 @@ function mountIndex() {
 // ----------------- ONBOARDING -----------------
 function mountOnboarding() {
   qs("logout-btn")?.addEventListener("click", async () => {
-    await signOut(auth);
+    await logout();
     window.location.assign("./index.html");
   });
 
@@ -508,7 +500,7 @@ function mountOnboarding() {
     });
   }
 
-  onAuthStateChanged(auth, async (user) => {
+  watchAuth(async (user) => {
     if (!user) {
       window.location.assign("./index.html");
       return;
@@ -516,7 +508,7 @@ function mountOnboarding() {
 
     await reload(user);
     if (!user.emailVerified) {
-      await signOut(auth);
+      await logout();
       window.location.assign("./index.html");
       return;
     }
@@ -658,11 +650,11 @@ function mountApp() {
   setupMenu();
 
   document.getElementById("logout-btn")?.addEventListener("click", async () => {
-    await signOut(auth);
+    await logout();
     window.location.assign("./index.html");
   });
 
-  onAuthStateChanged(auth, async (user) => {
+  watchAuth(async (user) => {
     try {
       if (!user) {
         dbg("NO USER -> redirect index");
@@ -677,7 +669,7 @@ function mountApp() {
         } catch (e) {
           console.error("sendEmailVerification failed", e);
         }
-        await signOut(auth);
+        await logout();
         window.location.assign("./index.html");
         return;
       }
@@ -718,13 +710,11 @@ function mountApp() {
       });
 
       document.getElementById("mark-today-done")?.addEventListener("click", async () => {
-        document.getElementById("status-line").textContent =
-          "Segnato: oggi completato (MVP).";
+        document.getElementById("status-line").textContent = "Segnato: oggi completato (MVP).";
       });
 
       document.getElementById("mark-today-less")?.addEventListener("click", async () => {
-        document.getElementById("status-line").textContent =
-          "Segnato: oggi sotto target (MVP).";
+        document.getElementById("status-line").textContent = "Segnato: oggi sotto target (MVP).";
       });
     } catch (e) {
       console.error(e);
@@ -754,13 +744,9 @@ function renderDashboard(plan, exams, profile) {
   );
   safeText("today-meta", todayISO);
 
-  const todayDay =
-    plan.days?.find((d) => d.dateISO === todayISO) || plan.days?.[0] || null;
+  const todayDay = plan.days?.find((d) => d.dateISO === todayISO) || plan.days?.[0] || null;
 
-  const todayTotal = (todayDay?.tasks || []).reduce(
-    (a, t) => a + Number(t.minutes || 0),
-    0
-  );
+  const todayTotal = (todayDay?.tasks || []).reduce((a, t) => a + Number(t.minutes || 0), 0);
   safeText(
     "today-pill",
     `Target oggi: ${Math.round(todayTotal)} min · ${Math.round((todayTotal / 60) * 10) / 10}h`
@@ -811,7 +797,6 @@ function renderDashboard(plan, exams, profile) {
         </div>
       `;
 
-      // ✅ checkbox cliccabile: toggle completed senza aprire task page
       const chk = row.querySelector(".taskChk");
       chk?.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -822,7 +807,6 @@ function renderDashboard(plan, exams, profile) {
         } catch {}
       });
 
-      // click riga -> apre task page
       row.addEventListener("click", () => {
         openTaskPage({
           taskId,
@@ -952,7 +936,7 @@ function mountTask() {
   }
 
   document.getElementById("logout-btn")?.addEventListener("click", async () => {
-    await signOut(auth);
+    await logout();
     window.location.assign("./index.html");
   });
 
@@ -1017,7 +1001,6 @@ function mountTask() {
 
     st.plannedSec = plannedSec;
 
-    // ✅ sync iniziale: se dashboard l'ha marcata done, riflettilo anche qui
     try {
       if (localStorage.getItem(`sp_task_done_${tid}`) === "1") st.done = true;
     } catch {}
@@ -1058,11 +1041,6 @@ function mountTask() {
       const pieLbl = document.getElementById("pieLbl");
       if (piePct) piePct.textContent = `${pct}%`;
       if (pieLbl) pieLbl.textContent = st.running ? "in corso" : "pausa";
-
-      const status = document.getElementById("task-status");
-      if (status) {
-        
-      }
     }
 
     function tick() {
@@ -1103,7 +1081,6 @@ function mountTask() {
 
       saveState(st);
 
-      // ✅ reset: togli completed in dashboard
       try {
         localStorage.removeItem(`sp_task_done_${tid}`);
       } catch {}
@@ -1115,7 +1092,6 @@ function mountTask() {
       }
     }
 
-    // ✅ MODIFICA 1: markDone salva la spunta per la dashboard
     function markDone() {
       st.done = true;
       st.skipped = false;
@@ -1128,7 +1104,6 @@ function mountTask() {
       renderTimer();
     }
 
-    // ✅ MODIFICA 2: sotto target rimuove la spunta
     function markSkip() {
       st.skipped = true;
       st.done = false;
@@ -1154,7 +1129,6 @@ function mountTask() {
       saveState(st);
       tick();
     }
-
   };
 
   // 1) storage
@@ -1166,7 +1140,7 @@ function mountTask() {
 
   // 2) ricostruzione
   dbg("Payload non trovato in storage -> provo ricostruzione...");
-  onAuthStateChanged(auth, async (user) => {
+  watchAuth(async (user) => {
     try {
       if (!user) {
         dbg("Non sei loggato. Torna alla dashboard.");
@@ -1191,7 +1165,9 @@ function mountTask() {
         } catch {}
         bootWithPayload(rebuilt);
       } else {
-        dbg("Non trovo il task nel piano salvato (settimana corrente). Rigenera o riapri dalla dashboard.");
+        dbg(
+          "Non trovo il task nel piano salvato (settimana corrente). Rigenera o riapri dalla dashboard."
+        );
         const h = document.getElementById("task-title");
         const sub = document.getElementById("task-subtitle");
         if (h) h.textContent = "Task non trovata";
