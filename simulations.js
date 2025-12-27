@@ -79,6 +79,137 @@ async function listExams(uid){
   return exams;
 }
 
+
+// ---------------- Info popovers (auto from .paramHelp) ----------------
+function setupInfoPopovers(){
+    // Create a single shared popover (lightweight)
+    let tip = document.getElementById("popTip");
+    if(!tip){
+      tip = document.createElement("div");
+      tip.id = "popTip";
+      tip.className = "popTip hidden";
+      tip.setAttribute("role", "dialog");
+      tip.setAttribute("aria-modal", "false");
+      tip.innerHTML = `
+        <div class="popTipTitle" id="popTipTitle"></div>
+        <div class="popTipBody" id="popTipBody"></div>
+      `;
+      document.body.appendChild(tip);
+    }
+  
+    const titleEl = tip.querySelector("#popTipTitle");
+    const bodyEl  = tip.querySelector("#popTipBody");
+  
+    let anchorBtn = null;
+  
+    const close = ()=>{
+      tip.classList.add("hidden");
+      if(anchorBtn) anchorBtn.setAttribute("aria-expanded", "false");
+      anchorBtn = null;
+    };
+  
+    const place = (btn)=>{
+      const r = btn.getBoundingClientRect();
+      const pad = 10;
+  
+      // measure (need visible)
+      tip.classList.remove("hidden");
+      const tr = tip.getBoundingClientRect();
+  
+      // prefer below-right, fallback above if needed
+      let x = r.left;
+      let y = r.bottom + 8;
+  
+      if(x + tr.width > window.innerWidth - pad) x = window.innerWidth - pad - tr.width;
+      if(x < pad) x = pad;
+  
+      if(y + tr.height > window.innerHeight - pad){
+        y = r.top - tr.height - 8;
+      }
+      if(y < pad) y = pad;
+  
+      tip.style.left = `${Math.round(x)}px`;
+      tip.style.top  = `${Math.round(y)}px`;
+    };
+  
+    const openFor = (btn, title, text)=>{
+      if(anchorBtn === btn && !tip.classList.contains("hidden")){
+        close();
+        return;
+      }
+      anchorBtn = btn;
+      btn.setAttribute("aria-expanded", "true");
+  
+      titleEl.textContent = title || "Info";
+      bodyEl.textContent  = text || "—";
+  
+      place(btn);
+    };
+  
+    // Auto-generate info buttons from existing .paramHelp
+    const rows = document.querySelectorAll(".paramRow");
+    rows.forEach(row=>{
+      const label = row.querySelector(".paramLabel");
+      const help = row.querySelector(".paramHelp");
+      if(!label || !help) return;
+  
+      const helpText = help.textContent.trim();
+      if(!helpText) return;
+  
+      // Title: first child text inside paramLabel (your markup has <div>Title</div> then <div class=paramHelp>)
+      const titleNode = label.querySelector("div:first-child");
+      const title = titleNode?.textContent?.trim() || "Info";
+  
+      // Avoid double insertion
+      if(label.querySelector(".infoBtn")) return;
+  
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "infoBtn";
+      btn.textContent = "i";
+      btn.setAttribute("aria-label", `Info: ${title}`);
+      btn.setAttribute("aria-expanded", "false");
+  
+      // Put the button next to the title line
+      // We want it inside the first <div> of label (the title row)
+      if(titleNode){
+        titleNode.appendChild(btn);
+      }else{
+        label.appendChild(btn);
+      }
+  
+      // Hide inline help (we will use it in popover)
+      help.classList.add("isCaptured");
+  
+      btn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        openFor(btn, title, helpText);
+      });
+    });
+  
+    // Close on outside click
+    document.addEventListener("click", (e)=>{
+      if(tip.classList.contains("hidden")) return;
+      if(anchorBtn && (anchorBtn.contains(e.target) || tip.contains(e.target))) return;
+      close();
+    });
+  
+    // Close on ESC
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape") close();
+    });
+  
+    // Reposition on scroll/resize if open
+    window.addEventListener("resize", ()=>{
+      if(!tip.classList.contains("hidden") && anchorBtn) place(anchorBtn);
+    }, { passive:true });
+  
+    window.addEventListener("scroll", ()=>{
+      if(!tip.classList.contains("hidden") && anchorBtn) place(anchorBtn);
+    }, { passive:true });
+  }
+  
 // ---------------- Utils ----------------
 function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
 
@@ -486,6 +617,7 @@ function populateSelect(selectEl, exams){
 // ---------------- Main ----------------
 window.addEventListener("DOMContentLoaded", ()=>{
   setupMenu();
+  setupInfoPopovers();
 
   onAuthStateChanged(auth, async (user)=>{
     setupSimUI();
