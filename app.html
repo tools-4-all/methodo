@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Dashboard</title>
+  <link rel="stylesheet" href="./styles.css?v=11" />
+
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Dashboard</h1>
+        <p id="user-line">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./onboarding.html">
+              <span>Modifica profilo</span>
+            </a>
+      
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+                <span>Simulazioni</span>
+            </a>
+              
+      
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+    </header>
+
+    <main class="grid">
+
+      <!-- LEFT -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Oggi</h2>
+          <div class="meta" id="today-meta">—</div>
+        </div>
+
+        <div class="todayTop">
+          <span class="pill" id="today-pill">—</span>
+          <div class="toolbar">
+            <button class="btn tiny" id="mark-today-done" type="button">Ho fatto tutto</button>
+            <button class="btn tiny" id="mark-today-less" type="button">Ho fatto meno</button>
+            <button class="btn tiny" id="regen-week" type="button">Rigenera</button>
+          </div>
+        </div>
+
+        <div id="today-tasks" class="tasks"></div>
+
+        <div class="divider"></div>
+
+        <div class="callout">
+          <h3>Stima</h3>
+          <p id="status-line">—</p>
+        </div>
+      </section>
+
+      <!-- RIGHT -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Settimana</h2>
+          <div class="meta" id="week-meta">—</div>
+        </div>
+
+        <div id="week-summary" class="weekSummary"></div>
+
+        <div class="divider"></div>
+
+        <div class="cardHeader">
+          <h2>Esami</h2>
+          <div class="meta">readiness stimata</div>
+        </div>
+
+        <div id="exam-cards" class="examGrid"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Profilo</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="container">
+
+    <header class="header">
+      <div class="title">
+        <h1>Profilo</h1>
+        <p id="user-line" class="meta">—</p>
+      </div>
+      <div class="toolbar">
+        <a class="btn ghost" href="./app.html">Torna alla dashboard</a>
+        <button class="btn" id="logout-btn" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- LEFT: Profilo -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Impostazioni</h2>
+          <div class="meta">Obiettivo, carico e disponibilità</div>
+        </div>
+
+        <div class="form cleanForm">
+
+          <!-- Blocchi “puliti” -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Obiettivo</h3>
+              <p class="meta">Influenza quanto “spingi” sul piano</p>
+            </div>
+
+            <div class="formRow">
+              <label for="goal-mode">Modalità</label>
+              <select id="goal-mode">
+                <option value="pass">Passare (minimo efficace)</option>
+                <option value="good" selected>Buon voto (standard)</option>
+                <option value="top">Top (massimizza)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Carico di studio</h3>
+              <p class="meta">Quanto vuoi studiare ogni settimana</p>
+            </div>
+
+            <div class="formRow">
+              <label for="weekly-hours">Ore/settimana</label>
+              <div class="inputWithSuffix">
+                <input id="weekly-hours" type="number" min="1" max="80" step="1" value="12" />
+                <span class="suffix">h</span>
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="task-minutes">Durata task</label>
+              <div class="inputWithSuffix">
+                <select id="task-minutes">
+                  <option value="25">25</option>
+                  <option value="35" selected>35</option>
+                  <option value="45">45</option>
+                  <option value="60">60</option>
+                </select>
+                <span class="suffix">min</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Disponibilità settimanale</h3>
+              <p class="meta">Quanti minuti massimi puoi dedicare ogni giorno</p>
+            </div>
+
+            <!-- App.js probabilmente popola qui -->
+            <div class="weekWrap">
+              <div id="day-minutes" class="weekGrid"></div>
+              <p class="meta hint">
+                Suggerimento: metti valori “realistici”. Se esageri, il piano diventa rumoroso e difficile da seguire.
+              </p>
+            </div>
+
+            <p class="error" id="profile-error"></p>
+            <p class="meta ok" id="profile-saved"></p>
+
+            <div class="toolbar" style="justify-content:flex-end">
+              <button class="btn primary" id="save-profile" type="button">Salva profilo</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- RIGHT: Esami -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Esami</h2>
+          <div class="meta">Aggiungi e gestisci</div>
+        </div>
+
+        <div class="form cleanForm">
+
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Nuovo esame</h3>
+              <p class="meta">Nome, data e livello iniziale</p>
+            </div>
+
+            <div class="formRow">
+              <label for="exam-name">Nome</label>
+              <input id="exam-name" placeholder="Analisi 2 / Fisica / ..." />
+            </div>
+
+            <div class="formRow">
+              <label for="exam-date">Data</label>
+              <input id="exam-date" type="date" />
+            </div>
+
+            <div class="twoCols">
+              <div class="formRow">
+                <label for="exam-cfu">CFU</label>
+                <input id="exam-cfu" type="number" min="1" max="30" step="1" value="6" />
+              </div>
+
+              <div class="formRow">
+                <label for="exam-level">Livello (0–5)</label>
+                <input id="exam-level" type="number" min="0" max="5" step="1" value="0" />
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="exam-diff">Difficoltà</label>
+              <select id="exam-diff">
+                <option value="1">1 (facile)</option>
+                <option value="2" selected>2 (media)</option>
+                <option value="3">3 (difficile)</option>
+              </select>
+            </div>
+
+            <div class="toolbar" style="justify-content:flex-end">
+              <button class="btn" id="add-exam" type="button">Aggiungi esame</button>
+            </div>
+
+            <p class="error" id="exam-error"></p>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Lista esami</h3>
+              <p class="meta">Controlla date e priorità</p>
+            </div>
+
+            <div id="exam-list" class="examGrid"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="toolbar" style="justify-content:flex-end">
+            <button class="btn primary" id="finish-onboarding" type="button">Vai alla dashboard</button>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

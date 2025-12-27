@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Simulazioni</title>
+  <link rel="stylesheet" href="./styles.css?v=12" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Simulazioni</h1>
+        <p id="user-line">—</p>
+      </div>
+
+      <div class="toolbar">
+        <a class="btn ghost" href="./app.html">Dashboard</a>
+
+        <!-- stesso menu (riusa il tuo) -->
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./onboarding.html">
+              <span>Modifica profilo</span><span class="menuHint">↵</span>
+            </a>
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span><span class="menuHint">D</span>
+            </a>
+            <div class="menuSep"></div>
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span><span class="menuHint">⎋</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid" style="grid-template-columns: .9fr 1.1fr; align-items:start">
+      <!-- Controls -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Simulazioni</h2>
+          <div class="meta" id="sim-meta">—</div>
+        </div>
+      
+        <!-- Presets -->
+        <div class="presetRow">
+          <button class="chip" id="preset-realistic" type="button">Realistico</button>
+          <button class="chip" id="preset-optimistic" type="button">Ottimista</button>
+          <button class="chip" id="preset-stress" type="button">Stress test</button>
+        </div>
+      
+        <div class="paramGrid">
+      
+          <!-- Base simulation -->
+          <div class="paramCard">
+            <div class="paramHead">
+              <div>
+                <div class="paramTitle">Base</div>
+                <div class="paramDesc">Dinamica della readiness nel tempo.</div>
+              </div>
+              <span class="pillLite">Baseline</span>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Orizzonte</div>
+                <div class="paramHelp">Quanti giorni simulare (7–365).</div>
+              </div>
+              <div class="paramControl">
+                <input id="horizon-days" class="num" type="number" min="7" max="365" step="1" value="60" />
+                <span class="unit">giorni</span>
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Decay</div>
+                <div class="paramHelp">Dimenticanza giornaliera (0–0.03).</div>
+              </div>
+              <div class="paramControl">
+                <input id="decay" class="range" type="range" min="0" max="0.03" step="0.001" value="0.006" />
+                <input id="decay-num" class="numSlim" type="number" min="0" max="0.03" step="0.001" value="0.006" />
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Imprevisti (noise)</div>
+                <div class="paramHelp">Variabilità: 0 = deterministico.</div>
+              </div>
+              <div class="paramControl">
+                <input id="noise" class="range" type="range" min="0" max="0.5" step="0.01" value="0.10" />
+                <input id="noise-num" class="numSlim" type="number" min="0" max="0.5" step="0.01" value="0.10" />
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Boost urgenza</div>
+                <div class="paramHelp">Quanto spinge sugli esami vicini (0.5–4).</div>
+              </div>
+              <div class="paramControl">
+                <input id="urgency-boost" class="range" type="range" min="0.5" max="4" step="0.1" value="2.0" />
+                <input id="urgency-boost-num" class="numSlim" type="number" min="0.5" max="4" step="0.1" value="2.0" />
+              </div>
+            </div>
+      
+            <div class="btnRow">
+              <button class="btn primary" id="run-sim" type="button">Esegui</button>
+              <button class="btn" id="run-mc" type="button">Monte Carlo (20)</button>
+            </div>
+          </div>
+      
+          <!-- What-if -->
+          <div class="paramCard">
+            <div class="paramHead">
+              <div>
+                <div class="paramTitle">What-if</div>
+                <div class="paramDesc">Confronta scenario vs baseline (linee tratteggiate).</div>
+              </div>
+              <span class="pillLite">Scenario</span>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Δ ore settimanali</div>
+                <div class="paramHelp">Aggiunge/toglie tempo su Lun–Sab.</div>
+              </div>
+              <div class="paramControl">
+                <input id="delta-hours" class="range" type="range" min="-10" max="30" step="0.5" value="0" />
+                <input id="delta-hours-num" class="numSlim" type="number" min="-10" max="30" step="0.5" value="0" />
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Goal mode</div>
+                <div class="paramHelp">Sovrascrive l’obiettivo (opzionale).</div>
+              </div>
+              <div class="paramControl">
+                <select id="goal-override" class="select">
+                  <option value="">(nessuno)</option>
+                  <option value="pass">pass</option>
+                  <option value="good">good</option>
+                  <option value="top">top</option>
+                </select>
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Durata task</div>
+                <div class="paramHelp">Per future versioni (ora solo override profilo).</div>
+              </div>
+              <div class="paramControl">
+                <input id="task-override" class="num" type="number" min="15" max="120" step="5" placeholder="(vuoto)" />
+                <span class="unit">min</span>
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Drop esame</div>
+                <div class="paramHelp">Simula che lo rimandi (sparisce dal piano).</div>
+              </div>
+              <div class="paramControl">
+                <select id="drop-exam" class="select">
+                  <option value="">(nessuno)</option>
+                </select>
+              </div>
+            </div>
+      
+            <div class="paramRow">
+              <div class="paramLabel">
+                <div>Boost esame</div>
+                <div class="paramHelp">Moltiplica la priorità dell’esame scelto.</div>
+              </div>
+              <div class="paramControl boostLine">
+                <select id="boost-exam" class="select">
+                  <option value="">(nessuno)</option>
+                </select>
+                <input id="boost-factor" class="numSlim" type="number" min="0.5" max="3" step="0.1" value="1.0" />
+                <span class="unit">×</span>
+              </div>
+            </div>
+      
+            <div class="btnRow">
+              <button class="btn primary" id="run-whatif" type="button">Confronta</button>
+              <button class="btn" id="run-whatif-mc" type="button">What-if MC (20)</button>
+            </div>
+      
+            <div class="statusBox">
+              <div class="statusTitle">Stato</div>
+              <div class="statusText" id="sim-status">—</div>
+            </div>
+          </div>
+      
+        </div>
+      
+        <div class="divider"></div>
+      
+        <div class="callout">
+          <h3>Come leggerlo</h3>
+          <p>
+            Readiness 0–100: cresce con lo studio e scende con decay/rumore.
+            Linee piene = baseline, tratteggio = scenario.
+          </p>
+        </div>
+      </section>
+      
+
+      <!-- Chart -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Readiness nel tempo</h2>
+          <div class="meta">una linea per esame</div>
+        </div>
+
+        <div class="chartWrap">
+          <canvas id="chart" width="980" height="520"></canvas>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="legend" class="legend"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./simulations.js?v=12"></script>
+</body>
+</html>

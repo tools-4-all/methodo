@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Study Planner</h1>
+      <p class="muted">Accedi per costruire un piano settimanale realistico.</p>
+    </header>
+
+    <main class="card">
+      <div class="tabs">
+        <button class="tab active" id="tab-login">Login</button>
+        <button class="tab" id="tab-signup">Crea account</button>
+      </div>
+
+      <form id="login-form" class="form">
+        <label>Email</label>
+        <input type="email" id="login-email" required placeholder="nome@uni.it" />
+        <label>Password</label>
+        <input type="password" id="login-pass" required placeholder="••••••••" />
+        <button type="submit" class="btn primary" id="login-submit">Entra</button>
+
+        <p class="error" id="login-error"></p>
+      </form>
+
+      <form id="signup-form" class="form hidden">
+        <label>Email</label>
+        <input type="email" id="signup-email" required placeholder="nome@uni.it" />
+        <label>Password</label>
+        <input type="password" id="signup-pass" required placeholder="min 6 caratteri" />
+        <button type="submit" class="btn primary">Crea account</button>
+        <p class="error" id="signup-error"></p>
+      </form>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
