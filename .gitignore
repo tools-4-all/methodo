@@ -1,0 +1,82 @@
+# =========================
+# OS / System files
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# =========================
+# Node / JavaScript
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Build / Dist
+# =========================
+dist/
+build/
+out/
+.cache/
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# =========================
+# Firebase
+# =========================
+.firebase/
+.firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# =========================
+# Temporary / Backup files
+# =========================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# =========================
+# Documentation / Exports
+# =========================
+documentazione.pdf
+documentation.pdf
+docs/export/
+docs/*.pdf
+
+# =========================
+# Misc
+# =========================
+coverage/
+.cache-loader/
