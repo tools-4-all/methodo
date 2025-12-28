@@ -1559,6 +1559,48 @@ color: rgba(255,255,255,.92);
 }
 .toastClose:hover { background: rgba(255,255,255,0.18); }
 
+/* ===== PERSONAL INFO DISPLAY ===== */
+.personalInfoDisplay{
+  margin-bottom:16px;
+}
+
+.personalInfoCard{
+  background: var(--panelSolid);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.personalInfoRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.personalInfoRow:last-child{
+  border-bottom:none;
+  padding-bottom:0;
+}
+
+.personalInfoLabel{
+  font-size:13px;
+  color: rgba(255,255,255,.72);
+  font-weight:850;
+}
+
+.personalInfoValue{
+  font-size:14px;
+  color: rgba(255,255,255,.92);
+  font-weight:900;
+  text-align:right;
+}
+
 /* ===== CONSIGLI / BLOG PAGE ===== */
 main > section.adviceCard {
   margin-bottom: 20px;

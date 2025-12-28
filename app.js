@@ -296,8 +296,221 @@ async function reconstructTaskPayloadFromFirestore(user, tid) {
 async function routeAfterLogin(user) {
   await ensureUserDoc(user);
   const profile = await getProfile(user.uid);
+  
+  // Controlla se mancano informazioni personali di base
+  const needsPersonalInfo = !profile?.name || !profile?.faculty || !profile?.age;
+  
+  if (needsPersonalInfo) {
+    // Mostra popup per informazioni personali
+    showPersonalInfoModal(user, async () => {
+      // Dopo aver salvato le info personali, vai a onboarding
+      window.location.assign("./onboarding.html");
+    });
+    return;
+  }
+  
+  // Se ha le info personali ma manca il profilo completo, vai a onboarding
   const needsOnboarding = !profile?.goalMode || !profile?.dayMinutes;
   window.location.assign(needsOnboarding ? "./onboarding.html" : "./app.html");
+}
+
+// ----------------- Personal Info Modal -----------------
+function showPersonalInfoModal(user, onComplete) {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("personal-info-modal")) return;
+
+  // Overlay oscurante
+  const overlay = document.createElement("div");
+  overlay.id = "personal-info-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.75)",
+    zIndex: "10000",
+    padding: "20px",
+  });
+
+  // Contenitore principale con stile card
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "520px";
+  card.style.width = "90%";
+  card.style.padding = "28px";
+  card.style.maxHeight = "90vh";
+  card.style.overflowY = "auto";
+
+  // Titolo modale
+  const title = document.createElement("h2");
+  title.textContent = "Benvenuto in Study Planner!";
+  title.style.marginBottom = "8px";
+  title.style.fontSize = "24px";
+  title.style.fontWeight = "950";
+  card.appendChild(title);
+
+  const subtitle = document.createElement("p");
+  subtitle.textContent = "Aiutaci a conoscerti meglio per personalizzare la tua esperienza";
+  subtitle.style.marginBottom = "24px";
+  subtitle.style.color = "rgba(255,255,255,.72)";
+  subtitle.style.fontSize = "14px";
+  card.appendChild(subtitle);
+
+  // Contenitore form
+  const form = document.createElement("div");
+  form.className = "form";
+  form.style.gap = "16px";
+
+  // Campo nome
+  const nameLabel = document.createElement("label");
+  nameLabel.innerHTML = '<span>Nome</span>';
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "pi-name";
+  nameInput.placeholder = "Il tuo nome";
+  nameInput.required = true;
+  nameInput.autocomplete = "name";
+  nameLabel.appendChild(nameInput);
+
+  // Campo facoltà
+  const facultyLabel = document.createElement("label");
+  facultyLabel.innerHTML = '<span>Facoltà / Corso di studi</span>';
+  const facultyInput = document.createElement("input");
+  facultyInput.type = "text";
+  facultyInput.id = "pi-faculty";
+  facultyInput.placeholder = "Es: Ingegneria, Medicina, Economia...";
+  facultyInput.required = true;
+  facultyInput.autocomplete = "organization";
+  facultyLabel.appendChild(facultyInput);
+
+  // Campo età
+  const ageLabel = document.createElement("label");
+  ageLabel.innerHTML = '<span>Età</span>';
+  const ageInput = document.createElement("input");
+  ageInput.type = "number";
+  ageInput.id = "pi-age";
+  ageInput.min = "16";
+  ageInput.max = "100";
+  ageInput.placeholder = "18";
+  ageInput.required = true;
+  ageLabel.appendChild(ageInput);
+
+  // Campo tipo sessione
+  const sessionLabel = document.createElement("label");
+  sessionLabel.innerHTML = '<span>Stai preparando</span>';
+  const sessionSelect = document.createElement("select");
+  sessionSelect.id = "pi-session-type";
+  sessionSelect.required = true;
+  const sessionOptions = [
+    { value: "exams", text: "Esami della sessione" },
+    { value: "exemptions", text: "Esoneri" },
+    { value: "both", text: "Entrambi" },
+  ];
+  sessionOptions.forEach((opt) => {
+    const option = document.createElement("option");
+    option.value = opt.value;
+    option.textContent = opt.text;
+    sessionSelect.appendChild(option);
+  });
+  sessionLabel.appendChild(sessionSelect);
+
+  // Aggiungi tutti i campi al form
+  form.appendChild(nameLabel);
+  form.appendChild(facultyLabel);
+  form.appendChild(ageLabel);
+  form.appendChild(sessionLabel);
+  card.appendChild(form);
+
+  // Messaggio di errore
+  const errorMsg = document.createElement("p");
+  errorMsg.id = "pi-error";
+  errorMsg.className = "error";
+  errorMsg.style.marginTop = "8px";
+  card.appendChild(errorMsg);
+
+  // Azioni (bottoni)
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnRow";
+  btnRow.style.marginTop = "20px";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn primary";
+  saveBtn.type = "button";
+  saveBtn.textContent = "Continua";
+  saveBtn.style.width = "100%";
+
+  btnRow.appendChild(saveBtn);
+  card.appendChild(btnRow);
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  // Focus sul primo campo
+  setTimeout(() => nameInput.focus(), 100);
+
+  // Funzione per chiudere la modale
+  function closeModal() {
+    try {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    } catch {}
+  }
+
+  // Gestore Salva
+  saveBtn.addEventListener("click", async () => {
+    try {
+      const name = nameInput.value.trim();
+      const faculty = facultyInput.value.trim();
+      const age = Number(ageInput.value || 0);
+      const sessionType = sessionSelect.value;
+
+      if (!name) throw new Error("Nome mancante.");
+      if (!faculty) throw new Error("Facoltà mancante.");
+      if (!age || age < 16 || age > 100) throw new Error("Età non valida (16-100).");
+
+      // Salva le informazioni personali nel profilo
+      await setProfile(user.uid, {
+        name,
+        faculty,
+        age,
+        sessionType,
+      });
+
+      closeModal();
+      if (onComplete) {
+        await onComplete();
+      } else {
+        // Se non c'è callback, ricarica la pagina
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+      errorMsg.textContent = err?.message ?? "Errore salvataggio informazioni";
+    }
+  });
+
+  // Chiudi con ESC
+  document.addEventListener("keydown", function escHandler(e) {
+    if (e.key === "Escape" && document.getElementById("personal-info-modal")) {
+      // Non permettere di chiudere senza completare
+      e.preventDefault();
+    }
+  });
+
+  // Enter per salvare
+  [nameInput, facultyInput, ageInput, sessionSelect].forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveBtn.click();
+      }
+    });
+  });
 }
 
 // ----------------- INDEX (AUTH) -----------------
@@ -537,6 +750,54 @@ function mountOnboarding() {
     await ensureUserDoc(user);
 
     const profile = await getProfile(user.uid);
+    
+    // Se mancano informazioni personali, mostra il popup
+    if (!profile?.name || !profile?.faculty || !profile?.age) {
+      showPersonalInfoModal(user, async () => {
+        // Dopo aver salvato, ricarica la pagina per continuare
+        window.location.reload();
+      });
+      return;
+    }
+    
+    // Mostra le informazioni personali nell'header se disponibili
+    if (profile.name) {
+      const userLine = qs("user-line");
+      if (userLine) {
+        userLine.textContent = `${profile.name} · ${profile.faculty || ""}`;
+      }
+    }
+    
+    // Mostra informazioni personali nella sezione profilo
+    const personalInfoDisplay = qs("personal-info-display");
+    if (personalInfoDisplay && profile.name) {
+      personalInfoDisplay.innerHTML = `
+        <div class="personalInfoCard">
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Nome</span>
+            <span class="personalInfoValue">${escapeHtml(profile.name)}</span>
+          </div>
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Facoltà</span>
+            <span class="personalInfoValue">${escapeHtml(profile.faculty || "—")}</span>
+          </div>
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Età</span>
+            <span class="personalInfoValue">${profile.age || "—"}</span>
+          </div>
+          ${profile.sessionType ? `
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Preparazione</span>
+            <span class="personalInfoValue">${
+              profile.sessionType === "exams" ? "Esami sessione" :
+              profile.sessionType === "exemptions" ? "Esoneri" :
+              profile.sessionType === "both" ? "Esami ed esoneri" : "—"
+            }</span>
+          </div>
+          ` : ""}
+        </div>
+      `;
+    }
 
     renderDayInputs(profile?.dayMinutes ?? null);
 
