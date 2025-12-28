@@ -842,6 +842,23 @@ input,select{
   color: var(--text);
   outline:none;
 }
+textarea{
+  width:100%;
+  padding:12px 12px;
+  border-radius: 12px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  outline:none;
+  color-scheme: dark;
+  -webkit-text-fill-color: rgba(255,255,255,.92);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+}
+
 input:focus,select:focus,textarea:focus{
   border-color: var(--orange-border);
   box-shadow: 0 0 0 4px rgba(249,115,22,.08);
