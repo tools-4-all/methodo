@@ -278,10 +278,26 @@
       border-left: 3px solid rgba(99, 102, 241, 0.6);
       border-radius: 8px;
       margin-bottom: 12px;
+      transition: all 0.2s ease;
     }
 
     .tipItem:last-child {
       margin-bottom: 0;
+    }
+
+    .tipItemClickable {
+      cursor: pointer;
+    }
+
+    .tipItemClickable:hover {
+      background: rgba(99, 102, 241, 0.12);
+      border-left-color: rgba(99, 102, 241, 0.9);
+      transform: translateX(2px);
+    }
+
+    .tipItemClickable:active {
+      transform: translateX(0);
+      transform: scale(0.98);
     }
 
     .tipIcon {
@@ -297,6 +313,19 @@
       margin-bottom: 6px;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+    }
+
+    .tipExpandIcon {
+      font-size: 16px;
+      color: rgba(99, 102, 241, 0.7);
+      margin-left: auto;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .tipItemClickable:hover .tipExpandIcon {
+      transform: translateX(4px);
+      color: rgba(99, 102, 241, 1);
     }
 
     .tipDesc {
@@ -304,6 +333,47 @@
       color: rgba(255, 255, 255, 0.7);
       line-height: 1.6;
       margin-left: 32px;
+    }
+
+    /* === ANIMAZIONI POPUP === */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(20px);
+      }
     }
 
     /* === EXAM CONTEXT CARD === */
@@ -468,7 +538,7 @@
 
         <!-- TIPS CARD -->
         <section class="card taskTipsCard">
-          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">💡 Consigli di Studio</h2>
+          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Consigli di Studio</h2>
           
           <div id="task-tips-list">
             <div class="tipItem">

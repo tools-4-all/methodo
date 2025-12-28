@@ -3906,40 +3906,47 @@ function mountTask() {
       tips.push({
         icon: "📖",
         title: "Studio teorico efficace",
-        desc: "Leggi attivamente: prendi appunti, fai domande, crea connessioni. Usa la tecnica Feynman: spiega i concetti come se dovessi insegnarli a qualcuno."
+        desc: "Leggi attivamente: prendi appunti, fai domande, crea connessioni. Usa la tecnica Feynman: spiega i concetti come se dovessi insegnarli a qualcuno.",
+        detail: "La tecnica Feynman prende il nome dal fisico premio Nobel Richard Feynman. Il principio è semplice: se riesci a spiegare un concetto in modo semplice, significa che lo hai veramente compreso. Prova a scrivere una spiegazione come se stessi insegnando a uno studente alle prime armi. Se ti blocchi su un punto, quello è l'argomento su cui devi concentrarti. Inoltre, prendi appunti attivi: non copiare passivamente, ma rielabora le informazioni creando connessioni tra i concetti. Usa mappe mentali, diagrammi e analogie per rendere i concetti astratti più concreti e memorabili."
       });
       tips.push({
         icon: "🔄",
         title: "Ripetizione spaziata",
-        desc: "Rivedi i concetti chiave dopo 24 ore, poi dopo 3 giorni. Questo aiuta la memorizzazione a lungo termine."
+        desc: "Rivedi i concetti chiave dopo 24 ore, poi dopo 3 giorni. Questo aiuta la memorizzazione a lungo termine.",
+        detail: "La ripetizione spaziata (spaced repetition) è una delle tecniche più efficaci per la memorizzazione a lungo termine. Il principio si basa sulla 'curva dell'oblio': dopo aver appreso qualcosa, la memoria si indebolisce nel tempo, ma ogni revisione rafforza il ricordo. Programma le tue revisioni: prima revisione dopo 24 ore, seconda dopo 3 giorni, terza dopo una settimana, quarta dopo due settimane. Puoi usare app come Anki o semplicemente un calendario. L'importante è essere costanti: anche solo 10-15 minuti di revisione al giorno possono fare la differenza tra ricordare e dimenticare completamente un argomento."
       });
     } else if (taskType.includes("practice") || taskType.includes("pratica") || taskType.includes("esercizi")) {
       tips.push({
         icon: "✏️",
         title: "Pratica attiva",
-        desc: "Non limitarti a guardare le soluzioni. Prova prima da solo, anche se sbagli. L'errore è parte dell'apprendimento."
+        desc: "Non limitarti a guardare le soluzioni. Prova prima da solo, anche se sbagli. L'errore è parte dell'apprendimento.",
+        detail: "La pratica attiva è fondamentale per l'apprendimento. Quando guardi solo le soluzioni, stai usando la memoria passiva, che è molto meno efficace. Invece, quando provi a risolvere un problema da solo, stai attivando la memoria attiva e costruendo connessioni neurali più forti. Anche se sbagli, il processo di tentativo ti aiuta a identificare le lacune nella tua comprensione. Dopo aver provato, confronta la tua soluzione con quella corretta e analizza le differenze. Chiediti: perché ho sbagliato? Quale concetto non avevo compreso? Questo processo di riflessione trasforma ogni errore in un'opportunità di apprendimento."
       });
       tips.push({
         icon: "🎯",
         title: "Focus su pattern",
-        desc: "Identifica i pattern ricorrenti negli esercizi. Una volta capito il metodo, applicalo a varianti simili."
+        desc: "Identifica i pattern ricorrenti negli esercizi. Una volta capito il metodo, applicalo a varianti simili.",
+        detail: "La maggior parte degli esercizi segue pattern ricorrenti. Una volta identificato il metodo risolutivo, puoi applicarlo a decine di varianti simili. Inizia risolvendo 3-5 esercizi dello stesso tipo, analizzando attentamente il processo risolutivo. Identifica i passaggi chiave: quali sono le informazioni date? Qual è l'obiettivo? Quali sono i passaggi intermedi? Crea un 'template mentale' del metodo. Poi, prova a risolvere esercizi simili applicando lo stesso template. Se trovi difficoltà, torna agli esercizi base e rafforza la comprensione del metodo. Con il tempo, svilupperai un'intuizione che ti permetterà di riconoscere rapidamente quale metodo applicare."
       });
     } else if (taskType.includes("review") || taskType.includes("ripasso")) {
       tips.push({
         icon: "📝",
         title: "Ripasso attivo",
-        desc: "Non rileggere passivamente. Crea mappe mentali, riassumi a parole tue, risolvi esercizi senza guardare le soluzioni."
+        desc: "Non rileggere passivamente. Crea mappe mentali, riassumi a parole tue, risolvi esercizi senza guardare le soluzioni.",
+        detail: "Il ripasso passivo (rileggere semplicemente il materiale) è uno dei metodi meno efficaci di studio. Il cervello tende a confondere la familiarità con la comprensione: se hai già letto qualcosa, ti sembra di conoscerla, anche se in realtà non la ricordi davvero. Il ripasso attivo invece richiede di ricostruire attivamente le informazioni. Crea mappe mentali senza guardare il libro: questo ti costringe a ricordare le connessioni tra i concetti. Scrivi riassunti a parole tue: se riesci a spiegare un concetto con le tue parole, significa che lo hai compreso. Risolvi esercizi senza guardare le soluzioni: questo attiva la memoria procedurale. Ogni volta che ricostruisci attivamente un'informazione, la memorizzi più profondamente."
       });
       tips.push({
         icon: "🧠",
         title: "Testa te stesso",
-        desc: "Chiudi il libro e prova a spiegare i concetti. Se non ci riesci, riapri e studia quella parte specifica."
+        desc: "Chiudi il libro e prova a spiegare i concetti. Se non ci riesci, riapri e studia quella parte specifica.",
+        detail: "Il self-testing (autovalutazione) è una delle tecniche più potenti per l'apprendimento. Quando chiudi il libro e provi a spiegare un concetto, stai facendo un 'recall test': stai cercando di recuperare le informazioni dalla memoria a lungo termine. Questo processo rafforza le connessioni neurali molto più della semplice rilettura. Se riesci a spiegare il concetto, significa che lo hai compreso. Se non ci riesci o ti blocchi, hai identificato una lacuna specifica nella tua comprensione. In quel caso, riapri il libro e studia solo quella parte, poi richiudi e riprova. Questo ciclo di test → identificazione lacune → studio mirato → nuovo test è estremamente efficace. Puoi anche creare domande per te stesso mentre studi e rispondere a queste domande durante il ripasso."
       });
     } else {
       tips.push({
         icon: "📚",
         title: "Studio mirato",
-        desc: "Concentrati su un argomento alla volta. Completa questo task prima di passare al successivo."
+        desc: "Concentrati su un argomento alla volta. Completa questo task prima di passare al successivo.",
+        detail: "Il multitasking è un mito quando si tratta di apprendimento. Il cervello ha risorse cognitive limitate e quando cerchi di fare più cose contemporaneamente, la qualità dell'apprendimento diminuisce. Concentrarsi su un argomento alla volta permette al cervello di costruire connessioni più profonde e più stabili. Quando completi un task prima di passare al successivo, crei un senso di realizzazione che aumenta la motivazione. Inoltre, questo approccio ti permette di entrare in uno stato di 'flow' (flusso), dove sei completamente immerso nell'attività e la concentrazione è massima. Elimina le distrazioni: metti il telefono in modalità silenziosa, chiudi le schede del browser non necessarie, trova un ambiente tranquillo. Dedica questo tempo esclusivamente al task corrente."
       });
     }
 
@@ -3948,7 +3955,8 @@ function mountTask() {
       tips.push({
         icon: "⏰",
         title: "Task di oggi",
-        desc: "Questo task è pianificato per oggi. Completa il timer per mantenere il ritmo di studio."
+        desc: "Questo task è pianificato per oggi. Completa il timer per mantenere il ritmo di studio.",
+        detail: "Mantenere il ritmo di studio è fondamentale per il successo. Quando completi i task pianificati per il giorno, mantieni la coerenza del tuo piano di studio e costruisci abitudini positive. Ogni task completato è un piccolo successo che aumenta la tua autoefficacia e motivazione. Se accumuli task non completati, rischi di creare un debito di studio che diventa sempre più difficile da recuperare. Usa il timer per mantenere la concentrazione: sapere che hai un tempo limitato ti aiuta a rimanere focalizzato. Al termine del timer, fai una breve pausa per rigenerare le energie mentali. Se non riesci a completare il task oggi, non scoraggiarti: riprogrammalo per domani e mantieni la costanza."
       });
     }
 
@@ -3956,19 +3964,162 @@ function mountTask() {
     tips.push({
       icon: "🍅",
       title: "Tecnica Pomodoro",
-      desc: `Dopo ${task.minutes || 25} minuti di studio, fai una pausa di 5 minuti. Questo mantiene alta la concentrazione.`
+      desc: `Dopo ${task.minutes || 25} minuti di studio, fai una pausa di 5 minuti. Questo mantiene alta la concentrazione.`,
+      detail: `La tecnica Pomodoro è stata sviluppata da Francesco Cirillo alla fine degli anni '80. Il metodo prevede sessioni di studio concentrate di ${task.minutes || 25} minuti (un 'pomodoro'), seguite da una pausa di 5 minuti. Dopo 4 pomodori completati, fai una pausa più lunga di 15-30 minuti. Questa tecnica funziona perché rispetta i limiti naturali dell'attenzione umana: il cervello può mantenere un'alta concentrazione solo per periodi limitati. Le pause brevi permettono al cervello di consolidare le informazioni appena apprese e di rigenerare le risorse cognitive. Durante la pausa, evita attività che richiedono concentrazione (come i social media): invece, alzati, cammina, bevi acqua, fai stretching o semplicemente guarda fuori dalla finestra. Questo aiuta il cervello a 'resettarsi' e prepararsi per il prossimo pomodoro.`
     });
 
     // Renderizza i tips
-    container.innerHTML = tips.map(tip => `
-      <div class="tipItem">
+    container.innerHTML = tips.map((tip, index) => `
+      <div class="tipItem tipItemClickable" data-tip-index="${index}">
         <div class="tipTitle">
           <span class="tipIcon">${tip.icon}</span>
           <span>${escapeHtml(tip.title)}</span>
+          <span class="tipExpandIcon">→</span>
         </div>
         <div class="tipDesc">${escapeHtml(tip.desc)}</div>
       </div>
     `).join("");
+
+    // Salva i tips per il popup
+    container._tips = tips;
+
+    // Aggiungi event listeners per aprire il popup
+    container.querySelectorAll(".tipItemClickable").forEach((item, index) => {
+      item.addEventListener("click", () => {
+        showTipDetailModal(tips[index]);
+      });
+    });
+  }
+
+  // Funzione per mostrare il popup di approfondimento del consiglio
+  function showTipDetailModal(tip) {
+    // Evita di aprire più modali contemporaneamente
+    if (document.getElementById("tip-detail-modal")) return;
+
+    // Overlay oscurante
+    const overlay = document.createElement("div");
+    overlay.id = "tip-detail-modal";
+    Object.assign(overlay.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0,0,0,0.75)",
+      zIndex: "10000",
+      padding: "20px",
+      animation: "fadeIn 0.2s ease-out",
+    });
+
+    // Contenitore principale con stile card
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.maxWidth = "600px";
+    card.style.width = "90%";
+    card.style.padding = "32px";
+    card.style.maxHeight = "85vh";
+    card.style.overflowY = "auto";
+    card.style.position = "relative";
+    card.style.animation = "slideUp 0.3s ease-out";
+
+    // Icona e titolo
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "16px";
+    header.style.marginBottom = "20px";
+
+    const iconSpan = document.createElement("span");
+    iconSpan.textContent = tip.icon;
+    iconSpan.style.fontSize = "32px";
+    iconSpan.style.lineHeight = "1";
+
+    const title = document.createElement("h2");
+    title.textContent = tip.title;
+    title.style.margin = "0";
+    title.style.fontSize = "24px";
+    title.style.fontWeight = "900";
+    title.style.color = "rgba(255, 255, 255, 0.95)";
+    title.style.flex = "1";
+
+    header.appendChild(iconSpan);
+    header.appendChild(title);
+    card.appendChild(header);
+
+    // Descrizione breve
+    const shortDesc = document.createElement("p");
+    shortDesc.textContent = tip.desc;
+    shortDesc.style.marginBottom = "24px";
+    shortDesc.style.color = "rgba(255, 255, 255, 0.7)";
+    shortDesc.style.fontSize = "15px";
+    shortDesc.style.lineHeight = "1.6";
+    shortDesc.style.paddingBottom = "20px";
+    shortDesc.style.borderBottom = "1px solid rgba(255, 255, 255, 0.1)";
+    card.appendChild(shortDesc);
+
+    // Approfondimento
+    const detailTitle = document.createElement("h3");
+    detailTitle.textContent = "Approfondimento";
+    detailTitle.style.marginTop = "0";
+    detailTitle.style.marginBottom = "16px";
+    detailTitle.style.fontSize = "18px";
+    detailTitle.style.fontWeight = "700";
+    detailTitle.style.color = "rgba(255, 255, 255, 0.9)";
+    card.appendChild(detailTitle);
+
+    const detail = document.createElement("div");
+    detail.textContent = tip.detail || tip.desc;
+    detail.style.color = "rgba(255, 255, 255, 0.8)";
+    detail.style.fontSize = "15px";
+    detail.style.lineHeight = "1.7";
+    detail.style.whiteSpace = "pre-wrap";
+    card.appendChild(detail);
+
+    // Bottone di chiusura
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "btn";
+    closeBtn.textContent = "Chiudi";
+    closeBtn.style.marginTop = "28px";
+    closeBtn.style.width = "100%";
+    closeBtn.addEventListener("click", () => closeModal());
+
+    card.appendChild(closeBtn);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // Funzione per chiudere la modale
+    function closeModal() {
+      try {
+        if (overlay.parentNode) {
+          overlay.style.animation = "fadeOut 0.2s ease-out";
+          card.style.animation = "slideDown 0.2s ease-out";
+          setTimeout(() => {
+            if (overlay.parentNode) {
+              document.body.removeChild(overlay);
+            }
+          }, 200);
+        }
+      } catch {}
+    }
+
+    // Chiudi cliccando sull'overlay (ma non sulla card)
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        closeModal();
+      }
+    });
+
+    // Chiudi con ESC
+    const escHandler = (e) => {
+      if (e.key === "Escape" && document.getElementById("tip-detail-modal")) {
+        closeModal();
+        document.removeEventListener("keydown", escHandler);
+      }
+    };
+    document.addEventListener("keydown", escHandler);
   }
 
   // 1) storage
