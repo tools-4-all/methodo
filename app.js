@@ -1,5 +1,5 @@
 // app.js (single-file, GitHub Pages-friendly)
-// Works with: index.html, onboarding.html, app.html, task.html
+// Works with: index.html, onboarding.html, app.html, task.html, profile.html, strategies.html, settings.html
 // Requires: planner.js (ES module) for generateWeeklyPlan/startOfWeekISO
 // Auth moved to: auth.js
 
@@ -149,6 +149,30 @@ async function removeExam(uid, examId) {
 async function updateExam(uid, examId, examData) {
   const ref = doc(db, "users", uid, "exams", examId);
   await updateDoc(ref, { ...examData, updatedAt: serverTimestamp() });
+}
+
+async function addPassedExam(uid, examData) {
+  const col = collection(db, "users", uid, "passedExams");
+  const ref = await addDoc(col, {
+    ...examData,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+async function listPassedExams(uid) {
+  const col = collection(db, "users", uid, "passedExams");
+  const snap = await getDocs(col);
+  const exams = [];
+  snap.forEach((d) => exams.push({ id: d.id, ...d.data() }));
+  exams.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))); // più recenti prima
+  return exams;
+}
+
+async function removePassedExam(uid, examId) {
+  const ref = doc(db, "users", uid, "passedExams", examId);
+  await deleteDoc(ref);
 }
 
 async function saveWeeklyPlan(uid, weekStartISO, plan) {
@@ -303,15 +327,15 @@ async function routeAfterLogin(user) {
   if (needsPersonalInfo) {
     // Mostra popup per informazioni personali
     showPersonalInfoModal(user, async () => {
-      // Dopo aver salvato le info personali, vai a onboarding
-      window.location.assign("./onboarding.html");
+      // Dopo aver salvato le info personali, vai a settings
+      window.location.assign("./settings.html");
     });
     return;
   }
   
-  // Se ha le info personali ma manca il profilo completo, vai a onboarding
+  // Se ha le info personali ma manca il profilo completo, vai a settings
   const needsOnboarding = !profile?.goalMode || !profile?.dayMinutes;
-  window.location.assign(needsOnboarding ? "./onboarding.html" : "./app.html");
+  window.location.assign(needsOnboarding ? "./settings.html" : "./app.html");
 }
 
 // ----------------- Personal Info Modal -----------------
@@ -1038,6 +1062,514 @@ function openEditExamModal(uid, exam, onSuccess) {
   });
 }
 
+// ----------------- PROFILE PAGE -----------------
+function mountProfile() {
+  setupMenu();
+
+  document.getElementById("logout-btn")?.addEventListener("click", async () => {
+    await logout();
+    window.location.assign("./index.html");
+  });
+
+  watchAuth(async (user) => {
+    if (!user) {
+      window.location.assign("./index.html");
+      return;
+    }
+
+    await reload(user);
+    if (!user.emailVerified) {
+      await logout();
+      window.location.assign("./index.html");
+      return;
+    }
+
+    setText(qs("user-line"), user.email ?? "—");
+    await ensureUserDoc(user);
+
+    const profile = await getProfile(user.uid);
+    
+    // Se mancano informazioni personali, mostra il popup
+    if (!profile?.name || !profile?.faculty || !profile?.age) {
+      showPersonalInfoModal(user, async () => {
+        window.location.reload();
+      });
+      return;
+    }
+    
+    // Mostra le informazioni personali nell'header
+    if (profile.name) {
+      const userLine = qs("user-line");
+      if (userLine) {
+        userLine.textContent = `${profile.name} · ${profile.faculty || ""}`;
+      }
+    }
+    
+    // Mostra informazioni personali nella sezione profilo
+    const personalInfoDisplay = qs("personal-info-display");
+    if (personalInfoDisplay && profile.name) {
+      personalInfoDisplay.innerHTML = `
+        <div class="personalInfoCard">
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Nome</span>
+            <span class="personalInfoValue">${escapeHtml(profile.name)}</span>
+          </div>
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Facoltà</span>
+            <span class="personalInfoValue">${escapeHtml(profile.faculty || "—")}</span>
+          </div>
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Età</span>
+            <span class="personalInfoValue">${profile.age || "—"}</span>
+          </div>
+          ${profile.sessionType ? `
+          <div class="personalInfoRow">
+            <span class="personalInfoLabel">Preparazione</span>
+            <span class="personalInfoValue">${
+              profile.sessionType === "exams" ? "Esami sessione" :
+              profile.sessionType === "exemptions" ? "Esoneri" :
+              profile.sessionType === "both" ? "Esami ed esoneri" : "—"
+            }</span>
+          </div>
+          ` : ""}
+        </div>
+      `;
+    }
+
+    // Carica e mostra esami sostenuti
+    await refreshPassedExamsList(user.uid);
+
+    // Calcola e mostra statistiche
+    await updateStats(user.uid);
+
+    // Gestore aggiunta esame sostenuto (solo una volta)
+    const addBtn = qs("add-passed-exam");
+    if (addBtn && !addBtn.dataset.bound) {
+      addBtn.dataset.bound = "1";
+      addBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        setText(qs("passed-exam-error"), "");
+
+        try {
+          const name = (qs("passed-exam-name")?.value || "").trim();
+          const grade = Number(qs("passed-exam-grade")?.value || 0);
+          const cfu = Number(qs("passed-exam-cfu")?.value || 0);
+          const date = qs("passed-exam-date")?.value;
+          const notes = (qs("passed-exam-notes")?.value || "").trim();
+
+          if (!name) throw new Error("Nome esame mancante.");
+          if (!grade || grade < 18 || grade > 30) throw new Error("Voto non valido (18-30).");
+          if (!cfu || cfu < 1) throw new Error("CFU non validi.");
+          if (!date) throw new Error("Data superamento mancante.");
+
+          await addPassedExam(user.uid, { name, grade, cfu, date, notes });
+          
+          // Reset form
+          if (qs("passed-exam-name")) qs("passed-exam-name").value = "";
+          if (qs("passed-exam-grade")) qs("passed-exam-grade").value = "";
+          if (qs("passed-exam-cfu")) qs("passed-exam-cfu").value = "6";
+          if (qs("passed-exam-date")) qs("passed-exam-date").value = "";
+          if (qs("passed-exam-notes")) qs("passed-exam-notes").value = "";
+
+          await refreshPassedExamsList(user.uid);
+          await updateStats(user.uid);
+        } catch (err) {
+          console.error(err);
+          setText(qs("passed-exam-error"), err?.message ?? "Errore aggiunta esame");
+        }
+      });
+    }
+  });
+}
+
+async function refreshPassedExamsList(uid) {
+  const list = qs("passed-exams-list");
+  if (!list) return;
+
+  const exams = await listPassedExams(uid);
+  list.innerHTML = "";
+
+  if (exams.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted small";
+    p.textContent = "Nessun esame sostenuto aggiunto.";
+    list.appendChild(p);
+    return;
+  }
+
+  for (const ex of exams) {
+    const card = document.createElement("div");
+    card.className = "passedExamCard";
+    card.innerHTML = `
+      <div class="passedExamInfo">
+        <div class="passedExamName">${escapeHtml(ex.name)}</div>
+        <div class="passedExamMeta">
+          ${escapeHtml(ex.date || "—")} · ${ex.cfu} CFU
+          ${ex.notes ? ` · ${escapeHtml(ex.notes)}` : ""}
+        </div>
+      </div>
+      <div class="passedExamGrade">${ex.grade}</div>
+      <div class="examCardActions">
+        <button class="btn tiny" type="button" data-del="${ex.id}">Rimuovi</button>
+      </div>
+    `;
+
+    const delBtn = card.querySelector("button[data-del]");
+    delBtn?.addEventListener("click", async () => {
+      if (confirm("Vuoi rimuovere questo esame?")) {
+        await removePassedExam(uid, ex.id);
+        await refreshPassedExamsList(uid);
+        await updateStats(uid);
+      }
+    });
+
+    list.appendChild(card);
+  }
+}
+
+async function updateStats(uid) {
+  const exams = await listPassedExams(uid);
+  
+  if (exams.length === 0) {
+    setText(qs("grade-average"), "—");
+    setText(qs("grade-count"), "0 esami");
+    setText(qs("total-cfu"), "0");
+    setText(qs("max-grade"), "—");
+    setText(qs("max-grade-exam"), "—");
+    setText(qs("weighted-average"), "—");
+    setText(qs("weighted-average-sub"), "—");
+    drawGradesChart([]);
+    generatePersonalizedTips([], 0, 0);
+    return;
+  }
+
+  // Calcola media semplice
+  const totalGrade = exams.reduce((sum, e) => sum + (e.grade || 0), 0);
+  const avg = Math.round((totalGrade / exams.length) * 10) / 10;
+  setText(qs("grade-average"), avg.toFixed(1));
+  setText(qs("grade-count"), `${exams.length} ${exams.length === 1 ? "esame" : "esami"}`);
+
+  // Calcola media ponderata (per CFU)
+  const totalWeighted = exams.reduce((sum, e) => sum + ((e.grade || 0) * (e.cfu || 0)), 0);
+  const totalCfu = exams.reduce((sum, e) => sum + (e.cfu || 0), 0);
+  const weightedAvg = totalCfu > 0 ? Math.round((totalWeighted / totalCfu) * 10) / 10 : 0;
+  if (weightedAvg > 0) {
+    setText(qs("weighted-average"), weightedAvg.toFixed(2));
+    setText(qs("weighted-average-sub"), `su ${totalCfu} CFU`);
+  } else {
+    setText(qs("weighted-average"), "—");
+    setText(qs("weighted-average-sub"), "—");
+  }
+
+  // CFU totali
+  setText(qs("total-cfu"), totalCfu.toString());
+
+  // Voto più alto
+  const maxExam = exams.reduce((max, e) => (!max || (e.grade || 0) > (max.grade || 0)) ? e : max, null);
+  if (maxExam) {
+    setText(qs("max-grade"), maxExam.grade.toString());
+    setText(qs("max-grade-exam"), escapeHtml(maxExam.name));
+  } else {
+    setText(qs("max-grade"), "—");
+    setText(qs("max-grade-exam"), "—");
+  }
+
+  // Genera grafico voti
+  drawGradesChart(exams);
+
+  // Genera consigli personalizzati
+  generatePersonalizedTips(exams, avg, weightedAvg);
+}
+
+function drawGradesChart(exams) {
+  const chartContainer = document.getElementById("grades-chart");
+  if (!chartContainer) return;
+  
+  if (exams.length === 0) {
+    chartContainer.innerHTML = '<p class="muted small" style="text-align:center; padding:40px;">Aggiungi esami per vedere il grafico</p>';
+    return;
+  }
+
+  // Crea o ripristina canvas
+  let canvas = document.getElementById("grades-canvas");
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    canvas.id = "grades-canvas";
+    chartContainer.innerHTML = "";
+    chartContainer.appendChild(canvas);
+  }
+
+  const ctx = canvas.getContext("2d");
+  const containerWidth = chartContainer.offsetWidth || 400;
+  const width = 400;
+  const height = 200;
+  
+  // Set display size
+  canvas.style.width = width + "px";
+  canvas.style.height = height + "px";
+  canvas.width = width;
+  canvas.height = height;
+  
+  // Ordina esami per data (più vecchi prima)
+  const sortedExams = [...exams].sort((a, b) => {
+    const dateA = new Date(a.date || 0);
+    const dateB = new Date(b.date || 0);
+    return dateA - dateB;
+  });
+
+  // Calcola range date
+  const dates = sortedExams.map(e => new Date(e.date || 0)).filter(d => !isNaN(d.getTime()));
+  if (dates.length === 0) {
+    chartContainer.innerHTML = '<p class="muted small" style="text-align:center; padding:40px;">Aggiungi esami con date valide per vedere il grafico</p>';
+    return;
+  }
+
+  const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  const dateRange = maxDate - minDate || 1; // Evita divisione per zero
+
+  // Margini
+  const marginLeft = 50;
+  const marginRight = 20;
+  const marginTop = 20;
+  const marginBottom = 40;
+  const chartWidth = width - marginLeft - marginRight;
+  const chartHeight = height - marginTop - marginBottom;
+
+  // Sfondo
+  ctx.fillStyle = "rgba(10, 12, 20, 0.5)";
+  ctx.fillRect(0, 0, width, height);
+
+  // Griglia orizzontale (voti)
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  ctx.lineWidth = 1;
+  ctx.font = "10px system-ui";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.textAlign = "right";
+  
+  for (let grade = 18; grade <= 30; grade += 3) {
+    const y = marginTop + chartHeight - ((grade - 18) / 12) * chartHeight;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, y);
+    ctx.lineTo(width - marginRight, y);
+    ctx.stroke();
+    
+    // Label voti
+    ctx.fillText(grade.toString(), marginLeft - 8, y + 3);
+  }
+
+  // Griglia verticale (date) - mostra alcune date chiave
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.textAlign = "center";
+  ctx.font = "9px system-ui";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  
+  const numDateLabels = Math.min(5, sortedExams.length);
+  for (let i = 0; i < numDateLabels; i++) {
+    const index = Math.floor((i / (numDateLabels - 1)) * (sortedExams.length - 1));
+    const exam = sortedExams[index];
+    if (!exam || !exam.date) continue;
+    
+    const examDate = new Date(exam.date);
+    const x = marginLeft + ((examDate - minDate) / dateRange) * chartWidth;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, marginTop);
+    ctx.lineTo(x, height - marginBottom);
+    ctx.stroke();
+    
+    // Formatta data (GG/MM/AA)
+    const day = String(examDate.getDate()).padStart(2, "0");
+    const month = String(examDate.getMonth() + 1).padStart(2, "0");
+    const year = String(examDate.getFullYear()).slice(-2);
+    ctx.fillText(`${day}/${month}/${year}`, x, height - marginBottom + 15);
+  }
+
+  // Disegna linea dei voti
+  if (sortedExams.length > 0) {
+    ctx.strokeStyle = "rgba(99, 102, 241, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    let firstPoint = true;
+    sortedExams.forEach((exam, index) => {
+      if (!exam.date || !exam.grade) return;
+      
+      const examDate = new Date(exam.date);
+      const x = marginLeft + ((examDate - minDate) / dateRange) * chartWidth;
+      const y = marginTop + chartHeight - ((exam.grade - 18) / 12) * chartHeight;
+      
+      if (firstPoint) {
+        ctx.moveTo(x, y);
+        firstPoint = false;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    
+    ctx.stroke();
+
+    // Disegna punti
+    ctx.fillStyle = "rgba(99, 102, 241, 1)";
+    sortedExams.forEach((exam) => {
+      if (!exam.date || !exam.grade) return;
+      
+      const examDate = new Date(exam.date);
+      const x = marginLeft + ((examDate - minDate) / dateRange) * chartWidth;
+      const y = marginTop + chartHeight - ((exam.grade - 18) / 12) * chartHeight;
+      
+      // Punto
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Colore punto in base al voto
+      if (exam.grade >= 27) ctx.fillStyle = "rgba(34, 197, 94, 1)"; // Verde
+      else if (exam.grade >= 24) ctx.fillStyle = "rgba(99, 102, 241, 1)"; // Blu
+      else if (exam.grade >= 21) ctx.fillStyle = "rgba(245, 158, 11, 1)"; // Arancione
+      else ctx.fillStyle = "rgba(251, 113, 133, 1)"; // Rosso
+      
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Reset colore per prossimo punto
+      ctx.fillStyle = "rgba(99, 102, 241, 1)";
+    });
+  }
+
+  // Assi
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.lineWidth = 1;
+  
+  // Asse Y (voti)
+  ctx.beginPath();
+  ctx.moveTo(marginLeft, marginTop);
+  ctx.lineTo(marginLeft, height - marginBottom);
+  ctx.stroke();
+  
+  // Asse X (tempo)
+  ctx.beginPath();
+  ctx.moveTo(marginLeft, height - marginBottom);
+  ctx.lineTo(width - marginRight, height - marginBottom);
+  ctx.stroke();
+}
+
+function generatePersonalizedTips(exams, avg, weightedAvg) {
+  const tipsContainer = document.getElementById("personalized-tips");
+  if (!tipsContainer) return;
+
+  tipsContainer.innerHTML = "";
+
+  if (exams.length === 0) {
+    tipsContainer.innerHTML = `
+      <div class="tipCard">
+        <div class="tipIcon">💡</div>
+        <div class="tipContent">
+          <div class="tipTitle">Aggiungi i tuoi esami</div>
+          <div class="tipDesc">Inizia aggiungendo gli esami che hai già sostenuto per vedere statistiche e consigli personalizzati.</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const tips = [];
+
+  // Tip basato su media
+  if (avg < 22) {
+    tips.push({
+      icon: "📚",
+      title: "Media sotto la sufficienza",
+      desc: `La tua media è ${avg.toFixed(1)}. Considera di dedicare più tempo allo studio e seguire un piano più strutturato. Usa la sezione Strategie per configurare un piano di studio ottimizzato.`
+    });
+  } else if (avg >= 22 && avg < 26) {
+    tips.push({
+      icon: "✅",
+      title: "Buona media",
+      desc: `Ottima media di ${avg.toFixed(1)}! Continua così. Potresti provare a puntare a voti più alti concentrandoti sugli esami più importanti.`
+    });
+  } else if (avg >= 26) {
+    tips.push({
+      icon: "🌟",
+      title: "Eccellente media",
+      desc: `Eccellente! La tua media di ${avg.toFixed(1)} è molto alta. Continua a mantenere questo livello di preparazione.`
+    });
+  }
+
+  // Tip su media ponderata vs semplice
+  if (weightedAvg > 0 && Math.abs(weightedAvg - avg) > 0.5) {
+    if (weightedAvg > avg) {
+      tips.push({
+        icon: "🎯",
+        title: "Ottima distribuzione",
+        desc: `La tua media ponderata (${weightedAvg.toFixed(2)}) è superiore alla media semplice. Significa che ottieni voti più alti negli esami con più CFU. Ottimo lavoro!`
+      });
+    } else {
+      tips.push({
+        icon: "⚠️",
+        title: "Attenzione ai CFU",
+        desc: `La tua media ponderata (${weightedAvg.toFixed(2)}) è inferiore alla media semplice. Considera di concentrarti di più sugli esami con più CFU per migliorare la media complessiva.`
+      });
+    }
+  }
+
+  // Tip su trend
+  if (exams.length >= 3) {
+    const recent = exams.slice(0, 3);
+    const older = exams.slice(3, 6);
+    if (older.length > 0) {
+      const recentAvg = recent.reduce((s, e) => s + (e.grade || 0), 0) / recent.length;
+      const olderAvg = older.reduce((s, e) => s + (e.grade || 0), 0) / older.length;
+      if (recentAvg < olderAvg - 1) {
+        tips.push({
+          icon: "📉",
+          title: "Trend negativo",
+          desc: "Hai avuto un calo recente nei voti. Potrebbe essere utile rivedere il tuo metodo di studio o ridurre il carico di lavoro."
+        });
+      } else if (recentAvg > olderAvg + 1) {
+        tips.push({
+          icon: "📈",
+          title: "Trend positivo",
+          desc: "Ottimo! I tuoi voti recenti sono migliori. Continua con questo approccio di studio."
+        });
+      }
+    }
+  }
+
+  // Tip su distribuzione
+  const excellent = exams.filter(e => (e.grade || 0) >= 27).length;
+  if (excellent > 0 && excellent / exams.length > 0.3) {
+    tips.push({
+      icon: "🏆",
+      title: "Molti voti eccellenti",
+      desc: `Hai ${excellent} esami con voto 27 o superiore. Ottimo lavoro! Mantieni questo livello.`
+    });
+  }
+
+  // Mostra i tips
+  if (tips.length === 0) {
+    tips.push({
+      icon: "👍",
+      title: "Continua così",
+      desc: "I tuoi risultati sono buoni. Continua a seguire il tuo piano di studio."
+    });
+  }
+
+  tips.forEach(tip => {
+    const tipCard = document.createElement("div");
+    tipCard.className = "tipCard";
+    tipCard.innerHTML = `
+      <div class="tipIcon">${tip.icon}</div>
+      <div class="tipContent">
+        <div class="tipTitle">${escapeHtml(tip.title)}</div>
+        <div class="tipDesc">${escapeHtml(tip.desc)}</div>
+      </div>
+    `;
+    tipsContainer.appendChild(tipCard);
+  });
+}
+
 // ----------------- MENU -----------------
 function setupMenu() {
   const btn = document.getElementById("menu-btn");
@@ -1205,13 +1737,13 @@ function mountApp() {
 
       const profile = await getProfile(user.uid);
       if (!profile?.goalMode || !profile?.dayMinutes) {
-        window.location.assign("./onboarding.html");
+        window.location.assign("./settings.html");
         return;
       }
 
       const exams = await listExams(user.uid);
       if (exams.length === 0) {
-        window.location.assign("./onboarding.html");
+        window.location.assign("./settings.html");
         return;
       }
 
@@ -2290,6 +2822,21 @@ window.addEventListener("DOMContentLoaded", () => {
   }
   if (document.getElementById("task-title") || document.getElementById("timer-start")) {
     mountTask();
+    return;
+  }
+  if (qs("add-passed-exam") || qs("personal-info-display")) {
+    mountProfile();
+    return;
+  }
+  if (qs("save-strategies") || qs("day-minutes")) {
+    // Potrebbe essere strategies.html o onboarding.html
+    // Controlla se c'è il bottone save-strategies (strategies) o save-profile (onboarding)
+    if (qs("save-strategies")) {
+      // TODO: mountStrategies() quando implementato
+      mountOnboarding(); // Per ora usa onboarding per strategies
+    } else {
+      mountOnboarding();
+    }
     return;
   }
   console.log("boot -> unknown page");

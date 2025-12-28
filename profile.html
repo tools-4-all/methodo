@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Profilo</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Profilo</h1>
+        <p id="user-line" class="meta">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./settings.html">
+              <span>Impostazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+              <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./consigli.html">
+              <span>Consigli</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid">
+      
+      <!-- LEFT: Informazioni Personali -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Informazioni Personali</h2>
+          <div class="meta">Dati del tuo profilo</div>
+        </div>
+        
+        <!-- Informazioni personali (solo visualizzazione) -->
+        <div id="personal-info-display" class="personalInfoDisplay"></div>
+        
+        <div class="divider"></div>
+        
+        <!-- Sezione per modificare informazioni (opzionale, per futuro) -->
+        <div class="formSection">
+          <p class="meta hint">
+            Per modificare queste informazioni, contatta il supporto o elimina e ricrea il tuo account.
+          </p>
+        </div>
+      </section>
+
+      <!-- CENTER: Esami Sostenuti -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Esami Sostenuti</h2>
+          <div class="meta">Traccia i tuoi risultati accademici</div>
+        </div>
+
+        <div class="form cleanForm">
+          <!-- Form per aggiungere esame sostenuto -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Nuovo esame sostenuto</h3>
+              <p class="meta">Aggiungi un esame che hai già superato</p>
+            </div>
+
+            <div class="formRow">
+              <label for="passed-exam-name">Nome esame</label>
+              <input id="passed-exam-name" type="text" placeholder="Analisi 1 / Fisica / ..." />
+            </div>
+
+            <div class="twoCols">
+              <div class="formRow">
+                <label for="passed-exam-grade">Voto</label>
+                <input id="passed-exam-grade" type="number" min="18" max="30" step="1" placeholder="" />
+              </div>
+
+              <div class="formRow">
+                <label for="passed-exam-cfu">CFU</label>
+                <input id="passed-exam-cfu" type="number" min="1" max="30" step="1" value="" />
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="passed-exam-date">Data superamento</label>
+              <input id="passed-exam-date" type="date" />
+            </div>
+
+            <div class="formRow">
+              <label for="passed-exam-notes">
+                <span>Note (opzionale)</span>
+                <span class="labelHint">Aggiungi osservazioni o note personali su questo esame</span>
+              </label>
+              <textarea 
+                id="passed-exam-notes" 
+                rows="3" 
+                placeholder="Es: esame molto difficile, ho studiato per 2 mesi, argomento interessante..."
+                class="notesTextarea"
+              ></textarea>
+            </div>
+
+            <div class="toolbar" style="justify-content:flex-end">
+              <button class="btn" id="add-passed-exam" type="button">Aggiungi esame</button>
+            </div>
+
+            <p class="error" id="passed-exam-error"></p>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Lista esami sostenuti -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Storico esami</h3>
+              <p class="meta">I tuoi esami superati</p>
+            </div>
+
+            <div id="passed-exams-list" class="passedExamsList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Statistiche e Consigli -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Statistiche e Consigli</h2>
+          <div class="meta">Analisi del tuo percorso</div>
+        </div>
+
+        <!-- Statistiche riassuntive -->
+        <div id="stats-summary" class="statsSummary">
+          <!-- Media voti -->
+          <div class="statCard">
+            <div class="statLabel">Media voti</div>
+            <div class="statValue" id="grade-average">—</div>
+            <div class="statSub" id="grade-count">0 esami</div>
+          </div>
+
+          <!-- Media ponderata -->
+          <div class="statCard">
+            <div class="statLabel">Media ponderata</div>
+            <div class="statValue" id="weighted-average">—</div>
+            <div class="statSub" id="weighted-average-sub">—</div>
+          </div>
+
+          <!-- CFU totali -->
+          <div class="statCard">
+            <div class="statLabel">CFU totali</div>
+            <div class="statValue" id="total-cfu">0</div>
+            <div class="statSub">Crediti acquisiti</div>
+          </div>
+
+          <!-- Voto più alto -->
+          <div class="statCard">
+            <div class="statLabel">Voto più alto</div>
+            <div class="statValue" id="max-grade">—</div>
+            <div class="statSub" id="max-grade-exam">—</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Grafico voti -->
+        <div class="formSection">
+          <div class="sectionTitle">
+            <h3>Andamento voti nel tempo</h3>
+            <p class="meta">Visualizza l'evoluzione dei tuoi voti nel tempo</p>
+          </div>
+          <div id="grades-chart" class="gradesChart">
+            <!-- Grafico a barre verrà generato qui -->
+            <canvas id="grades-canvas"></canvas>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Consigli per migliorare -->
+        <div class="formSection">
+          <div class="sectionTitle">
+            <h3>Consigli personalizzati</h3>
+            <p class="meta">Suggerimenti basati sui tuoi risultati</p>
+          </div>
+          <div id="personalized-tips" class="personalizedTips">
+            <!-- I consigli verranno generati dinamicamente -->
+            <div class="tipCard">
+              <div class="tipIcon">💡</div>
+              <div class="tipContent">
+                <div class="tipTitle">Aggiungi i tuoi esami</div>
+                <div class="tipDesc">Inizia aggiungendo gli esami che hai già sostenuto per vedere statistiche e consigli personalizzati.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+

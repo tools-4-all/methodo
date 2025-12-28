@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Impostazioni</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Impostazioni</h1>
+        <p id="user-line" class="meta">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+              <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./consigli.html">
+              <span>Consigli</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid" style="grid-template-columns: 1fr 1fr; gap: 24px; max-width: 900px; margin: 0 auto;">
+      
+      <!-- Profilo -->
+      <a href="./profile.html" class="settingsCard">
+        <div class="settingsCardIcon">👤</div>
+        <h2>Profilo</h2>
+        <p class="meta">Informazioni personali, esami sostenuti, statistiche e consigli</p>
+        <ul class="settingsCardFeatures">
+          <li>Visualizza e gestisci i tuoi dati</li>
+          <li>Traccia esami superati con voti</li>
+          <li>Statistiche e grafici voti</li>
+          <li>Consigli personalizzati</li>
+        </ul>
+        <div class="settingsCardAction">
+          <span class="btn primary">Apri Profilo →</span>
+        </div>
+      </a>
+
+      <!-- Strategie -->
+      <a href="./strategies.html" class="settingsCard">
+        <div class="settingsCardIcon">⚙️</div>
+        <h2>Strategie</h2>
+        <p class="meta">Configura l'algoritmo e gestisci gli esami da preparare</p>
+        <ul class="settingsCardFeatures">
+          <li>Impostazioni algoritmo di studio</li>
+          <li>Obiettivo e carico settimanale</li>
+          <li>Disponibilità giornaliera</li>
+          <li>Gestione esami da preparare</li>
+        </ul>
+        <div class="settingsCardAction">
+          <span class="btn primary">Apri Strategie →</span>
+        </div>
+      </a>
+
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+  <script>
+    // ===== MENU TOGGLE =====
+    const menuBtn = document.getElementById("menu-btn");
+    const menuPanel = document.getElementById("menu-panel");
+
+    function openMenu(){
+      menuPanel.classList.remove("hidden");
+      menuBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeMenu(){
+      menuPanel.classList.add("hidden");
+      menuBtn.setAttribute("aria-expanded", "false");
+    }
+    function toggleMenu(){
+      const isOpen = !menuPanel.classList.contains("hidden");
+      isOpen ? closeMenu() : openMenu();
+    }
+
+    menuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // click fuori -> chiudi
+    document.addEventListener("click", (e) => {
+      if (!menuPanel.classList.contains("hidden")) closeMenu();
+    });
+
+    // click dentro panel -> non chiudere
+    menuPanel.addEventListener("click", (e) => e.stopPropagation());
+
+    // ESC -> chiudi
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMenu();
+    });
+  </script>
+</body>
+</html>
+

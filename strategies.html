@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Strategie</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Strategie di Studio</h1>
+        <p id="user-line" class="meta">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./settings.html">
+              <span>Impostazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+              <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./consigli.html">
+              <span>Consigli</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid">
+      
+      <!-- LEFT: Impostazioni Algoritmo -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Impostazioni Algoritmo</h2>
+          <div class="meta">Configura come l'algoritmo genera il tuo piano</div>
+        </div>
+
+        <div class="form cleanForm">
+          <!-- Obiettivo -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Obiettivo di studio</h3>
+              <p class="meta">Influenza quanto "spingi" sul piano di studio</p>
+            </div>
+
+            <div class="formRow">
+              <label for="goal-mode">Modalità</label>
+              <select id="goal-mode">
+                <option value="pass">Sufficiente (18-22)</option>
+                <option value="good" selected>Buono (23-26)</option>
+                <option value="top">Ottimo (27-30)</option>
+              </select>
+            </div>
+
+            <div class="infoBox">
+              <strong>Come funziona:</strong>
+              <ul class="infoList">
+                <li><strong>Sufficiente:</strong> Piano più leggero, meno ore settimanali, focus su copertura completa</li>
+                <li><strong>Buono:</strong> Bilanciato tra tempo e qualità, raccomandato per la maggior parte</li>
+                <li><strong>Ottimo:</strong> Piano intensivo, più ore, più ripetizioni e approfondimenti</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Carico di studio -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Carico di studio settimanale</h3>
+              <p class="meta">Quanto tempo vuoi dedicare allo studio ogni settimana</p>
+            </div>
+
+            <div class="formRow">
+              <label for="weekly-hours">Ore per settimana</label>
+              <div class="inputWithSuffix">
+                <input id="weekly-hours" type="number" min="1" max="80" step="1" value="12" />
+                <span class="suffix">h</span>
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="task-minutes">Durata task</label>
+              <div class="inputWithSuffix">
+                <select id="task-minutes">
+                  <option value="25">25 minuti (Pomodoro)</option>
+                  <option value="35" selected>35 minuti</option>
+                  <option value="45">45 minuti</option>
+                  <option value="60">60 minuti (1 ora)</option>
+                </select>
+                <span class="suffix">min</span>
+              </div>
+            </div>
+
+            <div class="infoBox">
+              <strong>Suggerimento:</strong> Sii realistico. Se metti troppe ore, il piano diventa difficile da seguire e potresti demotivarti.
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Disponibilità settimanale -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Disponibilità giornaliera</h3>
+              <p class="meta">Quanti minuti massimi puoi dedicare ogni giorno</p>
+            </div>
+
+            <div class="weekWrap">
+              <div id="day-minutes" class="weekGrid"></div>
+              <p class="meta hint">
+                <strong>Importante:</strong> Metti valori realistici. Se esageri, il piano diventa difficile da seguire.
+                La somma settimanale dovrebbe essere coerente con le ore settimanali impostate sopra.
+              </p>
+            </div>
+          </div>
+
+          <p class="error" id="strategy-error"></p>
+          <p class="meta ok" id="strategy-saved"></p>
+
+          <div class="toolbar" style="justify-content:flex-end; margin-top:20px;">
+            <button class="btn primary" id="save-strategies" type="button">Salva impostazioni</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Esami da Preparare -->
+      <section class="card">
+        <div class="cardHeader">
+          <h2>Esami da Preparare</h2>
+          <div class="meta">Aggiungi e gestisci gli esami che stai studiando</div>
+        </div>
+
+        <div class="form cleanForm">
+          <!-- Form nuovo esame -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Nuovo esame</h3>
+              <p class="meta">Nome, data e livello iniziale</p>
+            </div>
+
+            <div class="formRow">
+              <label for="exam-name">Nome</label>
+              <input id="exam-name" placeholder="Analisi 2 / Fisica / ..." />
+            </div>
+
+            <div class="formRow">
+              <label for="exam-date">Data esame</label>
+              <input id="exam-date" type="date" />
+            </div>
+
+            <div class="twoCols">
+              <div class="formRow">
+                <label for="exam-cfu">CFU</label>
+                <input id="exam-cfu" type="number" min="1" max="30" step="1" value="6" />
+              </div>
+
+              <div class="formRow">
+                <label for="exam-level">Livello preparazione (0–5)</label>
+                <input id="exam-level" type="number" min="0" max="5" step="1" value="0" />
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="exam-diff">Difficoltà</label>
+              <select id="exam-diff">
+                <option value="1">1 (facile)</option>
+                <option value="2" selected>2 (media)</option>
+                <option value="3">3 (difficile)</option>
+              </select>
+            </div>
+
+            <div class="infoBox">
+              <strong>Livello preparazione:</strong>
+              <ul class="infoList">
+                <li><strong>0:</strong> Non ho mai visto l'argomento</li>
+                <li><strong>1-2:</strong> Ho visto qualcosa ma molto poco</li>
+                <li><strong>3:</strong> Ho una base ma devo approfondire</li>
+                <li><strong>4:</strong> Sono abbastanza preparato, serve ripasso</li>
+                <li><strong>5:</strong> Sono quasi pronto, serve solo consolidamento</li>
+              </ul>
+            </div>
+
+            <div class="toolbar" style="justify-content:flex-end">
+              <button class="btn" id="add-exam" type="button">Aggiungi esame</button>
+            </div>
+
+            <p class="error" id="exam-error"></p>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Lista esami -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Lista esami</h3>
+              <p class="meta">Controlla date e priorità</p>
+            </div>
+
+            <div id="exam-list" class="examGrid"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Bottone per andare alla dashboard -->
+          <div class="toolbar" style="justify-content:flex-end">
+            <a href="./app.html" class="btn primary">Vai alla dashboard</a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+  <script>
+    // ===== MENU TOGGLE =====
+    const menuBtn = document.getElementById("menu-btn");
+    const menuPanel = document.getElementById("menu-panel");
+
+    function openMenu(){
+      menuPanel.classList.remove("hidden");
+      menuBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeMenu(){
+      menuPanel.classList.add("hidden");
+      menuBtn.setAttribute("aria-expanded", "false");
+    }
+    function toggleMenu(){
+      const isOpen = !menuPanel.classList.contains("hidden");
+      isOpen ? closeMenu() : openMenu();
+    }
+
+    menuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // click fuori -> chiudi
+    document.addEventListener("click", (e) => {
+      if (!menuPanel.classList.contains("hidden")) closeMenu();
+    });
+
+    // click dentro panel -> non chiudere
+    menuPanel.addEventListener("click", (e) => e.stopPropagation());
+
+    // ESC -> chiudi
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMenu();
+    });
+  </script>
+</body>
+</html>
+
