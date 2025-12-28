@@ -876,6 +876,35 @@ function mountOnboarding() {
     // Listener per save-strategies (strategies.html)
     qs("save-strategies")?.addEventListener("click", handleSaveSettings);
 
+    // Info box dinamica per tipo esame
+    const categorySelect = qs("exam-category");
+    const categoryInfo = qs("category-info");
+    const categoryInfoTitle = qs("category-info-title");
+    const categoryInfoDesc = qs("category-info-desc");
+    
+    const updateCategoryInfo = () => {
+      if (!categorySelect || !categoryInfo) return;
+      const value = categorySelect.value;
+      if (value === "auto") {
+        if (categoryInfo) categoryInfo.style.display = "none";
+      } else {
+        if (categoryInfo) categoryInfo.style.display = "block";
+        if (value === "scientific") {
+          if (categoryInfoTitle) categoryInfoTitle.textContent = "Scientifico";
+          if (categoryInfoDesc) categoryInfoDesc.textContent = "L'algoritmo proporrà teoria ed esercizi, ma NON spaced repetition (non efficace per formule/esercizi).";
+        } else if (value === "humanistic") {
+          if (categoryInfoTitle) categoryInfoTitle.textContent = "Umanistico";
+          if (categoryInfoDesc) categoryInfoDesc.textContent = "L'algoritmo proporrà teoria, ripasso e spaced repetition, ma NON esercizi pratici.";
+        } else {
+          if (categoryInfoTitle) categoryInfoTitle.textContent = "Misto";
+          if (categoryInfoDesc) categoryInfoDesc.textContent = "L'algoritmo proporrà tutti i tipi di task (teoria, esercizi, ripasso, spaced repetition).";
+        }
+      }
+    };
+    
+    categorySelect?.addEventListener("change", updateCategoryInfo);
+    updateCategoryInfo(); // Mostra info iniziale se non è "auto"
+
     qs("add-exam")?.addEventListener("click", async (e) => {
       e.preventDefault();
       setText(qs("exam-error"), "");
@@ -886,13 +915,38 @@ function mountOnboarding() {
         const date = qs("exam-date").value;
         const level = Number(qs("exam-level").value || 0);
         const difficulty = Number(qs("exam-diff").value || 2);
+        const category = (qs("exam-category")?.value || "auto").trim();
+        const topics = (qs("exam-topics")?.value || "").trim();
 
         if (!name) throw new Error("Nome esame mancante.");
         if (!date) throw new Error("Data esame mancante.");
         if (cfu < 1) throw new Error("CFU non validi.");
 
-        await addExam(user.uid, { name, cfu, date, level, difficulty });
+        // Auto-rileva categoria se non specificata
+        let finalCategory = category;
+        if (category === "auto") {
+          finalCategory = detectExamCategory(name);
+        }
+
+        await addExam(user.uid, { 
+          name, 
+          cfu, 
+          date, 
+          level, 
+          difficulty,
+          category: finalCategory,
+          topics: topics || null
+        });
+        
+        // Reset form
         qs("exam-name").value = "";
+        qs("exam-date").value = "";
+        qs("exam-cfu").value = "6";
+        qs("exam-level").value = "0";
+        qs("exam-diff").value = "2";
+        qs("exam-category").value = "auto";
+        if (qs("exam-topics")) qs("exam-topics").value = "";
+        
         await refreshExamList(user.uid);
       } catch (err) {
         console.error(err);
@@ -955,6 +1009,43 @@ function mountOnboarding() {
       goToDashboardBtn.addEventListener("click", handleGoToDashboard);
     }
   });
+}
+
+// ----------------- Auto-rilevamento categoria esame -----------------
+function detectExamCategory(examName) {
+  const name = (examName || "").toLowerCase();
+  
+  // Parole chiave scientifiche
+  const scientificKeywords = [
+    "matematica", "analisi", "algebra", "geometria", "calcolo", "statistica",
+    "fisica", "meccanica", "elettromagnetismo", "termodinamica", "quantistica",
+    "chimica", "organica", "inorganica", "fisica",
+    "informatica", "programmazione", "algoritmi", "database", "software",
+    "ingegneria", "elettronica", "meccanica", "civile", "aerospaziale",
+    "biologia", "anatomia", "fisiologia", "genetica",
+    "economia quantitativa", "econometria", "finanza matematica"
+  ];
+  
+  // Parole chiave umanistiche
+  const humanisticKeywords = [
+    "lettere", "letteratura", "storia", "filosofia", "storia dell'arte",
+    "lingua", "linguistica", "filologia", "critica letteraria",
+    "antropologia", "sociologia", "psicologia sociale",
+    "diritto", "giurisprudenza", "storia del diritto",
+    "pedagogia", "scienze dell'educazione"
+  ];
+  
+  // Controlla match
+  for (const keyword of scientificKeywords) {
+    if (name.includes(keyword)) return "scientific";
+  }
+  
+  for (const keyword of humanisticKeywords) {
+    if (name.includes(keyword)) return "humanistic";
+  }
+  
+  // Default: misto se non si riesce a determinare
+  return "mixed";
 }
 
 // ----------------- Modale modifica esame -----------------
@@ -1060,12 +1151,48 @@ function openEditExamModal(uid, exam, onSuccess) {
   });
   diffLabel.appendChild(diffSelect);
 
+  // Campo categoria
+  const catLabel = document.createElement("label");
+  catLabel.innerHTML = '<span>Tipo esame</span>';
+  const catSelect = document.createElement("select");
+  catSelect.id = "ee-category";
+  catSelect.required = true;
+  const catOptions = [
+    { value: "auto", text: "Auto-rileva (consigliato)" },
+    { value: "scientific", text: "Scientifico" },
+    { value: "humanistic", text: "Umanistico" },
+    { value: "mixed", text: "Misto" },
+  ];
+  const examCategory = exam.category || "auto";
+  catOptions.forEach((opt) => {
+    const option = document.createElement("option");
+    option.value = opt.value;
+    option.textContent = opt.text;
+    if (opt.value === examCategory) option.selected = true;
+    catSelect.appendChild(option);
+  });
+  catLabel.appendChild(catSelect);
+
+  // Campo argomenti principali
+  const topicsLabel = document.createElement("label");
+  topicsLabel.innerHTML = '<span>Argomenti principali <span style="font-size:11px;color:rgba(255,255,255,.5);">(opzionale)</span></span>';
+  const topicsTextarea = document.createElement("textarea");
+  topicsTextarea.id = "ee-topics";
+  topicsTextarea.className = "notesTextarea";
+  topicsTextarea.style.minHeight = "80px";
+  topicsTextarea.placeholder = "Es: Funzioni, Derivate, Integrali... (uno per riga o separati da virgola)";
+  topicsTextarea.rows = 3;
+  topicsTextarea.value = exam.topics || "";
+  topicsLabel.appendChild(topicsTextarea);
+
   // Aggiungi tutti i campi al form
   form.appendChild(nameLabel);
   form.appendChild(dateLabel);
   form.appendChild(cfuLabel);
   form.appendChild(levelLabel);
   form.appendChild(diffLabel);
+  form.appendChild(catLabel);
+  form.appendChild(topicsLabel);
   card.appendChild(form);
 
   // Azioni (bottoni)
@@ -1109,12 +1236,28 @@ function openEditExamModal(uid, exam, onSuccess) {
       const cfu = Number(cfuInput.value || 0);
       const level = Number(levelInput.value || 0);
       const difficulty = Number(diffSelect.value || 2);
+      const category = (catSelect.value || "auto").trim();
+      const topics = topicsTextarea.value.trim() || null;
 
       if (!name) throw new Error("Nome esame mancante.");
       if (!date) throw new Error("Data esame mancante.");
       if (cfu < 1) throw new Error("CFU non validi.");
 
-      await updateExam(uid, exam.id, { name, cfu, date, level, difficulty });
+      // Auto-rileva categoria se necessario
+      let finalCategory = category;
+      if (category === "auto") {
+        finalCategory = detectExamCategory(name);
+      }
+
+      await updateExam(uid, exam.id, { 
+        name, 
+        cfu, 
+        date, 
+        level, 
+        difficulty,
+        category: finalCategory,
+        topics
+      });
       closeModal();
       if (onSuccess) onSuccess();
     } catch (err) {

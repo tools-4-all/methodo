@@ -73,27 +73,50 @@ function normalizeWeights(items) {
   return items.map((x) => ({ ...x, frac: x.weight / sum }));
 }
 
-function buildTaskTemplates(goalMode) {
-  // Task primitives: cambiano in base all'obiettivo
+function buildTaskTemplates(goalMode, examCategory = "mixed") {
+  // Task primitives: cambiano in base all'obiettivo e al tipo di esame
   // pass: più esercizi d'esame presto, top: più teoria/approfondimento
-  const pass = [
+  
+  // Template base per ogni obiettivo
+  const passBase = [
     { type: "exam", label: "Prove d'esame + correzione" },
     { type: "practice", label: "Esercizi mirati (weakness)" },
     { type: "review", label: "Ripasso attivo + error log" },
+    { type: "spaced", label: "Spaced repetition / flashcard" },
   ];
-  const good = [
+  const goodBase = [
     { type: "theory", label: "Teoria (lettura attiva)" },
     { type: "practice", label: "Esercizi base → medi" },
     { type: "exam", label: "Prove d'esame + correzione" },
     { type: "review", label: "Ripasso attivo + error log" },
+    { type: "spaced", label: "Spaced repetition / flashcard" },
   ];
-  const top = [
+  const topBase = [
     { type: "theory", label: "Teoria + dimostrazioni chiave" },
     { type: "practice", label: "Esercizi difficili" },
     { type: "exam", label: "Prove d'esame (timeboxed)" },
     { type: "review", label: "Ripasso attivo + mappe" },
+    { type: "spaced", label: "Spaced repetition / flashcard" },
   ];
-  return goalMode === "top" ? top : goalMode === "good" ? good : pass;
+  
+  // Seleziona template base
+  let templates = goalMode === "top" ? topBase : goalMode === "good" ? goodBase : passBase;
+  
+  // Filtra in base alla categoria dell'esame
+  if (examCategory === "scientific") {
+    // Esami scientifici: NO spaced repetition (non efficace per formule/esercizi)
+    templates = templates.filter(t => t.type !== "spaced");
+  } else if (examCategory === "humanistic") {
+    // Esami umanistici: NO esercizi pratici (focus su teoria, ripasso, memorizzazione)
+    templates = templates.filter(t => t.type !== "practice");
+    // Aggiungi più focus su spaced repetition per memorizzazione
+    if (!templates.some(t => t.type === "spaced")) {
+      templates.push({ type: "spaced", label: "Spaced repetition / flashcard" });
+    }
+  }
+  // Per "mixed" o altri, usa tutti i template
+  
+  return templates;
 }
 
 function pickTaskType(idx, templates) {
@@ -220,7 +243,6 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   }
 
   // genera tasks per giorno
-  const templates = buildTaskTemplates(goalMode);
   const days = dayKeys.map((k, i) => ({
     key: k,
     label: dayLabels[i],
@@ -232,8 +254,13 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   // Coda di task per esame
   const taskQueues = new Map();
   for (const a of allocations) {
-    // trova esame per recuperare difficulty/level
+    // trova esame per recuperare difficulty/level e categoria
     const exam = validExams.find((ex) => ex.id === a.examId);
+    const examCategory = exam?.category || "mixed";
+    
+    // Genera template specifico per questo esame
+    const templates = buildTaskTemplates(goalMode, examCategory);
+    
     const examTaskMin = computeExamTaskMinutes(baseTaskMin, exam);
     const nTasks = Math.max(1, Math.floor(a.targetMin / examTaskMin));
     const queue = [];
@@ -250,14 +277,28 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
       });
     }
     // se restano minuti non multipli, aggiungi un task corto
+    // Per esami scientifici, evita "spaced" (flashcard)
     const rem = a.targetMin - nTasks * examTaskMin;
     if (rem >= 15) {
+      let microType = "micro";
+      let microLabel = "Micro-ripasso / flashcard";
+      
+      if (examCategory === "scientific") {
+        // Per scientifici: micro-ripasso teorico invece di flashcard
+        microType = "micro";
+        microLabel = "Micro-ripasso teorico";
+      } else if (examCategory === "humanistic") {
+        // Per umanistici: flashcard/spaced repetition va bene
+        microType = "spaced";
+        microLabel = "Flashcard / ripasso veloce";
+      }
+      
       queue.push({
         id: cryptoId(),
         examId: a.examId,
         examName: a.name,
-        type: "micro",
-        label: "Micro-ripasso / flashcard",
+        type: microType,
+        label: microLabel,
         minutes: rem,
         done: false,
       });

@@ -196,6 +196,33 @@
               </select>
             </div>
 
+            <div class="formRow">
+              <label for="exam-category">Tipo esame</label>
+              <select id="exam-category">
+                <option value="auto">Auto-rileva (consigliato)</option>
+                <option value="scientific">Scientifico (Matematica, Fisica, Ingegneria...)</option>
+                <option value="humanistic">Umanistico (Lettere, Storia, Filosofia...)</option>
+                <option value="mixed">Misto (Economia, Psicologia...)</option>
+              </select>
+            </div>
+
+            <div class="infoBox" id="category-info" style="display:none; margin-top:8px;">
+              <strong id="category-info-title"></strong>
+              <p id="category-info-desc" style="margin:4px 0 0 0; font-size:12px;"></p>
+            </div>
+
+            <div class="formRow">
+              <label for="exam-topics">
+                <span>Argomenti principali <span class="labelHint">(opzionale)</span></span>
+              </label>
+              <textarea 
+                id="exam-topics" 
+                class="notesTextarea" 
+                placeholder="Es: Funzioni, Derivate, Integrali... (uno per riga o separati da virgola)"
+                rows="3"
+              ></textarea>
+            </div>
+
             <div class="infoBox">
               <strong>Livello preparazione:</strong>
               <ul class="infoList">
