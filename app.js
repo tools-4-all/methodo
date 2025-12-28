@@ -702,11 +702,15 @@ function mountApp() {
       }
 
       renderDashboard(plan, exams, profile);
+      // Associa il bottone per aggiungere task manuali dopo il primo render
+      bindAddTaskButton(plan, exams, profile, user, weekStartISO);
 
       document.getElementById("regen-week")?.addEventListener("click", async () => {
         const plan2 = generateWeeklyPlan(profile, exams, weekStart);
         await saveWeeklyPlan(user.uid, weekStartISO, plan2);
         renderDashboard(plan2, exams, profile);
+        // Ricollega il bottone per il nuovo piano
+        bindAddTaskButton(plan2, exams, profile, user, weekStartISO);
       });
 
       document.getElementById("mark-today-done")?.addEventListener("click", async () => {
@@ -900,6 +904,220 @@ function renderDashboard(plan, exams, profile) {
       `Prossimo: ${next.name}. Preparazione stimata ${pct}% (${badge.text}). Se vuoi salire: aumenta ore o riduci esami attivi.`
     );
   }
+}
+
+// ----------------- Aggiunta task manuale -----------------
+/**
+ * Collega il bottone "+" per permettere all'utente di aggiungere manualmente un nuovo task
+ * nella giornata corrente. Richiede il piano, l'elenco esami, il profilo, l'utente
+ * e la data di inizio settimana per salvare correttamente il piano aggiornato.
+ */
+function bindAddTaskButton(plan, exams, profile, user, weekStartISO) {
+  const btn = document.getElementById("add-task-btn");
+  if (!btn) return;
+  // Evita di collegare più volte lo stesso bottone (dopo ri-render)
+  if (btn.dataset.bound) return;
+  btn.dataset.bound = "1";
+  btn.addEventListener("click", () => {
+    // Apri una finestra di dialogo personalizzata per la creazione del task.
+    openAddTaskModal(plan, exams, profile, user, weekStartISO);
+  });
+}
+
+/**
+ * Mostra un popup modale per creare un nuovo task.
+ * L'overlay è creato dinamicamente e usa gli stili esistenti (card, form, btn)
+ * per mantenere coerenza con il resto del sito. Gli esami sono proposti in un menu a tendina.
+ *
+ * @param {Object} plan     Piano corrente da aggiornare
+ * @param {Array} exams     Elenco esami disponibili
+ * @param {Object} profile  Profilo utente (non usato qui ma mantenuto per coerenza API)
+ * @param {Object} user     Utente autenticato (serve per salvare su Firestore)
+ * @param {String} weekStartISO ISO della data di inizio settimana
+ */
+function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("task-modal")) return;
+
+  // Overlay oscurante
+  const overlay = document.createElement("div");
+  overlay.id = "task-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.6)",
+    zIndex: "9999",
+  });
+
+  // Contenitore principale con stile card
+  const card = document.createElement("div");
+  card.className = "card";
+  // Regola dimensioni e padding per la modale
+  card.style.maxWidth = "420px";
+  card.style.width = "90%";
+  card.style.padding = "20px";
+
+  // Titolo modale
+  const title = document.createElement("h3");
+  title.textContent = "Nuovo task";
+  title.style.marginBottom = "12px";
+  title.style.fontSize = "18px";
+  card.appendChild(title);
+
+  // Contenitore form
+  const form = document.createElement("div");
+  form.className = "form";
+
+  // Campo selezione esame
+  const examLabel = document.createElement("label");
+  examLabel.innerHTML = '<span>Esame</span>';
+  const examSelect = document.createElement("select");
+  examSelect.id = "nt-exam";
+  examSelect.required = true;
+  // Popola select con esami
+  exams.forEach((e) => {
+    const opt = document.createElement("option");
+    opt.value = e.id;
+    opt.textContent = e.name;
+    examSelect.appendChild(opt);
+  });
+  examLabel.appendChild(examSelect);
+
+  // Campo descrizione
+  const labelLabel = document.createElement("label");
+  labelLabel.innerHTML = '<span>Descrizione</span>';
+  const labelInput = document.createElement("input");
+  labelInput.type = "text";
+  labelInput.id = "nt-label";
+  labelInput.placeholder = "Descrizione";
+  labelInput.required = true;
+  labelLabel.appendChild(labelInput);
+
+  // Campo tipo
+  const typeLabel = document.createElement("label");
+  typeLabel.innerHTML = '<span>Tipo</span>';
+  const typeInput = document.createElement("input");
+  typeInput.type = "text";
+  typeInput.id = "nt-type";
+  typeInput.placeholder = "theory, practice, review...";
+  typeInput.required = true;
+  typeLabel.appendChild(typeInput);
+
+  // Campo minuti
+  const minutesLabel = document.createElement("label");
+  minutesLabel.innerHTML = '<span>Durata (min)</span>';
+  const minutesInput = document.createElement("input");
+  minutesInput.type = "number";
+  minutesInput.id = "nt-minutes";
+  minutesInput.min = "1";
+  minutesInput.value = "30";
+  minutesInput.required = true;
+  minutesLabel.appendChild(minutesInput);
+
+  // Aggiungi tutti i campi al form
+  form.appendChild(examLabel);
+  form.appendChild(labelLabel);
+  form.appendChild(typeLabel);
+  form.appendChild(minutesLabel);
+  card.appendChild(form);
+
+  // Azioni (bottoni) nella riga finale
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnRow";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn primary";
+  saveBtn.type = "button";
+  saveBtn.id = "nt-save";
+  saveBtn.textContent = "Salva";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn";
+  cancelBtn.type = "button";
+  cancelBtn.id = "nt-cancel";
+  cancelBtn.textContent = "Annulla";
+
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  // Funzione per chiudere la modale e rimuoverla dal DOM
+  function closeModal() {
+    try {
+      document.body.removeChild(overlay);
+    } catch {}
+  }
+
+  // Gestore Annulla
+  cancelBtn.addEventListener("click", () => {
+    closeModal();
+  });
+
+  // Gestore Salva
+  saveBtn.addEventListener("click", async () => {
+    // Recupera valori
+    const examId = examSelect.value;
+    const exam = exams.find((e) => String(e.id) === String(examId));
+    const labelVal = labelInput.value.trim();
+    const typeVal = typeInput.value.trim();
+    const minutesVal = parseInt(minutesInput.value, 10);
+
+    if (!exam || !labelVal || !typeVal || !minutesVal || minutesVal <= 0) {
+      alert("Compila tutti i campi con valori validi.");
+      return;
+    }
+    try {
+      const newTask = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(16).slice(2),
+        examId: exam.id,
+        examName: exam.name,
+        type: typeVal,
+        label: labelVal,
+        minutes: minutesVal,
+        done: false,
+      };
+      const todayISO = isoToday();
+      const day =
+        plan.days?.find((d) => d.dateISO === todayISO) || plan.days?.[0];
+      if (!day) {
+        alert("Errore: giorno non trovato.");
+        return;
+      }
+      day.tasks = [...(day.tasks || []), newTask];
+      // Aggiorna l'allocazione per l'esame in base ai minuti aggiunti
+      if (!plan.allocations) plan.allocations = [];
+      const alloc = plan.allocations.find((a) => a.examId === exam.id);
+      if (alloc) {
+        alloc.targetMin = Number(alloc.targetMin || 0) + minutesVal;
+      } else {
+        plan.allocations.push({
+          examId: exam.id,
+          name: exam.name,
+          targetMin: minutesVal,
+        });
+      }
+      // Salva e ri-renderizza
+      await saveWeeklyPlan(user.uid, weekStartISO, plan);
+      renderDashboard(plan, exams, profile);
+      bindAddTaskButton(plan, exams, profile, user, weekStartISO);
+      closeModal();
+    } catch (err) {
+      console.error(err);
+      alert("Errore creazione task: " + (err?.message || err));
+    }
+  });
 }
 
 // ----------------- TASK PAGE -----------------
