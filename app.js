@@ -132,9 +132,28 @@ async function listExams(uid) {
     if (!examData.category || examData.category === "auto") {
       examData.category = detectExamCategory(examData.name || "");
     }
+    
+    // Migrazione: se l'esame ha solo 'date' (vecchio formato), convertilo in appelli
+    if (examData.date && !examData.appelli) {
+      examData.appelli = [{
+        date: examData.date,
+        type: "esame", // default
+        selected: true
+      }];
+      // Mantieni anche date per compatibilità
+    } else if (!examData.appelli && !examData.date) {
+      // Se non ha né appelli né date, crea un array vuoto
+      examData.appelli = [];
+    }
+    
     exams.push({ id: d.id, ...examData });
   });
-  exams.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  // Ordina per la prima data disponibile (da appelli o date legacy)
+  exams.sort((a, b) => {
+    const dateA = a.appelli?.[0]?.date || a.date || "";
+    const dateB = b.appelli?.[0]?.date || b.date || "";
+    return String(dateA).localeCompare(String(dateB));
+  });
   return exams;
 }
 
@@ -877,6 +896,119 @@ let examTopicsList = [];
 // Stato per la modale di modifica (separato)
 let editExamTopicsList = [];
 
+// ----------------- APPELLI MANAGEMENT -----------------
+/**
+ * Gestisce l'interfaccia per gli appelli/esoneri multipli di un esame.
+ */
+
+// Inizializza l'interfaccia degli appelli
+function initAppelliInterface() {
+  const container = qs("appelli-container");
+  const addBtn = qs("add-appello-btn");
+  
+  if (!container || !addBtn) return;
+  
+  // Assicura che ci sia almeno un appello
+  if (container.children.length === 0) {
+    addAppelloItem(container);
+  }
+  
+  // Handler per aggiungere appello
+  addBtn.addEventListener("click", () => {
+    addAppelloItem(container);
+  });
+  
+  // Gestisci rimozione appelli esistenti
+  container.addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-appello")) {
+      const item = e.target.closest(".appelloItem");
+      if (item && container.children.length > 1) {
+        item.remove();
+        updateRemoveButtons(container);
+      }
+    }
+  });
+}
+
+// Aggiunge un nuovo item appello
+function addAppelloItem(container) {
+  const index = container.children.length;
+  const item = document.createElement("div");
+  item.className = "appelloItem";
+  item.innerHTML = `
+    <div class="appelloInputRow">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+        <label class="appelloDateLabel" for="appello-date-${index}">Data</label>
+        <input type="date" id="appello-date-${index}" class="appelloDate" />
+      </div>
+      <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+    </div>
+  `;
+  container.appendChild(item);
+  updateRemoveButtons(container);
+}
+
+// Aggiorna la visibilità dei bottoni rimuovi
+function updateRemoveButtons(container) {
+  const items = container.querySelectorAll(".appelloItem");
+  items.forEach((item, index) => {
+    const removeBtn = item.querySelector(".remove-appello");
+    if (removeBtn) {
+      removeBtn.style.display = items.length > 1 ? "block" : "none";
+    }
+  });
+}
+
+// Legge gli appelli dal form
+function getAppelliFromForm() {
+  const container = qs("appelli-container");
+  if (!container) return [];
+  
+  const appelli = [];
+  container.querySelectorAll(".appelloItem").forEach((item) => {
+    const dateInput = item.querySelector(".appelloDate");
+    if (dateInput && dateInput.value) {
+      appelli.push({
+        date: dateInput.value,
+        type: "esame", // Sempre esame
+        selected: true // Di default tutti selezionati
+      });
+    }
+  });
+  
+  return appelli;
+}
+
+// Popola il form con gli appelli esistenti
+function populateAppelliForm(appelli) {
+  const container = qs("appelli-container");
+  if (!container) return;
+  
+  container.innerHTML = "";
+  
+  if (appelli && appelli.length > 0) {
+    appelli.forEach((appello) => {
+      const item = document.createElement("div");
+      item.className = "appelloItem";
+      item.innerHTML = `
+        <div class="appelloInputRow">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+            <label class="appelloDateLabel" for="appello-date-${idx}">Data</label>
+            <input type="date" id="appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
+          </div>
+          <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+        </div>
+      `;
+      container.appendChild(item);
+    });
+  } else {
+    // Se non ci sono appelli, aggiungi uno vuoto
+    addAppelloItem(container);
+  }
+  
+  updateRemoveButtons(container);
+}
+
 /**
  * Inizializza l'interfaccia degli argomenti nel form principale
  */
@@ -1074,10 +1206,19 @@ function mountOnboarding() {
   function examCard(exam) {
     const d = document.createElement("div");
     d.className = "exam-card plain";
+    
+    // Mostra appelli se disponibili, altrimenti usa date legacy
+    const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+    const selectedAppelli = appelli.filter(a => a.selected !== false);
+    const appelliText = selectedAppelli.length > 0 
+      ? selectedAppelli.map(a => a.date).join(", ")
+      : (exam.date || "Nessuna data");
+    
     d.innerHTML = `
-      <div>
+      <div style="flex: 1; min-width: 0;">
         <strong>${escapeHtml(exam.name)}</strong>
-        <p class="muted small">${escapeHtml(exam.date)} · CFU ${exam.cfu} · livello ${exam.level}/5 · diff ${exam.difficulty}/3</p>
+        <p class="muted small">${escapeHtml(appelliText)} · CFU ${exam.cfu} · livello ${exam.level}/5 · diff ${exam.difficulty}/3</p>
+        ${appelli.length > 1 ? `<p class="muted small" style="margin-top:4px;">${appelli.length} appelli totali · ${selectedAppelli.length} selezionati</p>` : ""}
       </div>
       <div class="examCardActions">
         <button class="btn tiny" type="button" data-edit="${exam.id}">Modifica</button>
@@ -1097,6 +1238,7 @@ function mountOnboarding() {
       p.className = "muted small";
       p.textContent = "Nessun esame aggiunto.";
       list.appendChild(p);
+      updateSimulationContainer(exams);
       return;
     }
 
@@ -1118,8 +1260,393 @@ function mountOnboarding() {
         }
       });
     });
+    
+    // Aggiorna simulazione
+    updateSimulationContainer(exams, uid);
   }
-
+  
+  // Aggiorna il container della simulazione
+  function updateSimulationContainer(exams, uid) {
+    const container = qs("simulation-container");
+    if (!container) return;
+    
+    if (exams.length === 0) {
+      container.innerHTML = '<p class="muted small">Aggiungi esami per vedere la simulazione</p>';
+      return;
+    }
+    
+    let html = "";
+    exams.forEach((exam) => {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+      if (appelli.length === 0) return;
+      
+      html += `
+        <div class="simulationExamItem" data-exam-id="${exam.id}">
+          <div class="simulationExamName">${escapeHtml(exam.name)}</div>
+      `;
+      
+      appelli.forEach((appello, idx) => {
+        const isSelected = appello.selected !== false;
+        html += `
+          <div class="simulationAppelloItem">
+            <input type="checkbox" class="appello-checkbox" data-exam-id="${exam.id}" data-appello-index="${idx}" ${isSelected ? "checked" : ""} />
+            <div class="simulationAppelloInfo">
+              <span class="simulationAppelloDate">${escapeHtml(appello.date)}</span>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `</div>`;
+    });
+    
+    container.innerHTML = html || '<p class="muted small">Nessun appello disponibile</p>';
+    
+    // Aggiungi listener per checkbox
+    container.querySelectorAll(".appello-checkbox").forEach((checkbox) => {
+      checkbox.addEventListener("change", async () => {
+        const examId = checkbox.dataset.examId;
+        const appelloIndex = parseInt(checkbox.dataset.appelloIndex);
+        const exam = exams.find(e => e.id === examId);
+        if (exam && exam.appelli) {
+          exam.appelli[appelloIndex].selected = checkbox.checked;
+          await updateExam(uid, examId, { appelli: exam.appelli });
+          await refreshExamList(uid);
+        }
+      });
+    });
+  }
+  
+  // Esegue la simulazione
+  async function runSimulation(uid) {
+    const resultsContainer = qs("simulation-results");
+    if (!resultsContainer) return;
+    
+    const exams = await listExams(uid);
+    const profile = await getProfile(uid);
+    
+    if (!profile || !profile.goalMode || !profile.dayMinutes) {
+      alert("Completa prima le impostazioni del profilo");
+      return;
+    }
+    
+    // Filtra esami con appelli selezionati
+    const examsWithSelectedAppelli = exams.filter(exam => {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+      return appelli.some(a => a.selected !== false);
+    });
+    
+    if (examsWithSelectedAppelli.length === 0) {
+      alert("Seleziona almeno un appello per eseguire la simulazione");
+      return;
+    }
+    
+    // Crea esami "virtuali" per ogni appello selezionato
+    const virtualExams = [];
+    examsWithSelectedAppelli.forEach(exam => {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+      appelli.filter(a => a.selected !== false).forEach(appello => {
+        virtualExams.push({
+          ...exam,
+          id: `${exam.id}_${appello.date}`,
+          date: appello.date,
+          originalExamId: exam.id
+        });
+      });
+    });
+    
+    // Genera piano con esami virtuali
+    const weekStart = startOfWeekISO(new Date());
+    const plan = generateWeeklyPlan(profile, virtualExams, weekStart);
+    
+    // Calcola statistiche
+    const totalTasks = plan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0);
+    const totalHours = Math.round((plan.weeklyBudgetMin / 60) * 10) / 10;
+    const cutHours = plan.cut ? Math.round((plan.cut.reduce((sum, t) => sum + (t.minutes || 0), 0) / 60) * 10) / 10 : 0;
+    
+    // Analizza convenienza degli appelli per ogni esame
+    const appelliAnalysis = [];
+    const allocMap = new Map((plan.allocations || []).map((a) => [a.examId, a.targetMin]));
+    
+    examsWithSelectedAppelli.forEach(exam => {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+      const selectedAppelli = appelli.filter(a => a.selected !== false);
+      
+      if (selectedAppelli.length > 1) {
+        // Confronta gli appelli per questo esame
+        const comparisons = selectedAppelli.map(appello => {
+          const virtualExam = {
+            ...exam,
+            id: `${exam.id}_${appello.date}`,
+            date: appello.date
+          };
+          
+          const daysLeft = daysTo(appello.date);
+          const required = estimateRequiredMinutes(virtualExam, profile);
+          const capacity = estimateCapacityUntilExamMinutes(virtualExam, profile);
+          const allocThisWeek = Number(allocMap.get(virtualExam.id) || 0);
+          const readiness = estimateReadinessPercent(virtualExam, profile, allocThisWeek);
+          
+          // Fattore di convenienza (più alto = più conveniente)
+          // Considera: giorni rimanenti, readiness, tipo (esonero = bonus)
+          const daysScore = Math.min(daysLeft / 30, 1) * 40; // Max 40 punti per tempo
+          const readinessScore = readiness * 0.4; // 40 punti per readiness
+          const typeBonus = 0; // Nessun bonus tipo
+          const capacityScore = Math.min(capacity / required, 1) * 20; // Max 20 punti per capacità
+          
+          const convenienceScore = daysScore + readinessScore + typeBonus + capacityScore;
+          
+          return {
+            appello,
+            daysLeft,
+            required,
+            capacity,
+            readiness,
+            convenienceScore,
+            allocThisWeek
+          };
+        });
+        
+        // Ordina per convenienza (più alto = migliore)
+        comparisons.sort((a, b) => b.convenienceScore - a.convenienceScore);
+        const best = comparisons[0];
+        const worst = comparisons[comparisons.length - 1];
+        
+        appelliAnalysis.push({
+          exam,
+          comparisons,
+          best,
+          worst,
+          hasMultiple: comparisons.length > 1
+        });
+      }
+    });
+    
+    // Mostra risultati
+    let html = `
+      <div class="simulationSummary">
+        <div class="simulationSummaryTitle">Risultati Simulazione</div>
+        <div class="simulationSummaryStats">
+          <div class="simulationStat">
+            <div class="simulationStatValue">${examsWithSelectedAppelli.length}</div>
+            <div class="simulationStatLabel">Esami</div>
+          </div>
+          <div class="simulationStat">
+            <div class="simulationStatValue">${totalTasks}</div>
+            <div class="simulationStatLabel">Task</div>
+          </div>
+          <div class="simulationStat">
+            <div class="simulationStatValue">${totalHours}h</div>
+            <div class="simulationStatLabel">Budget</div>
+          </div>
+        </div>
+        ${cutHours > 0 ? `
+          <div style="margin-top:20px; padding:14px; background:rgba(245,158,11,0.1); border-radius:10px; border-left:3px solid rgba(245,158,11,0.6);">
+            <div style="font-size:13px; font-weight:600; color:rgba(245,158,11,1); margin-bottom:4px;">⚠️ Attenzione</div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:1.5;">${cutHours}h di task non possono essere completati con il budget attuale. Considera di aumentare le ore settimanali o ridurre il numero di appelli selezionati.</div>
+          </div>
+        ` : `
+          <div style="margin-top:20px; padding:14px; background:rgba(34,197,94,0.1); border-radius:10px; border-left:3px solid rgba(34,197,94,0.6);">
+            <div style="font-size:13px; font-weight:600; color:rgba(34,197,94,1); margin-bottom:4px;">✓ Piano fattibile</div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:1.5;">Tutti i task possono essere completati con il budget settimanale disponibile.</div>
+          </div>
+        `}
+      </div>
+    `;
+    
+    // Aggiungi analisi comparativa degli appelli
+    if (appelliAnalysis.length > 0) {
+      html += `
+        <div class="simulationRecommendations">
+          <div class="simulationRecommendationsTitle">Consigli Appelli</div>
+          <div class="simulationRecommendationsList">
+      `;
+      
+      appelliAnalysis.forEach(({ exam, comparisons, best, worst }) => {
+        const bestDate = best.appello.date;
+        const bestType = "Esame";
+        const bestDays = best.daysLeft;
+        const bestReadiness = best.readiness;
+        const bestRequired = Math.round(best.required / 60);
+        const bestCapacity = Math.round(best.capacity / 60);
+        
+        let recommendation = "";
+        let recommendationClass = "simulationRecommendationGood";
+        
+        if (best.convenienceScore > worst.convenienceScore + 15) {
+          recommendation = `Consigliato: ${bestDate}`;
+          recommendationClass = "simulationRecommendationGood";
+        } else if (best.convenienceScore > worst.convenienceScore + 5) {
+          recommendation = `Preferibile: ${bestDate}`;
+          recommendationClass = "simulationRecommendationNeutral";
+        } else {
+          recommendation = `Appelli simili`;
+          recommendationClass = "simulationRecommendationNeutral";
+        }
+        
+        html += `
+          <div class="simulationRecommendationItem ${recommendationClass}">
+            <div class="simulationRecommendationHeader">
+              <strong>${escapeHtml(exam.name)}</strong>
+              <span class="simulationRecommendationBadge">${recommendation}</span>
+            </div>
+            <div class="simulationRecommendationDetails">
+        `;
+        
+        comparisons.forEach((comp, idx) => {
+          const isBest = idx === 0;
+          const readinessBadge = comp.readiness >= 85 ? "good" : comp.readiness >= 60 ? "warn" : "bad";
+          const readinessText = comp.readiness >= 85 ? "on track" : comp.readiness >= 60 ? "borderline" : "rischio";
+          
+          html += `
+            <div class="simulationAppelloComparison ${isBest ? "simulationAppelloBest" : ""}">
+              <div class="simulationAppelloComparisonHeader">
+                <span class="simulationAppelloDate">${escapeHtml(comp.appello.date)}</span>
+                ${isBest ? '<span class="simulationBestBadge">⭐ Consigliato</span>' : ''}
+              </div>
+              <div class="simulationAppelloComparisonStats">
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Giorni</span>
+                  <span class="simulationAppelloStatValue">${comp.daysLeft}g</span>
+                </div>
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Readiness</span>
+                  <span class="simulationAppelloStatValue badge ${readinessBadge}">${comp.readiness}%</span>
+                </div>
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Necessario</span>
+                  <span class="simulationAppelloStatValue">${Math.round(comp.required / 60)}h</span>
+                </div>
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Capacità</span>
+                  <span class="simulationAppelloStatValue">${Math.round(comp.capacity / 60)}h</span>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += `
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `
+          </div>
+        </div>
+      `;
+    }
+    
+    // Mostra risultati in un popup invece che inline
+    showSimulationResultsModal(html);
+  }
+  
+  // Mostra i risultati della simulazione in un popup
+  function showSimulationResultsModal(htmlContent) {
+    // Evita di aprire più modali contemporaneamente
+    if (document.getElementById("simulation-results-modal")) return;
+    
+    // Overlay oscurante
+    const overlay = document.createElement("div");
+    overlay.id = "simulation-results-modal";
+    Object.assign(overlay.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0,0,0,0.8)",
+      zIndex: "10000",
+      padding: "20px",
+      animation: "fadeIn 0.2s ease-out",
+    });
+    
+    // Contenitore principale con stile card
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.maxWidth = "900px";
+    card.style.width = "95%";
+    card.style.maxHeight = "90vh";
+    card.style.overflowY = "auto";
+    card.style.padding = "32px";
+    card.style.position = "relative";
+    card.style.animation = "slideUp 0.3s ease-out";
+    
+    // Header con titolo e bottone chiusura
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.marginBottom = "24px";
+    header.style.paddingBottom = "20px";
+    header.style.borderBottom = "1px solid rgba(255, 255, 255, 0.1)";
+    
+    const title = document.createElement("h2");
+    title.textContent = "Risultati Simulazione";
+    title.style.margin = "0";
+    title.style.fontSize = "28px";
+    title.style.fontWeight = "900";
+    title.style.color = "rgba(255, 255, 255, 0.95)";
+    title.style.letterSpacing = "-0.02em";
+    
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "✕";
+    closeBtn.className = "btn ghost";
+    closeBtn.style.width = "40px";
+    closeBtn.style.height = "40px";
+    closeBtn.style.padding = "0";
+    closeBtn.style.fontSize = "20px";
+    closeBtn.style.borderRadius = "50%";
+    closeBtn.style.display = "flex";
+    closeBtn.style.alignItems = "center";
+    closeBtn.style.justifyContent = "center";
+    closeBtn.style.cursor = "pointer";
+    closeBtn.style.flexShrink = "0";
+    
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+    
+    // Contenuto
+    const content = document.createElement("div");
+    content.innerHTML = htmlContent;
+    card.appendChild(content);
+    
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    
+    // Funzione per chiudere la modale
+    function closeModal() {
+      overlay.style.animation = "fadeOut 0.2s ease-out";
+      card.style.animation = "slideDown 0.2s ease-out";
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        document.body.style.overflow = "";
+      }, 200);
+    }
+    
+    // Event listeners
+    closeBtn.addEventListener("click", closeModal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.getElementById("simulation-results-modal")) {
+        closeModal();
+      }
+    });
+    
+    // Previeni scroll del body
+    document.body.style.overflow = "hidden";
+  }
+  
   watchAuth(async (user) => {
     if (!user) {
       window.location.assign("./index.html");
@@ -1297,6 +1824,12 @@ function mountOnboarding() {
     // Inizializza interfaccia argomenti
     initTopicsInterface();
     
+    // Inizializza interfaccia appelli
+    initAppelliInterface();
+    
+    // Collega il bottone di simulazione (dopo che uid è disponibile)
+    qs("run-simulation")?.addEventListener("click", () => runSimulation(user.uid));
+    
     // Aggiorna visualizzazione allenatore quando cambiano i valori
     const currentHoursInput = qs("current-hours");
     const targetHoursInput = qs("target-hours");
@@ -1330,14 +1863,14 @@ function mountOnboarding() {
       try {
         const name = (qs("exam-name").value || "").trim();
         const cfu = Number(qs("exam-cfu").value || 0);
-        const date = qs("exam-date").value;
+        const appelli = getAppelliFromForm();
         const level = Number(qs("exam-level").value || 0);
         const difficulty = Number(qs("exam-diff").value || 2);
         const category = (qs("exam-category")?.value || "auto").trim();
         const topics = getTopicsArray("exam");
 
         if (!name) throw new Error("Nome esame mancante.");
-        if (!date) throw new Error("Data esame mancante.");
+        if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
         if (cfu < 1) throw new Error("CFU non validi.");
 
         // Auto-rileva categoria se non specificata
@@ -1349,7 +1882,9 @@ function mountOnboarding() {
         await addExam(user.uid, { 
           name, 
           cfu, 
-          date, 
+          appelli: appelli,
+          // Mantieni date per compatibilità (primo appello)
+          date: appelli[0]?.date || "",
           level, 
           difficulty,
           category: finalCategory,
@@ -1358,7 +1893,11 @@ function mountOnboarding() {
         
         // Reset form
         qs("exam-name").value = "";
-        qs("exam-date").value = "";
+        const appelliContainer = qs("appelli-container");
+        if (appelliContainer) {
+          appelliContainer.innerHTML = "";
+          addAppelloItem(appelliContainer);
+        }
         qs("exam-cfu").value = "6";
         qs("exam-level").value = "0";
         qs("exam-diff").value = "2";
@@ -1625,15 +2164,96 @@ function openEditExamModal(uid, exam, onSuccess) {
   nameInput.required = true;
   nameLabel.appendChild(nameInput);
 
-  // Campo data
-  const dateLabel = document.createElement("label");
-  dateLabel.innerHTML = '<span>Data</span>';
-  const dateInput = document.createElement("input");
-  dateInput.type = "date";
-  dateInput.id = "ee-date";
-  dateInput.value = exam.date || "";
-  dateInput.required = true;
-  dateLabel.appendChild(dateInput);
+  // Campo appelli
+  const appelliLabel = document.createElement("label");
+  appelliLabel.innerHTML = '<span>Appelli / Esoneri</span>';
+  const appelliContainer = document.createElement("div");
+  appelliContainer.id = "ee-appelli-container";
+  appelliContainer.className = "appelliContainer";
+  
+  // Popola con appelli esistenti o crea uno vuoto
+  const examAppelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+  if (examAppelli.length === 0) {
+    const item = document.createElement("div");
+    item.className = "appelloItem";
+    item.innerHTML = `
+      <div class="appelloInputRow">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <label class="appelloDateLabel" for="ee-appello-date-0">Data</label>
+          <input type="date" id="ee-appello-date-0" class="appelloDate" />
+        </div>
+        <button type="button" class="btn tiny remove-appello" style="display:none; align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+      </div>
+    `;
+    appelliContainer.appendChild(item);
+  } else {
+    examAppelli.forEach((appello, idx) => {
+      const item = document.createElement("div");
+      item.className = "appelloItem";
+      item.innerHTML = `
+        <div class="appelloInputRow">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+            <label class="appelloDateLabel" for="ee-appello-date-${idx}">Data</label>
+            <input type="date" id="ee-appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
+          </div>
+          <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+        </div>
+      `;
+      appelliContainer.appendChild(item);
+    });
+  }
+  
+  const addAppelloBtn = document.createElement("button");
+  addAppelloBtn.type = "button";
+  addAppelloBtn.className = "btn tiny";
+  addAppelloBtn.textContent = "+ Aggiungi appello";
+  addAppelloBtn.style.marginTop = "8px";
+  addAppelloBtn.addEventListener("click", () => {
+    const index = appelliContainer.children.length;
+    const item = document.createElement("div");
+    item.className = "appelloItem";
+    item.innerHTML = `
+      <div class="appelloInputRow">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <label class="appelloDateLabel" for="ee-appello-date-${index}">Data</label>
+          <input type="date" id="ee-appello-date-${index}" class="appelloDate" />
+        </div>
+        <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+      </div>
+    `;
+    appelliContainer.appendChild(item);
+    updateRemoveButtons(appelliContainer);
+  });
+  
+  // Gestisci rimozione
+  appelliContainer.addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-appello")) {
+      const item = e.target.closest(".appelloItem");
+      if (item && appelliContainer.children.length > 1) {
+        item.remove();
+        updateRemoveButtons(appelliContainer);
+      }
+    }
+  });
+  
+  appelliLabel.appendChild(appelliContainer);
+  appelliLabel.appendChild(addAppelloBtn);
+  
+  // Funzione helper per leggere appelli dalla modale
+  const getAppelliFromModal = () => {
+    const appelli = [];
+    appelliContainer.querySelectorAll(".appelloItem").forEach((item) => {
+      const dateInput = item.querySelector(".appelloDate");
+      if (dateInput && dateInput.value) {
+        appelli.push({
+          date: dateInput.value,
+          type: "esame", // Sempre esame
+          selected: true
+        });
+      }
+    });
+    return appelli;
+  };
 
   // Campo CFU
   const cfuLabel = document.createElement("label");
@@ -1736,7 +2356,7 @@ function openEditExamModal(uid, exam, onSuccess) {
 
   // Aggiungi tutti i campi al form
   form.appendChild(nameLabel);
-  form.appendChild(dateLabel);
+  form.appendChild(appelliLabel);
   form.appendChild(cfuLabel);
   form.appendChild(levelLabel);
   form.appendChild(diffLabel);
@@ -1786,7 +2406,7 @@ function openEditExamModal(uid, exam, onSuccess) {
   saveBtn.addEventListener("click", async () => {
     try {
       const name = nameInput.value.trim();
-      const date = dateInput.value;
+      const appelli = getAppelliFromModal();
       const cfu = Number(cfuInput.value || 0);
       const level = Number(levelInput.value || 0);
       const difficulty = Number(diffSelect.value || 2);
@@ -1794,7 +2414,7 @@ function openEditExamModal(uid, exam, onSuccess) {
       const topics = getTopicsArray("edit");
 
       if (!name) throw new Error("Nome esame mancante.");
-      if (!date) throw new Error("Data esame mancante.");
+      if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
       if (cfu < 1) throw new Error("CFU non validi.");
 
       // Auto-rileva categoria se necessario

@@ -224,8 +224,22 @@
             </div>
 
             <div class="formRow">
-              <label for="exam-date">Data esame</label>
-              <input id="exam-date" type="date" />
+              <label>
+                <span>Appelli d'esame</span>
+                <span class="labelHint">Aggiungi tutte le date disponibili</span>
+              </label>
+              <div id="appelli-container" class="appelliContainer">
+                <div class="appelloItem">
+                  <div class="appelloInputRow">
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                      <label class="appelloDateLabel" for="appello-date-0">Data</label>
+                      <input type="date" id="appello-date-0" class="appelloDate" />
+                    </div>
+                    <button type="button" class="btn tiny remove-appello" style="display:none; align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn tiny" id="add-appello-btn" style="margin-top:12px;">+ Aggiungi appello</button>
             </div>
 
             <div class="twoCols">
@@ -310,6 +324,26 @@
             </div>
 
             <div id="exam-list" class="examGrid"></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Simulazione Appelli -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>🎯 Simulazione Appelli</h3>
+              <p class="meta">Simula quali appelli sostenere per ottimizzare la pianificazione</p>
+            </div>
+
+            <div id="simulation-container" class="simulationContainer">
+              <p class="muted small">Aggiungi esami per vedere la simulazione</p>
+            </div>
+
+            <div class="toolbar" style="justify-content:flex-end; margin-top:12px;">
+              <button class="btn" id="run-simulation" type="button">Esegui Simulazione</button>
+            </div>
+
+            <div id="simulation-results" class="simulationResults" style="display:none;"></div>
           </div>
 
           <div class="divider"></div>

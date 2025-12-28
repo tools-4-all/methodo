@@ -249,9 +249,30 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
   // Filtra e valida esami PRIMA di usarli
-  const validExams = (exams || [])
-    .filter((e) => e?.name && e?.date)
-    .map((e) => ({ ...e }));
+  // Considera solo esami con appelli selezionati
+  const validExams = [];
+  for (const exam of exams || []) {
+    if (!exam?.name) continue;
+    
+    // Se ha appelli, usa solo quelli selezionati
+    if (exam.appelli && Array.isArray(exam.appelli) && exam.appelli.length > 0) {
+      const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
+      if (selectedAppelli.length === 0) continue; // Salta se nessun appello selezionato
+      
+      // Crea un esame virtuale per ogni appello selezionato
+      selectedAppelli.forEach(appello => {
+        validExams.push({
+          ...exam,
+          id: `${exam.id}_${appello.date}`,
+          date: appello.date,
+          appelloType: appello.type
+        });
+      });
+    } else if (exam.date) {
+      // Compatibilità con esami vecchi (solo date)
+      validExams.push({ ...exam });
+    }
+  }
 
   // Calcola budget settimanale reale
   let weeklyBudgetMin = dayKeys.reduce((acc, k) => acc + (dayMinutes[k] || 0), 0);
