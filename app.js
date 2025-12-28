@@ -3893,21 +3893,19 @@ function mountApp() {
         }
       }
       
-      // Aggiungi bottone di test premium (solo in sviluppo)
-      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.href.includes('localhost')) {
-        const testBtn = document.createElement("button");
-        testBtn.className = "btn";
-        testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
-        testBtn.textContent = isPremiumUser ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
-        testBtn.addEventListener("click", async () => {
-          await testPremium(!isPremiumUser);
-          setTimeout(() => window.location.reload(), 1000);
-        });
-        const toolbar = document.querySelector(".toolbar");
-        if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
-          testBtn.classList.add("test-premium-btn");
-          toolbar.insertBefore(testBtn, toolbar.firstChild);
-        }
+      // Aggiungi bottone di test premium (disponibile ovunque)
+      const testBtn = document.createElement("button");
+      testBtn.className = "btn";
+      testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
+      testBtn.textContent = isPremiumUser ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
+      testBtn.addEventListener("click", async () => {
+        await testPremium(!isPremiumUser);
+        setTimeout(() => window.location.reload(), 1000);
+      });
+      const toolbar = document.querySelector(".toolbar");
+      if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
+        testBtn.classList.add("test-premium-btn");
+        toolbar.insertBefore(testBtn, toolbar.firstChild);
       }
 
       const exams = await listExams(user.uid);
