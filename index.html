@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="icon" href="/favicon.jpg" type="image/jpeg" sizes="120x120">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <title>Study Planner — Pianificazione intelligente per studenti</title>
 
   <style>
@@ -22,6 +25,12 @@
       --panel: rgba(255,255,255,.07);
       --shadow: 0 18px 60px rgba(0,0,0,.50);
 
+      --orange: #f97316;
+      --orange-light: #fb923c;
+      --orange-dark: #ea580c;
+      --orange-bg: rgba(249, 115, 22, .1);
+      --orange-border: rgba(249, 115, 22, .2);
+
       --r: 18px;
     }
 
@@ -30,12 +39,14 @@
 
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       color: var(--text);
+      font-weight: 400;
+      letter-spacing: -0.01em;
       background:
-        radial-gradient(1200px 700px at 15% 10%, rgba(99,102,241,.16), transparent 58%),
-        radial-gradient(900px 600px at 80% 15%, rgba(34,197,94,.08), transparent 58%),
-        radial-gradient(900px 700px at 50% 95%, rgba(245,158,11,.06), transparent 62%),
+        radial-gradient(1200px 700px at 15% 10%, rgba(249,115,22,.12), transparent 58%),
+        radial-gradient(900px 600px at 80% 15%, rgba(249,115,22,.08), transparent 58%),
+        radial-gradient(900px 700px at 50% 95%, rgba(249,115,22,.06), transparent 62%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
@@ -167,10 +178,17 @@
     .btn:active{ transform: translateY(1px); }
 
     .btn.primary{
-      background: rgba(255,255,255,.92);
-      color:#0b0f1a;
+      background: var(--orange);
+      color: rgba(255,255,255,1);
       border-color: transparent;
-      font-weight: 900;
+      font-weight: 600;
+      transition: all .2s ease;
+    }
+
+    .btn.primary:hover{
+      background: var(--orange-light);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(249,115,22,.3);
     }
 
     /* ===== Password toggle ===== */
@@ -248,8 +266,9 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap:16px;
-      margin-bottom:40px;
+      gap:24px;
+      margin-bottom:80px;
+      padding-top:32px;
       flex-wrap:wrap;
     }
 
@@ -259,68 +278,80 @@
     }
 
     .landingTitle h1{
-      font-size:36px;
-      letter-spacing:-.03em;
-      margin-bottom:8px;
-      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(255,255,255,.75));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size:32px;
+      letter-spacing:-.02em;
+      margin-bottom:12px;
+      font-weight:950;
+      color: rgba(255,255,255,.98);
     }
 
     .landingTitle .tagline{
-      font-size:16px;
-      color: var(--muted);
-      line-height:1.4;
+      font-size:15px;
+      color: rgba(255,255,255,.65);
+      line-height:1.5;
+      font-weight:400;
+      letter-spacing:0.01em;
     }
 
     .landingLoginBtn{
-      padding:12px 20px;
-      font-weight:900;
+      padding:14px 28px;
+      font-weight:700;
       white-space:nowrap;
+      font-size:15px;
+      letter-spacing:0.01em;
     }
 
     .heroSection{
-      text-align:center;
-      padding:64px 20px;
-      margin-bottom:64px;
+      text-align:left;
+      padding:80px 0 120px 0;
+      margin-bottom:120px;
       position:relative;
+      max-width:900px;
+    }
+
+    .heroSection::before{
+      content:"";
+      position:absolute;
+      left:-48px;
+      top:0;
+      width:4px;
+      height:100%;
+      background: linear-gradient(180deg, var(--orange), var(--orange-light));
+      border-radius:2px;
     }
 
     .heroTitle{
-      font-size:48px;
-      font-weight:950;
-      letter-spacing:-.04em;
-      margin-bottom:20px;
-      line-height:1.15;
-      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(255,255,255,.85));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size:clamp(42px, 6vw, 64px);
+      font-weight:800;
+      letter-spacing:-.03em;
+      margin-bottom:28px;
+      line-height:1.1;
+      color: rgba(255,255,255,.98);
     }
 
     .heroSubtitle{
-      font-size:20px;
-      color: var(--muted);
+      font-size:clamp(18px, 2.5vw, 22px);
+      color: rgba(255,255,255,.7);
       line-height:1.7;
-      max-width:720px;
-      margin:0 auto 40px;
+      max-width:680px;
+      margin:0 0 48px 0;
+      font-weight:400;
+      letter-spacing:0.01em;
     }
 
     .featuresGrid{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap:24px;
-      margin-bottom:64px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap:32px;
+      margin-bottom:120px;
     }
 
     .featureCard{
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius: var(--r);
-      padding:32px;
-      box-shadow: var(--shadow);
-      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+      background: rgba(255,255,255,.02);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:20px;
+      padding:40px;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
       position:relative;
       overflow:hidden;
     }
@@ -331,16 +362,18 @@
       top:0;
       left:0;
       right:0;
-      height:3px;
-      background: linear-gradient(90deg, rgba(99,102,241,.8), rgba(34,197,94,.8));
+      height:2px;
+      background: linear-gradient(90deg, var(--orange), var(--orange-light));
       transform: scaleX(0);
-      transition: transform .3s ease;
+      transform-origin:left;
+      transition: transform .4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .featureCard:hover{
-      transform: translateY(-4px);
-      box-shadow: 0 24px 70px rgba(0,0,0,.6);
-      border-color: rgba(255,255,255,.22);
+      transform: translateY(-6px);
+      border-color: rgba(255,255,255,.16);
+      background: rgba(255,255,255,.04);
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
     }
 
     .featureCard:hover::before{
@@ -348,124 +381,187 @@
     }
 
     .featureIcon{
-      font-size:48px;
-      margin-bottom:16px;
-      display:block;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,.3));
+      width:56px;
+      height:56px;
+      border-radius:14px;
+      background: var(--orange-bg);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom:24px;
+      font-size:20px;
+      font-weight:700;
+      color: var(--orange);
+      border:1px solid var(--orange-border);
+      letter-spacing: 0.02em;
     }
 
     .featureTitle{
-      font-size:20px;
-      font-weight:950;
-      margin-bottom:12px;
+      font-size:22px;
+      font-weight:700;
+      margin-bottom:14px;
       color: rgba(255,255,255,.96);
       letter-spacing:-.01em;
     }
 
     .featureDesc{
       font-size:15px;
-      color: var(--muted);
-      line-height:1.7;
+      color: rgba(255,255,255,.65);
+      line-height:1.75;
+      font-weight:400;
+      letter-spacing:0;
     }
 
     .sectionTitle{
-      font-size:36px;
-      font-weight:950;
-      text-align:center;
-      margin-bottom:48px;
-      letter-spacing:-.03em;
-      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(255,255,255,.85));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size:clamp(32px, 4vw, 44px);
+      font-weight:800;
+      text-align:left;
+      margin-bottom:64px;
+      letter-spacing:-.02em;
+      color: rgba(255,255,255,.98);
     }
 
     .howItWorksSection{
-      margin-bottom:64px;
+      margin-bottom:120px;
+      padding:0;
+      background: transparent;
+      position:relative;
     }
 
     .stepsGrid{
-      display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap:32px;
-      margin-bottom:48px;
+      display:flex;
+      flex-direction:column;
+      gap:0;
+      margin-bottom:0;
+      position:relative;
+      max-width:800px;
+    }
+
+    .stepsGrid::before{
+      content:"";
+      position:absolute;
+      left:32px;
+      top:0;
+      bottom:0;
+      width:2px;
+      background: linear-gradient(180deg, var(--orange), var(--orange-light), transparent);
+      z-index:0;
     }
 
     .stepCard{
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius: var(--r);
-      padding:32px;
-      box-shadow: var(--shadow);
-      text-align:center;
+      display:flex;
+      gap:32px;
+      align-items:flex-start;
+      padding:48px 0;
       position:relative;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .stepCard:last-child{
+      padding-bottom:0;
+    }
+
+    .stepCard:hover .stepContent{
+      transform: translateX(8px);
     }
 
     .stepNumber{
       width:64px;
       height:64px;
-      border-radius:50%;
-      background: linear-gradient(135deg, rgba(99,102,241,.9), rgba(34,197,94,.9));
+      border-radius:16px;
+      background: var(--orange);
+      border:3px solid var(--bg0);
       display:flex;
       align-items:center;
       justify-content:center;
-      font-size:28px;
-      font-weight:950;
-      color: rgba(255,255,255,.98);
-      margin:0 auto 20px;
-      box-shadow: 0 8px 24px rgba(99,102,241,.4);
+      font-size:24px;
+      font-weight:700;
+      color: rgba(255,255,255,1);
+      margin:0;
+      flex-shrink:0;
+      position:relative;
+      z-index:1;
+      box-shadow: 0 4px 16px rgba(249,115,22,.3);
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .stepCard:hover .stepNumber{
+      transform: scale(1.1);
+      box-shadow: 0 6px 24px rgba(249,115,22,.4);
+    }
+
+    .stepContent{
+      flex:1;
+      padding-top:8px;
+      transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .stepTitle{
-      font-size:20px;
-      font-weight:950;
+      font-size:24px;
+      font-weight:700;
       margin-bottom:12px;
-      color: rgba(255,255,255,.96);
+      color: rgba(255,255,255,.98);
+      letter-spacing:-.01em;
     }
 
     .stepDesc{
-      font-size:15px;
-      color: var(--muted);
-      line-height:1.7;
+      font-size:16px;
+      color: rgba(255,255,255,.7);
+      line-height:1.75;
+      font-weight:400;
+      letter-spacing:0;
     }
 
     .benefitsSection{
       margin-bottom:64px;
+      padding:80px 0;
+      background: rgba(255,255,255,.02);
+      border-radius:24px;
+      margin-left:-24px;
+      margin-right:-24px;
+      padding-left:48px;
+      padding-right:48px;
+      border:1px solid rgba(255,255,255,.06);
     }
 
     .benefitsList{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap:20px;
-      margin-bottom:32px;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap:24px;
+      margin-bottom:48px;
     }
 
     .benefitItem{
       display:flex;
       align-items:flex-start;
-      gap:16px;
-      padding:20px;
-      background: var(--panel);
-      border:1px solid var(--border);
+      gap:20px;
+      padding:28px;
+      background: rgba(255,255,255,.02);
+      border:1px solid rgba(255,255,255,.08);
       border-radius:16px;
-      transition: transform .2s ease, border-color .2s ease;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .benefitItem:hover{
-      transform: translateX(4px);
-      border-color: rgba(34,197,94,.4);
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,.16);
+      background: rgba(255,255,255,.04);
     }
 
     .benefitIcon{
-      font-size:24px;
       flex-shrink:0;
-      width:40px;
-      height:40px;
+      width:44px;
+      height:44px;
       display:flex;
       align-items:center;
       justify-content:center;
-      background: rgba(34,197,94,.15);
-      border-radius:10px;
+      background: var(--orange-bg);
+      border:1px solid var(--orange-border);
+      border-radius:12px;
+      font-size:16px;
+      font-weight:700;
+      color: var(--orange);
+      letter-spacing: 0.01em;
     }
 
     .benefitText{
@@ -473,16 +569,19 @@
     }
 
     .benefitTitle{
-      font-size:16px;
-      font-weight:900;
-      margin-bottom:6px;
+      font-size:18px;
+      font-weight:600;
+      margin-bottom:8px;
       color: rgba(255,255,255,.96);
+      letter-spacing:-.01em;
     }
 
     .benefitDesc{
-      font-size:14px;
-      color: var(--muted);
-      line-height:1.6;
+      font-size:15px;
+      color: rgba(255,255,255,.65);
+      line-height:1.7;
+      font-weight:400;
+      letter-spacing:0;
     }
 
     .faqSection{
@@ -491,62 +590,87 @@
 
     .faqGrid{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-      gap:20px;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap:24px;
     }
 
     .faqItem{
-      background: var(--panel);
-      border:1px solid var(--border);
+      background: rgba(255,255,255,.02);
+      border:1px solid rgba(255,255,255,.08);
       border-radius:16px;
-      padding:24px;
-      transition: border-color .2s ease;
+      padding:32px;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .faqItem:hover{
-      border-color: rgba(255,255,255,.22);
+      border-color: rgba(255,255,255,.16);
+      background: rgba(255,255,255,.04);
     }
 
     .faqQuestion{
-      font-size:17px;
-      font-weight:900;
-      margin-bottom:10px;
+      font-size:18px;
+      font-weight:600;
+      margin-bottom:12px;
       color: rgba(255,255,255,.96);
+      letter-spacing:-.01em;
     }
 
     .faqAnswer{
-      font-size:14px;
-      color: var(--muted);
-      line-height:1.7;
+      font-size:15px;
+      color: rgba(255,255,255,.65);
+      line-height:1.75;
+      font-weight:400;
+      letter-spacing:0;
     }
 
     .ctaSection{
-      text-align:center;
-      padding:48px 20px;
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius: var(--r);
-      box-shadow: var(--shadow);
-      margin-bottom:48px;
+      text-align:left;
+      padding:64px 48px;
+      background: linear-gradient(135deg, var(--orange-bg), rgba(249,115,22,.05));
+      border:1px solid var(--orange-border);
+      border-radius:24px;
+      margin-bottom:80px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .ctaSection::before{
+      content:"";
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
+      bottom:0;
+      background: radial-gradient(circle at top right, rgba(249,115,22,.12), transparent 70%);
+      pointer-events:none;
+    }
+
+    .ctaSection > *{
+      position:relative;
+      z-index:1;
     }
 
     .ctaTitle{
-      font-size:32px;
-      font-weight:950;
-      margin-bottom:12px;
+      font-size:clamp(28px, 4vw, 36px);
+      font-weight:800;
+      margin-bottom:16px;
       letter-spacing:-.02em;
+      color: rgba(255,255,255,.98);
     }
 
     .ctaSubtitle{
-      font-size:16px;
-      color: var(--muted);
-      margin-bottom:24px;
+      font-size:18px;
+      color: rgba(255,255,255,.7);
+      margin-bottom:32px;
+      font-weight:400;
+      line-height:1.6;
     }
 
     .ctaButton{
-      padding:16px 32px;
+      padding:16px 36px;
       font-size:16px;
-      font-weight:900;
+      font-weight:700;
+      letter-spacing:0.01em;
     }
 
     .loginModal{
@@ -603,14 +727,31 @@
     }
 
     @media (max-width: 720px){
-      .landingTitle h1{ font-size:28px; }
-      .heroTitle{ font-size:36px; }
-      .heroSubtitle{ font-size:17px; }
-      .featuresGrid{ grid-template-columns:1fr; }
-      .stepsGrid{ grid-template-columns:1fr; }
-      .benefitsList{ grid-template-columns:1fr; }
-      .faqGrid{ grid-template-columns:1fr; }
-      .sectionTitle{ font-size:28px; }
+      .landingHeader{ margin-bottom:48px; padding-top:20px; }
+      .landingTitle h1{ font-size:26px; }
+      .landingTitle .tagline{ font-size:14px; }
+      .heroSection{ padding:60px 0 80px 0; margin-bottom:80px; }
+      .heroSection::before{ left:-24px; }
+      .heroTitle{ font-size:36px; margin-bottom:20px; }
+      .heroSubtitle{ font-size:17px; margin-bottom:32px; }
+      .featuresGrid{ grid-template-columns:1fr; gap:24px; margin-bottom:80px; }
+      .featureCard{ padding:32px; }
+      .howItWorksSection{ margin-bottom:80px; }
+      .stepsGrid{ max-width:100%; }
+      .stepsGrid::before{ left:24px; }
+      .stepCard{ gap:24px; padding:40px 0; }
+      .stepNumber{ width:48px; height:48px; font-size:20px; }
+      .stepTitle{ font-size:20px; }
+      .stepDesc{ font-size:15px; }
+      .benefitsSection{ margin-left:-24px; margin-right:-24px; padding:60px 24px; }
+      .benefitsList{ grid-template-columns:1fr; gap:20px; }
+      .benefitItem{ padding:24px; }
+      .faqGrid{ grid-template-columns:1fr; gap:20px; }
+      .faqItem{ padding:24px; }
+      .sectionTitle{ font-size:28px; margin-bottom:48px; }
+      .ctaSection{ padding:48px 32px; margin-bottom:64px; }
+      .ctaTitle{ font-size:28px; }
+      .ctaSubtitle{ font-size:16px; }
     }
   </style>
 </head>
@@ -660,7 +801,7 @@
     </div>
   </div>
 
-  <div class="container" style="max-width:1200px;">
+  <div class="container" style="max-width:1280px; padding: 40px 24px 80px;">
     <!-- Header con login button -->
     <header class="landingHeader">
       <div class="landingTitle">
@@ -678,7 +819,7 @@
         distribuendo i task in base alle tue priorità, disponibilità e obiettivi. 
         Studia in modo più efficace e raggiungi i tuoi traguardi.
       </p>
-      <button class="btn primary ctaButton" id="cta-login">Inizia gratis</button>
+      <button class="btn primary ctaButton" id="cta-login">Inizia ora</button>
     </section>
 
     <!-- Features -->
@@ -686,7 +827,7 @@
       <h2 class="sectionTitle">Perché Study Planner?</h2>
       <div class="featuresGrid">
         <div class="featureCard">
-          <span class="featureIcon">🧠</span>
+          <div class="featureIcon">AI</div>
           <h3 class="featureTitle">Algoritmo Intelligente</h3>
           <p class="featureDesc">
             Il nostro sistema analizza urgenza, difficoltà e livello di preparazione 
@@ -694,7 +835,7 @@
           </p>
         </div>
         <div class="featureCard">
-          <span class="featureIcon">⏰</span>
+          <div class="featureIcon">CL</div>
           <h3 class="featureTitle">Pianificazione Realistica</h3>
           <p class="featureDesc">
             Rispetta la tua disponibilità settimanale e distribuisce i task tra mattina 
@@ -702,7 +843,7 @@
           </p>
         </div>
         <div class="featureCard">
-          <span class="featureIcon">📊</span>
+          <div class="featureIcon">AN</div>
           <h3 class="featureTitle">Tracking del Progresso</h3>
           <p class="featureDesc">
             Monitora il completamento delle task, visualizza statistiche di readiness 
@@ -710,7 +851,7 @@
           </p>
         </div>
         <div class="featureCard">
-          <span class="featureIcon">🎯</span>
+          <div class="featureIcon">OB</div>
           <h3 class="featureTitle">Obiettivi Personalizzati</h3>
           <p class="featureDesc">
             Scegli tra "Sufficiente", "Buono" o "Ottimo" e il sistema adatterà 
@@ -718,7 +859,7 @@
           </p>
         </div>
         <div class="featureCard">
-          <span class="featureIcon">🔄</span>
+          <div class="featureIcon">FL</div>
           <h3 class="featureTitle">Flessibilità Totale</h3>
           <p class="featureDesc">
             Aggiungi task manuali, modifica esami, rigenera il piano quando serve. 
@@ -726,7 +867,7 @@
           </p>
         </div>
         <div class="featureCard">
-          <span class="featureIcon">📱</span>
+          <div class="featureIcon">TM</div>
           <h3 class="featureTitle">Timer Integrato</h3>
           <p class="featureDesc">
             Ogni task ha un timer dedicato per tracciare il tempo effettivo di studio 
@@ -742,35 +883,43 @@
       <div class="stepsGrid">
         <div class="stepCard">
           <div class="stepNumber">1</div>
-          <h3 class="stepTitle">Crea il tuo profilo</h3>
-          <p class="stepDesc">
-            Imposta la tua disponibilità settimanale, obiettivo di studio e durata preferita dei task. 
-            Il sistema si adatterà alle tue esigenze.
-          </p>
+          <div class="stepContent">
+            <h3 class="stepTitle">Crea il tuo profilo</h3>
+            <p class="stepDesc">
+              Imposta la tua disponibilità settimanale, obiettivo di studio e durata preferita dei task. 
+              Il sistema si adatterà alle tue esigenze e creerà un piano personalizzato.
+            </p>
+          </div>
         </div>
         <div class="stepCard">
           <div class="stepNumber">2</div>
-          <h3 class="stepTitle">Aggiungi i tuoi esami</h3>
-          <p class="stepDesc">
-            Inserisci gli esami con data, CFU, difficoltà e livello di preparazione attuale. 
-            Più informazioni fornisci, più preciso sarà il piano.
-          </p>
+          <div class="stepContent">
+            <h3 class="stepTitle">Aggiungi i tuoi esami</h3>
+            <p class="stepDesc">
+              Inserisci gli esami con data, CFU, difficoltà e livello di preparazione attuale. 
+              Più informazioni fornisci, più preciso e ottimizzato sarà il piano generato.
+            </p>
+          </div>
         </div>
         <div class="stepCard">
           <div class="stepNumber">3</div>
-          <h3 class="stepTitle">Ricevi il piano settimanale</h3>
-          <p class="stepDesc">
-            L'algoritmo genera automaticamente un piano ottimizzato con task distribuiti 
-            tra mattina e pomeriggio, rispettando le tue priorità.
-          </p>
+          <div class="stepContent">
+            <h3 class="stepTitle">Ricevi il piano settimanale</h3>
+            <p class="stepDesc">
+              L'algoritmo genera automaticamente un piano ottimizzato con task distribuiti 
+              tra mattina e pomeriggio, rispettando le tue priorità e disponibilità.
+            </p>
+          </div>
         </div>
         <div class="stepCard">
           <div class="stepNumber">4</div>
-          <h3 class="stepTitle">Studia e traccia</h3>
-          <p class="stepDesc">
-            Completa i task, usa il timer integrato e monitora il tuo progresso. 
-            Il sistema ti mostra sempre quanto sei preparato per ogni esame.
-          </p>
+          <div class="stepContent">
+            <h3 class="stepTitle">Studia e traccia</h3>
+            <p class="stepDesc">
+              Completa i task, usa il timer integrato e monitora il tuo progresso in tempo reale. 
+              Il sistema ti mostra sempre quanto sei preparato per ogni esame.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -780,7 +929,7 @@
       <h2 class="sectionTitle">Vantaggi per gli studenti</h2>
       <div class="benefitsList">
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">01</div>
           <div class="benefitText">
             <div class="benefitTitle">Riduce lo stress</div>
             <div class="benefitDesc">
@@ -790,7 +939,7 @@
           </div>
         </div>
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">02</div>
           <div class="benefitText">
             <div class="benefitTitle">Migliora i risultati</div>
             <div class="benefitDesc">
@@ -800,7 +949,7 @@
           </div>
         </div>
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">03</div>
           <div class="benefitText">
             <div class="benefitTitle">Risparmia tempo</div>
             <div class="benefitDesc">
@@ -810,7 +959,7 @@
           </div>
         </div>
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">04</div>
           <div class="benefitText">
             <div class="benefitTitle">Aumenta la motivazione</div>
             <div class="benefitDesc">
@@ -820,7 +969,7 @@
           </div>
         </div>
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">05</div>
           <div class="benefitText">
             <div class="benefitTitle">Equilibrio vita-studio</div>
             <div class="benefitDesc">
@@ -830,7 +979,7 @@
           </div>
         </div>
         <div class="benefitItem">
-          <div class="benefitIcon">✓</div>
+          <div class="benefitIcon">06</div>
           <div class="benefitText">
             <div class="benefitTitle">Prevenzione procrastinazione</div>
             <div class="benefitDesc">
@@ -882,10 +1031,10 @@
           </div>
         </div>
         <div class="faqItem">
-          <div class="faqQuestion">È gratuito?</div>
+          <div class="faqQuestion">Come posso iniziare?</div>
           <div class="faqAnswer">
-            Sì, Study Planner è completamente gratuito. Puoi creare un account e iniziare 
-            a usarlo subito senza costi nascosti.
+            Crea un account, configura il tuo profilo con disponibilità e obiettivi, 
+            aggiungi i tuoi esami e ricevi immediatamente un piano di studio personalizzato.
           </div>
         </div>
       </div>
@@ -894,7 +1043,7 @@
     <!-- CTA Finale -->
     <section class="ctaSection">
       <h2 class="ctaTitle">Pronto a migliorare il tuo metodo di studio?</h2>
-      <p class="ctaSubtitle">Crea un account gratuito e inizia subito a pianificare</p>
+      <p class="ctaSubtitle">Crea un account e inizia subito a pianificare il tuo studio</p>
       <button class="btn primary ctaButton" id="cta-login-2">Inizia ora</button>
     </section>
   </div>
