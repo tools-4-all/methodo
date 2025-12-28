@@ -248,6 +248,11 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
+  // Filtra e valida esami PRIMA di usarli
+  const validExams = (exams || [])
+    .filter((e) => e?.name && e?.date)
+    .map((e) => ({ ...e }));
+
   // Calcola budget settimanale reale
   let weeklyBudgetMin = dayKeys.reduce((acc, k) => acc + (dayMinutes[k] || 0), 0);
   
@@ -260,10 +265,6 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   }
   
   const weeklyBudget = weeklyBudgetMin;
-
-  const validExams = (exams || [])
-    .filter((e) => e?.name && e?.date)
-    .map((e) => ({ ...e }));
   if (validExams.length === 0) {
     return {
       weekStart: toISODate(weekStartDate),

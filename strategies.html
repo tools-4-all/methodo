@@ -265,15 +265,21 @@
             </div>
 
             <div class="formRow">
-              <label for="exam-topics">
+              <label>
                 <span>Argomenti principali <span class="labelHint">(opzionale)</span></span>
               </label>
-              <textarea 
-                id="exam-topics" 
-                class="notesTextarea" 
-                placeholder="Es: Funzioni, Derivate, Integrali... (uno per riga o separati da virgola)"
-                rows="3"
-              ></textarea>
+              <div class="topicsInputContainer">
+                <div class="topicsInputRow">
+                  <input 
+                    id="exam-topics-input" 
+                    type="text" 
+                    placeholder="Es: Funzioni, Derivate, Integrali..."
+                    class="topicsInput"
+                  />
+                  <button type="button" class="btn tiny" id="add-topic-btn">Aggiungi</button>
+                </div>
+                <div id="topics-list" class="topicsList"></div>
+              </div>
             </div>
 
             <div class="infoBox">

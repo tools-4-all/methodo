@@ -126,7 +126,14 @@ async function listExams(uid) {
   const col = collection(db, "users", uid, "exams");
   const snap = await getDocs(col);
   const exams = [];
-  snap.forEach((d) => exams.push({ id: d.id, ...d.data() }));
+  snap.forEach((d) => {
+    const examData = d.data();
+    // Assicura che ogni esame abbia una category (per compatibilità con esami vecchi)
+    if (!examData.category || examData.category === "auto") {
+      examData.category = detectExamCategory(examData.name || "");
+    }
+    exams.push({ id: d.id, ...examData });
+  });
   exams.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   return exams;
 }
@@ -188,6 +195,199 @@ async function loadWeeklyPlan(uid, weekStartISO) {
   const ref = doc(db, "users", uid, "plans", weekStartISO);
   const snap = await getDoc(ref);
   return snap.exists() ? snap.data()?.plan : null;
+}
+
+/**
+ * Verifica se ci sono state modifiche che richiedono la rigenerazione del piano.
+ * Confronta il profilo e gli esami attuali con quelli salvati nel piano.
+ */
+/**
+ * Normalizza un valore per il confronto (gestisce null/undefined/string/number)
+ */
+function normalizeValue(val) {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const num = Number(val);
+    return isNaN(num) ? val : num;
+  }
+  return val;
+}
+
+/**
+ * Confronta due valori normalizzandoli prima
+ */
+function valuesEqual(a, b) {
+  return normalizeValue(a) === normalizeValue(b);
+}
+
+function hasPlanChanges(currentProfile, currentExams, savedPlan) {
+  if (!savedPlan) {
+    console.log("[hasPlanChanges] Nessun piano salvato, serve rigenerare");
+    return true; // Se non c'è piano salvato, serve rigenerare
+  }
+  
+  if (!savedPlan.profileSnapshot || !savedPlan.examsSnapshot) {
+    console.log("[hasPlanChanges] Piano senza snapshot, serve rigenerare");
+    return true; // Se non c'è snapshot, serve rigenerare
+  }
+  
+  const snapshot = savedPlan.profileSnapshot;
+  
+  // Confronta parametri chiave del profilo (normalizzando i valori)
+  const profileChanged = 
+    !valuesEqual(currentProfile.goalMode, snapshot.goalMode) ||
+    !valuesEqual(currentProfile.weeklyHours, snapshot.weeklyHours) ||
+    !valuesEqual(currentProfile.taskMinutes, snapshot.taskMinutes) ||
+    !valuesEqual(currentProfile.currentHours, snapshot.currentHours) ||
+    !valuesEqual(currentProfile.targetHours, snapshot.targetHours) ||
+    JSON.stringify(currentProfile.dayMinutes || {}) !== JSON.stringify(snapshot.dayMinutes || {});
+  
+  if (profileChanged) {
+    console.log("[hasPlanChanges] Profilo modificato:", {
+      goalMode: { current: currentProfile.goalMode, saved: snapshot.goalMode },
+      weeklyHours: { current: currentProfile.weeklyHours, saved: snapshot.weeklyHours },
+      taskMinutes: { current: currentProfile.taskMinutes, saved: snapshot.taskMinutes },
+    });
+  }
+  
+  // Confronta esami: numero, ID, date, CFU, level, difficulty, category
+  const savedExams = savedPlan.examsSnapshot || [];
+  const savedExamIds = new Set(savedExams.map(e => e.id));
+  const currentExamIds = new Set(currentExams.map(e => e.id));
+  
+  // Verifica se ci sono esami aggiunti o rimossi
+  const examsAdded = currentExams.some(e => !savedExamIds.has(e.id));
+  const examsRemoved = Array.from(savedExamIds).some(id => !currentExamIds.has(id));
+  
+  if (examsAdded || examsRemoved) {
+    console.log("[hasPlanChanges] Esami aggiunti/rimossi:", {
+      added: examsAdded,
+      removed: examsRemoved,
+      currentCount: currentExams.length,
+      savedCount: savedExams.length
+    });
+  }
+  
+  // Verifica se ci sono modifiche agli esami esistenti
+  const examsModified = currentExams.some(currentExam => {
+    const savedExam = savedExams.find(e => e.id === currentExam.id);
+    if (!savedExam) return false;
+    
+    // Normalizza topics per il confronto
+    const normalizeTopics = (topics) => {
+      if (!topics) return null;
+      if (Array.isArray(topics)) {
+        return [...topics].sort();
+      }
+      if (typeof topics === "string" && topics.trim()) {
+        try {
+          const parsed = JSON.parse(topics);
+          return Array.isArray(parsed) ? parsed.sort() : null;
+        } catch {
+          return topics.split(/[,\n]/).map(t => t.trim()).filter(t => t).sort();
+        }
+      }
+      return null;
+    };
+    
+    const currentTopics = normalizeTopics(currentExam.topics);
+    const savedTopics = normalizeTopics(savedExam.topics);
+    
+    // Confronta topics: due array sono uguali se hanno gli stessi elementi (ordinati)
+    const topicsEqual = (a, b) => {
+      if (a === null && b === null) return true;
+      if (a === null || b === null) return false;
+      if (!Array.isArray(a) || !Array.isArray(b)) return false;
+      if (a.length !== b.length) return false;
+      return a.every((val, idx) => val === b[idx]);
+    };
+    
+    const modified = (
+      !valuesEqual(currentExam.name, savedExam.name) ||
+      !valuesEqual(currentExam.date, savedExam.date) ||
+      !valuesEqual(currentExam.cfu, savedExam.cfu) ||
+      !valuesEqual(currentExam.level, savedExam.level) ||
+      !valuesEqual(currentExam.difficulty, savedExam.difficulty) ||
+      !valuesEqual(currentExam.category || "mixed", savedExam.category || "mixed") ||
+      !topicsEqual(currentTopics, savedTopics)
+    );
+    
+    if (modified) {
+      console.log("[hasPlanChanges] Esame modificato:", {
+        id: currentExam.id,
+        name: { current: currentExam.name, saved: savedExam.name },
+        date: { current: currentExam.date, saved: savedExam.date },
+        cfu: { current: currentExam.cfu, saved: savedExam.cfu },
+        level: { current: currentExam.level, saved: savedExam.level },
+        difficulty: { current: currentExam.difficulty, saved: savedExam.difficulty },
+        category: { current: currentExam.category || "mixed", saved: savedExam.category || "mixed" },
+        topics: { current: currentTopics, saved: savedTopics, changed: !topicsEqual(currentTopics, savedTopics) }
+      });
+    }
+    
+    return modified;
+  });
+  
+  const hasChanges = profileChanged || examsAdded || examsRemoved || examsModified;
+  
+  if (!hasChanges) {
+    console.log("[hasPlanChanges] Nessuna modifica rilevata");
+  }
+  
+  return hasChanges;
+}
+
+/**
+ * Salva uno snapshot del profilo e degli esami nel piano per future comparazioni.
+ */
+function addSnapshotToPlan(plan, profile, exams) {
+  // Normalizza i valori del profilo per il confronto
+  plan.profileSnapshot = {
+    goalMode: profile.goalMode || null,
+    weeklyHours: normalizeValue(profile.weeklyHours),
+    taskMinutes: normalizeValue(profile.taskMinutes),
+    currentHours: normalizeValue(profile.currentHours),
+    targetHours: normalizeValue(profile.targetHours),
+    dayMinutes: profile.dayMinutes ? { ...profile.dayMinutes } : null,
+  };
+  
+  // Normalizza i valori degli esami per il confronto
+  plan.examsSnapshot = exams.map(e => {
+    // Normalizza topics: assicura che sia sempre un array o null
+    let normalizedTopics = null;
+    if (e.topics) {
+      if (Array.isArray(e.topics)) {
+        normalizedTopics = [...e.topics].sort(); // Ordina per confronto consistente
+      } else if (typeof e.topics === "string" && e.topics.trim()) {
+        // Se è una stringa, prova a parsare come JSON o split
+        try {
+          const parsed = JSON.parse(e.topics);
+          normalizedTopics = Array.isArray(parsed) ? parsed.sort() : null;
+        } catch {
+          normalizedTopics = e.topics.split(/[,\n]/).map(t => t.trim()).filter(t => t).sort();
+        }
+      }
+    }
+    
+    return {
+      id: e.id || null,
+      name: e.name || "",
+      date: e.date || "",
+      cfu: normalizeValue(e.cfu),
+      level: normalizeValue(e.level),
+      difficulty: normalizeValue(e.difficulty),
+      category: e.category || "mixed", // Default a "mixed" se non specificato
+      topics: normalizedTopics, // Aggiungi topics allo snapshot
+    };
+  });
+  
+  console.log("[addSnapshotToPlan] Snapshot salvato:", {
+    profile: plan.profileSnapshot,
+    examsCount: plan.examsSnapshot.length
+  });
+  
+  return plan;
 }
 
 // ----------------- Stime prodotto -----------------
@@ -665,6 +865,169 @@ function mountIndex() {
   });
 }
 
+// ----------------- TOPICS MANAGEMENT -----------------
+/**
+ * Gestisce l'interfaccia strutturata per gli argomenti principali degli esami.
+ * Permette di aggiungere e rimuovere argomenti uno per uno.
+ */
+
+// Stato globale per gli argomenti (per il form principale)
+let examTopicsList = [];
+
+// Stato per la modale di modifica (separato)
+let editExamTopicsList = [];
+
+/**
+ * Inizializza l'interfaccia degli argomenti nel form principale
+ */
+function initTopicsInterface() {
+  const input = qs("exam-topics-input");
+  const addBtn = qs("add-topic-btn");
+  const list = qs("topics-list");
+  
+  if (!input || !addBtn || !list) return;
+  
+  examTopicsList = [];
+  renderTopicsList(list, examTopicsList, "exam");
+  
+  // Handler per aggiungere argomento
+  const addTopic = () => {
+    const value = input.value.trim();
+    if (!value) return;
+    
+    // Evita duplicati
+    if (examTopicsList.includes(value)) {
+      input.value = "";
+      return;
+    }
+    
+    examTopicsList.push(value);
+    input.value = "";
+    renderTopicsList(list, examTopicsList, "exam");
+  };
+  
+  addBtn.addEventListener("click", addTopic);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTopic();
+    }
+  });
+}
+
+/**
+ * Inizializza l'interfaccia degli argomenti nella modale di modifica
+ */
+function initEditTopicsInterface(topics) {
+  const input = qs("ee-topics-input");
+  const addBtn = qs("ee-add-topic-btn");
+  const list = qs("ee-topics-list");
+  
+  if (!input || !addBtn || !list) return;
+  
+  // Converti topics in array se è una stringa (compatibilità)
+  if (typeof topics === "string" && topics.trim()) {
+    // Prova a parsare come array JSON, altrimenti split per virgola/riga
+    try {
+      const parsed = JSON.parse(topics);
+      editExamTopicsList = Array.isArray(parsed) ? parsed : topics.split(/[,\n]/).map(t => t.trim()).filter(t => t);
+    } catch {
+      editExamTopicsList = topics.split(/[,\n]/).map(t => t.trim()).filter(t => t);
+    }
+  } else if (Array.isArray(topics)) {
+    editExamTopicsList = [...topics];
+  } else {
+    editExamTopicsList = [];
+  }
+  
+  renderTopicsList(list, editExamTopicsList, "edit");
+  
+  // Handler per aggiungere argomento
+  const addTopic = () => {
+    const value = input.value.trim();
+    if (!value) return;
+    
+    // Evita duplicati
+    if (editExamTopicsList.includes(value)) {
+      input.value = "";
+      return;
+    }
+    
+    editExamTopicsList.push(value);
+    input.value = "";
+    renderTopicsList(list, editExamTopicsList, "edit");
+  };
+  
+  addBtn.addEventListener("click", addTopic);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTopic();
+    }
+  });
+}
+
+/**
+ * Renderizza la lista degli argomenti
+ */
+function renderTopicsList(container, topics, prefix) {
+  if (!container) return;
+  
+  container.innerHTML = "";
+  
+  topics.forEach((topic, index) => {
+    const item = document.createElement("div");
+    item.className = "topicItem";
+    item.innerHTML = `
+      <span class="topicItemText">${escapeHtml(topic)}</span>
+      <button type="button" class="topicItemRemove" data-index="${index}">Rimuovi</button>
+    `;
+    
+    const removeBtn = item.querySelector(".topicItemRemove");
+    removeBtn.addEventListener("click", () => {
+      if (prefix === "exam") {
+        examTopicsList.splice(index, 1);
+        renderTopicsList(container, examTopicsList, prefix);
+      } else {
+        editExamTopicsList.splice(index, 1);
+        renderTopicsList(container, editExamTopicsList, prefix);
+      }
+    });
+    
+    container.appendChild(item);
+  });
+}
+
+/**
+ * Ottiene gli argomenti come array (per salvataggio)
+ */
+function getTopicsArray(prefix) {
+  if (prefix === "exam") {
+    return examTopicsList.length > 0 ? examTopicsList : null;
+  } else {
+    return editExamTopicsList.length > 0 ? editExamTopicsList : null;
+  }
+}
+
+/**
+ * Resetta la lista degli argomenti
+ */
+function resetTopicsList(prefix) {
+  if (prefix === "exam") {
+    examTopicsList = [];
+    const list = qs("topics-list");
+    if (list) list.innerHTML = "";
+    const input = qs("exam-topics-input");
+    if (input) input.value = "";
+  } else {
+    editExamTopicsList = [];
+    const list = qs("ee-topics-list");
+    if (list) list.innerHTML = "";
+    const input = qs("ee-topics-input");
+    if (input) input.value = "";
+  }
+}
+
 // ----------------- ONBOARDING -----------------
 function mountOnboarding() {
   qs("logout-btn")?.addEventListener("click", async () => {
@@ -931,6 +1294,9 @@ function mountOnboarding() {
     categorySelect?.addEventListener("change", updateCategoryInfo);
     updateCategoryInfo(); // Mostra info iniziale se non è "auto"
 
+    // Inizializza interfaccia argomenti
+    initTopicsInterface();
+    
     // Aggiorna visualizzazione allenatore quando cambiano i valori
     const currentHoursInput = qs("current-hours");
     const targetHoursInput = qs("target-hours");
@@ -968,7 +1334,7 @@ function mountOnboarding() {
         const level = Number(qs("exam-level").value || 0);
         const difficulty = Number(qs("exam-diff").value || 2);
         const category = (qs("exam-category")?.value || "auto").trim();
-        const topics = (qs("exam-topics")?.value || "").trim();
+        const topics = getTopicsArray("exam");
 
         if (!name) throw new Error("Nome esame mancante.");
         if (!date) throw new Error("Data esame mancante.");
@@ -987,7 +1353,7 @@ function mountOnboarding() {
           level, 
           difficulty,
           category: finalCategory,
-          topics: topics || null
+          topics: topics
         });
         
         // Reset form
@@ -997,7 +1363,7 @@ function mountOnboarding() {
         qs("exam-level").value = "0";
         qs("exam-diff").value = "2";
         qs("exam-category").value = "auto";
-        if (qs("exam-topics")) qs("exam-topics").value = "";
+        resetTopicsList("exam");
         
         await refreshExamList(user.uid);
       } catch (err) {
@@ -1012,12 +1378,19 @@ function mountOnboarding() {
     
     const handleGoToDashboard = async () => {
       try {
-        // Forza un piccolo delay per assicurarsi che eventuali salvataggi siano completati
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Forza un delay più lungo per assicurarsi che eventuali salvataggi siano completati
+        // (Firestore potrebbe richiedere tempo per propagare le modifiche)
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Ricarica i dati freschi da Firestore
-        const profile2 = await getProfile(user.uid);
-        const exams2 = await listExams(user.uid);
+        // Ricarica i dati freschi da Firestore (con retry per assicurarsi che siano aggiornati)
+        let profile2 = await getProfile(user.uid);
+        let exams2 = await listExams(user.uid);
+        
+        // Se non ci sono esami, aspetta un po' e riprova (potrebbe essere un problema di timing)
+        if (exams2.length === 0) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          exams2 = await listExams(user.uid);
+        }
 
         console.log("[Dashboard] Verifica:", {
           hasGoalMode: !!profile2?.goalMode,
@@ -1044,6 +1417,56 @@ function mountOnboarding() {
             alert("Aggiungi almeno un esame da preparare prima di andare alla dashboard.");
           }
           return;
+        }
+
+        // Verifica se ci sono modifiche che richiedono rigenerazione del piano
+        const weekStart = startOfWeekISO(new Date());
+        const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
+        
+        console.log("[handleGoToDashboard] Verifica modifiche:", {
+          profile: {
+            goalMode: profile2?.goalMode,
+            weeklyHours: profile2?.weeklyHours,
+            taskMinutes: profile2?.taskMinutes,
+            currentHours: profile2?.currentHours,
+            targetHours: profile2?.targetHours,
+          },
+          examsCount: exams2.length,
+          exams: exams2.map(e => ({
+            id: e.id,
+            name: e.name,
+            date: e.date,
+            cfu: e.cfu,
+            level: e.level,
+            difficulty: e.difficulty,
+            category: e.category
+          }))
+        });
+        
+        const savedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
+        const needsRegeneration = hasPlanChanges(profile2, exams2, savedPlan);
+        
+        if (needsRegeneration) {
+          console.log("[handleGoToDashboard] Rilevate modifiche, rigenero il piano...");
+          // Assicura che tutti gli esami abbiano una category valida
+          const normalizedExams = exams2.map(e => ({
+            ...e,
+            category: e.category || detectExamCategory(e.name || "") || "mixed"
+          }));
+          
+          // Rigenera il piano con i nuovi dati
+          const newPlan = generateWeeklyPlan(profile2, normalizedExams, weekStart);
+          // Aggiungi snapshot per future comparazioni
+          addSnapshotToPlan(newPlan, profile2, normalizedExams);
+          // Salva il piano rigenerato
+          await saveWeeklyPlan(user.uid, weekStartISO, newPlan);
+          console.log("[handleGoToDashboard] Piano rigenerato e salvato:", {
+            weekStart: newPlan.weekStart,
+            allocations: newPlan.allocations.length,
+            totalTasks: newPlan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0)
+          });
+        } else {
+          console.log("[handleGoToDashboard] Nessuna modifica rilevata, uso piano esistente.");
         }
 
         // Tutto ok, vai alla dashboard
@@ -1281,14 +1704,35 @@ function openEditExamModal(uid, exam, onSuccess) {
   // Campo argomenti principali
   const topicsLabel = document.createElement("label");
   topicsLabel.innerHTML = '<span>Argomenti principali <span style="font-size:11px;color:rgba(255,255,255,.5);">(opzionale)</span></span>';
-  const topicsTextarea = document.createElement("textarea");
-  topicsTextarea.id = "ee-topics";
-  topicsTextarea.className = "notesTextarea";
-  topicsTextarea.style.minHeight = "80px";
-  topicsTextarea.placeholder = "Es: Funzioni, Derivate, Integrali... (uno per riga o separati da virgola)";
-  topicsTextarea.rows = 3;
-  topicsTextarea.value = exam.topics || "";
-  topicsLabel.appendChild(topicsTextarea);
+  
+  const topicsContainer = document.createElement("div");
+  topicsContainer.className = "topicsInputContainer";
+  
+  const topicsInputRow = document.createElement("div");
+  topicsInputRow.className = "topicsInputRow";
+  
+  const topicsInput = document.createElement("input");
+  topicsInput.id = "ee-topics-input";
+  topicsInput.type = "text";
+  topicsInput.className = "topicsInput";
+  topicsInput.placeholder = "Es: Funzioni, Derivate, Integrali...";
+  
+  const addTopicBtn = document.createElement("button");
+  addTopicBtn.type = "button";
+  addTopicBtn.id = "ee-add-topic-btn";
+  addTopicBtn.className = "btn tiny";
+  addTopicBtn.textContent = "Aggiungi";
+  
+  topicsInputRow.appendChild(topicsInput);
+  topicsInputRow.appendChild(addTopicBtn);
+  
+  const topicsList = document.createElement("div");
+  topicsList.id = "ee-topics-list";
+  topicsList.className = "topicsList";
+  
+  topicsContainer.appendChild(topicsInputRow);
+  topicsContainer.appendChild(topicsList);
+  topicsLabel.appendChild(topicsContainer);
 
   // Aggiungi tutti i campi al form
   form.appendChild(nameLabel);
@@ -1320,6 +1764,11 @@ function openEditExamModal(uid, exam, onSuccess) {
 
   overlay.appendChild(card);
   document.body.appendChild(overlay);
+  
+  // Inizializza l'interfaccia argomenti con i dati esistenti (dopo che è stata aggiunta al DOM)
+  setTimeout(() => {
+    initEditTopicsInterface(exam.topics);
+  }, 0);
 
   // Funzione per chiudere la modale
   function closeModal() {
@@ -1342,7 +1791,7 @@ function openEditExamModal(uid, exam, onSuccess) {
       const level = Number(levelInput.value || 0);
       const difficulty = Number(diffSelect.value || 2);
       const category = (catSelect.value || "auto").trim();
-      const topics = topicsTextarea.value.trim() || null;
+      const topics = getTopicsArray("edit");
 
       if (!name) throw new Error("Nome esame mancante.");
       if (!date) throw new Error("Data esame mancante.");
@@ -2300,22 +2749,54 @@ function mountApp() {
         weekStart.getDate()
       )}`;
 
+      // Assicura che tutti gli esami abbiano una category valida
+      const normalizedExams = exams.map(e => ({
+        ...e,
+        category: e.category || detectExamCategory(e.name || "") || "mixed"
+      }));
+      
       let plan = await loadWeeklyPlan(user.uid, weekStartISO);
       if (!plan) {
-        plan = generateWeeklyPlan(profile, exams, weekStart);
+        console.log("[App] Nessun piano salvato, genero nuovo piano...");
+        plan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+        // Aggiungi snapshot per future comparazioni
+        addSnapshotToPlan(plan, profile, normalizedExams);
         await saveWeeklyPlan(user.uid, weekStartISO, plan);
+        console.log("[App] Nuovo piano generato e salvato:", {
+          weekStart: plan.weekStart,
+          allocations: plan.allocations.length,
+          totalTasks: plan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0)
+        });
+      } else {
+        // Verifica se ci sono modifiche e rigenera se necessario
+        const needsRegeneration = hasPlanChanges(profile, normalizedExams, plan);
+        if (needsRegeneration) {
+          console.log("[App] Rilevate modifiche, rigenero il piano...");
+          plan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+          addSnapshotToPlan(plan, profile, normalizedExams);
+          await saveWeeklyPlan(user.uid, weekStartISO, plan);
+          console.log("[App] Piano rigenerato e salvato:", {
+            weekStart: plan.weekStart,
+            allocations: plan.allocations.length,
+            totalTasks: plan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0)
+          });
+        } else {
+          console.log("[App] Nessuna modifica rilevata, uso piano esistente.");
+        }
       }
 
-      renderDashboard(plan, exams, profile, user, weekStartISO);
+      renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
-      bindAddTaskButton(plan, exams, profile, user, weekStartISO);
+      bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
 
       document.getElementById("regen-week")?.addEventListener("click", async () => {
-        const plan2 = generateWeeklyPlan(profile, exams, weekStart);
+        const plan2 = generateWeeklyPlan(profile, normalizedExams, weekStart);
+        // Aggiungi snapshot per future comparazioni
+        addSnapshotToPlan(plan2, profile, normalizedExams);
         await saveWeeklyPlan(user.uid, weekStartISO, plan2);
-        renderDashboard(plan2, exams, profile, user, weekStartISO);
+        renderDashboard(plan2, normalizedExams, profile, user, weekStartISO);
         // Ricollega il bottone per il nuovo piano
-        bindAddTaskButton(plan2, exams, profile, user, weekStartISO);
+        bindAddTaskButton(plan2, normalizedExams, profile, user, weekStartISO);
       });
 
       document.getElementById("mark-today-done")?.addEventListener("click", async () => {

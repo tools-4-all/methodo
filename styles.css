@@ -1861,6 +1861,99 @@ color: rgba(255,255,255,.92);
   color: rgba(255,255,255,.4);
 }
 
+/* ===== TOPICS INPUT ===== */
+.topicsInputContainer{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.topicsInputRow{
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.topicsInput{
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  transition: all .15s ease;
+}
+
+.topicsInput:focus{
+  outline: none;
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 0 0 4px rgba(255,255,255,.08);
+  background: rgba(0,0,0,.28);
+}
+
+.topicsInput::placeholder{
+  color: rgba(255,255,255,.4);
+}
+
+.topicsList{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.topicsList:empty{
+  display: none;
+}
+
+.topicItem{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panelSolid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all .15s ease;
+}
+
+.topicItem:hover{
+  background: rgba(255,255,255,.08);
+  border-color: var(--border2);
+}
+
+.topicItemText{
+  flex: 1;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.topicItemRemove{
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: rgba(251, 113, 133, .15);
+  border: 1px solid rgba(251, 113, 133, .3);
+  border-radius: 6px;
+  color: rgba(251, 113, 133, 1);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+}
+
+.topicItemRemove:hover{
+  background: rgba(251, 113, 133, .25);
+  border-color: rgba(251, 113, 133, .4);
+}
+
+.topicItemRemove:active{
+  transform: scale(0.95);
+}
+
 /* ===== STRATEGIES PAGE ===== */
 .infoBox{
   background: var(--panelSolid);
