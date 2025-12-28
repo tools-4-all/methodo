@@ -1510,4 +1510,112 @@ color: rgba(255,255,255,.92);
 }
 .toastClose:hover { background: rgba(255,255,255,0.18); }
 
+/* ===== CONSIGLI / BLOG PAGE ===== */
+main > section.adviceCard {
+  margin-bottom: 20px;
+}
+
+.adviceContent {
+  padding-top: 8px;
+}
+
+.adviceIntro {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255,255,255,.88);
+  margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+}
+
+.adviceSection {
+  margin-bottom: 24px;
+}
+
+.adviceSection h3 {
+  font-size: 16px;
+  font-weight: 950;
+  color: rgba(255,255,255,.96);
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+}
+
+.adviceSection p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255,255,255,.85);
+  margin-bottom: 10px;
+}
+
+.adviceSection p:last-child {
+  margin-bottom: 0;
+}
+
+.adviceList {
+  margin: 12px 0;
+  padding-left: 24px;
+  list-style: none;
+  counter-reset: advice-counter;
+}
+
+.adviceList li {
+  position: relative;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255,255,255,.82);
+  margin-bottom: 10px;
+  padding-left: 24px;
+}
+
+.adviceList li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: rgba(34,197,94,.8);
+  font-weight: 900;
+}
+
+.adviceList li strong {
+  color: rgba(255,255,255,.95);
+  font-weight: 900;
+}
+
+.adviceTip {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: rgba(34,197,94,.12);
+  border: 1px solid rgba(34,197,94,.25);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255,255,255,.9);
+}
+
+.adviceTip strong {
+  color: rgba(34,197,94,.95);
+  font-weight: 900;
+}
+
+@media (max-width: 720px) {
+  .adviceSection {
+    margin-bottom: 20px;
+  }
+  
+  .adviceIntro {
+    font-size: 13px;
+    padding: 10px;
+  }
+  
+  .adviceSection h3 {
+    font-size: 15px;
+  }
+  
+  .adviceSection p,
+  .adviceList li {
+    font-size: 13px;
+  }
+}
+
 

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Consigli</title>
+  <link rel="stylesheet" href="./styles.css?v=11" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Consigli</h1>
+        <p class="meta">Guida e approfondimenti</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./onboarding.html">
+              <span>Modifica profilo</span>
+            </a>
+      
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+              <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Sezione: Come funziona l'algoritmo -->
+      <section class="card adviceCard">
+        <div class="cardHeader">
+          <h2>Come funziona il nostro algoritmo</h2>
+          <div class="meta">Pianificazione intelligente</div>
+        </div>
+        
+        <div class="adviceContent">
+          <p class="adviceIntro">
+            Il nostro algoritmo di pianificazione analizza i tuoi esami e crea un piano di studio settimanale ottimizzato. 
+            Ecco come funziona:
+          </p>
+
+          <div class="adviceSection">
+            <h3>1. Calcolo delle priorità</h3>
+            <p>
+              Ogni esame riceve un "peso" basato su diversi fattori:
+            </p>
+            <ul class="adviceList">
+              <li><strong>Urgenza:</strong> Quanto è vicina la data d'esame (più vicino = più urgente)</li>
+              <li><strong>Ignoranza:</strong> Quanto ti manca da preparare (livello 0-5, dove 0 = zero preparazione)</li>
+              <li><strong>Difficoltà:</strong> Complessità dell'esame (1=facile, 2=media, 3=difficile)</li>
+              <li><strong>CFU:</strong> Peso dell'esame nel tuo percorso</li>
+              <li><strong>Obiettivo:</strong> La modalità che hai scelto (sufficiente/buono/ottimo) influenza l'intensità</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>2. Allocazione del tempo</h3>
+            <p>
+              Il tempo disponibile viene distribuito proporzionalmente ai pesi calcolati. 
+              Ogni esame riceve almeno un minimo garantito (circa l'8% del budget settimanale o 60 minuti).
+            </p>
+            <p>
+              Il resto viene distribuito in base all'urgenza e all'importanza, dando priorità agli esami più vicini 
+              e meno preparati.
+            </p>
+          </div>
+
+          <div class="adviceSection">
+            <h3>3. Creazione dei task</h3>
+            <p>
+              Per ogni esame vengono generati task di studio con durate personalizzate:
+            </p>
+            <ul class="adviceList">
+              <li>La durata base è quella che hai impostato nel profilo (es. 35 minuti)</li>
+              <li>Esami più difficili o con livello più basso ricevono sessioni più lunghe</li>
+              <li>I task sono variati per tipo: teoria, pratica, prove d'esame, ripasso</li>
+              <li>Il tipo di task dipende dal tuo obiettivo (sufficiente/buono/ottimo)</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>4. Distribuzione giornaliera</h3>
+            <p>
+              I task vengono distribuiti nei giorni della settimana rispettando la tua disponibilità:
+            </p>
+            <ul class="adviceList">
+              <li>Ogni giorno ha un limite massimo di minuti (quello che hai impostato)</li>
+              <li>I task vengono distribuiti in modo bilanciato usando un algoritmo round-robin</li>
+              <li>Ogni task viene assegnato a mattina o pomeriggio in base alla capacità giornaliera</li>
+              <li>Se non c'è spazio per tutti i task, quelli meno urgenti vengono tagliati (vedrai un avviso)</li>
+            </ul>
+          </div>
+
+          <div class="adviceTip">
+            <strong>💡 Suggerimento:</strong> Se vedi che molti task vengono tagliati, considera di aumentare 
+            le ore settimanali o ridurre il numero di esami attivi. Il sistema ti avviserà sempre quando questo accade.
+          </div>
+        </div>
+      </section>
+
+      <!-- Sezione: Metodo di studio -->
+      <section class="card adviceCard">
+        <div class="cardHeader">
+          <h2>Metodo di studio efficace</h2>
+          <div class="meta">Strategie comprovate</div>
+        </div>
+        
+        <div class="adviceContent">
+          <p class="adviceIntro">
+            Un buon metodo di studio può fare la differenza. Ecco alcune strategie basate sulla ricerca scientifica:
+          </p>
+
+          <div class="adviceSection">
+            <h3>1. Spaced Repetition (Ripetizione spaziata)</h3>
+            <p>
+              Studiare lo stesso argomento più volte a distanza di giorni è molto più efficace che concentrare tutto in una sessione.
+              Il nostro algoritmo distribuisce i task in modo da favorire questa pratica.
+            </p>
+            <p><strong>Come applicarlo:</strong></p>
+            <ul class="adviceList">
+              <li>Non saltare i task di "ripasso" che il sistema ti propone</li>
+              <li>Rivedi gli argomenti già studiati almeno una volta a settimana</li>
+              <li>Usa le flashcard o mappe mentali per il ripasso rapido</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>2. Active Recall (Richiamo attivo)</h3>
+            <p>
+              Invece di rileggere passivamente, prova a richiamare le informazioni dalla memoria. 
+              Questo rafforza le connessioni neurali e migliora la ritenzione.
+            </p>
+            <p><strong>Come applicarlo:</strong></p>
+            <ul class="adviceList">
+              <li>Dopo aver letto un capitolo, chiudi il libro e prova a spiegare i concetti</li>
+              <li>Fai esercizi senza guardare le soluzioni prima</li>
+              <li>Usa la tecnica Feynman: spiega come se dovessi insegnarlo a qualcuno</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>3. Pomodoro Technique</h3>
+            <p>
+              Lavora a blocchi di tempo concentrati (25-45 minuti) seguiti da brevi pause. 
+              Questo mantiene alta la concentrazione e previene il burnout.
+            </p>
+            <p><strong>Come applicarlo:</strong></p>
+            <ul class="adviceList">
+              <li>Usa la durata dei task come blocchi di studio (es. 35 minuti = 1 pomodoro)</li>
+              <li>Fai una pausa di 5-10 minuti tra un task e l'altro</li>
+              <li>Dopo 4 task, fai una pausa più lunga (15-30 minuti)</li>
+              <li>Usa il timer integrato nella pagina task per rispettare i tempi</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>4. Interleaving (Studio intervallato)</h3>
+            <p>
+              Alternare diversi argomenti o tipi di esercizi in una stessa sessione migliora l'apprendimento 
+              rispetto a concentrarsi su un solo argomento.
+            </p>
+            <p><strong>Come applicarlo:</strong></p>
+            <ul class="adviceList">
+              <li>Segui il piano che ti propone il sistema: alterna teoria, pratica e ripasso</li>
+              <li>Non studiare solo un esame per giorni: distribuisci lo studio su più esami</li>
+              <li>Varia i tipi di task: teoria al mattino, esercizi al pomeriggio</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>5. Elaborazione profonda</h3>
+            <p>
+              Cerca di capire il "perché" e il "come", non solo memorizzare. 
+              Collegare nuove informazioni a quelle già conosciute crea reti di conoscenza più solide.
+            </p>
+            <p><strong>Come applicarlo:</strong></p>
+            <ul class="adviceList">
+              <li>Fai domande mentre studi: "Perché funziona così?" "Come si collega a...?"</li>
+              <li>Crea mappe concettuali che mostrano le relazioni tra i concetti</li>
+              <li>Risolvi problemi applicando la teoria, non solo leggendola</li>
+            </ul>
+          </div>
+
+          <div class="adviceTip">
+            <strong>💡 Ricorda:</strong> La costanza è più importante dell'intensità. 
+            Studiare un po' ogni giorno è meglio che concentrare tutto in poche sessioni lunghe.
+          </div>
+        </div>
+      </section>
+
+      <!-- Sezione: Come usare la dashboard -->
+      <section class="card adviceCard">
+        <div class="cardHeader">
+          <h2>Come usare la dashboard</h2>
+          <div class="meta">Guida pratica</div>
+        </div>
+        
+        <div class="adviceContent">
+          <div class="adviceSection">
+            <h3>Sezione "Oggi - Task"</h3>
+            <ul class="adviceList">
+              <li><strong>Grafico di completamento:</strong> Mostra quanti task hai completato e i minuti studiati</li>
+              <li><strong>Task divisi per periodo:</strong> Mattina e pomeriggio per organizzarti meglio</li>
+              <li><strong>Checkbox:</strong> Segna i task completati per tracciare il progresso</li>
+              <li><strong>Click su un task:</strong> Apri la pagina dettaglio con timer integrato</li>
+              <li><strong>Bottone "+":</strong> Aggiungi task manuali se necessario</li>
+              <li><strong>Bottone "Rigenera":</strong> Rigenera il piano settimanale se cambiano le priorità</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Sezione "Settimana"</h3>
+            <ul class="adviceList">
+              <li>Vedi come il tempo è distribuito tra i vari esami</li>
+              <li>Gli esami più urgenti ricevono più tempo</li>
+              <li>Se vedi un avviso "Realismo", alcuni task sono stati tagliati per mancanza di tempo</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Sezione "Esami"</h3>
+            <ul class="adviceList">
+              <li><strong>Readiness stimata:</strong> Percentuale che indica quanto sei preparato</li>
+              <li><strong>Badge colorati:</strong> 
+                <span class="badge good" style="display:inline-block;margin:0 4px">on track</span> = vai bene,
+                <span class="badge warn" style="display:inline-block;margin:0 4px">borderline</span> = attenzione,
+                <span class="badge bad" style="display:inline-block;margin:0 4px">rischio</span> = serve più tempo
+              </li>
+              <li>Vedi i dettagli: piano settimanale, tempo necessario stimato, capacità disponibile</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Pagina Task</h3>
+            <ul class="adviceList">
+              <li><strong>Timer:</strong> Avvia, pausa o resetta il timer per tracciare il tempo effettivo</li>
+              <li><strong>Segna completato:</strong> Marca il task come fatto</li>
+              <li><strong>Salta:</strong> Se non puoi fare il task, segnalo per non perdere traccia</li>
+              <li>Il timer salva automaticamente il progresso</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sezione: Suggerimenti per il profilo -->
+      <section class="card adviceCard">
+        <div class="cardHeader">
+          <h2>Suggerimenti per il profilo</h2>
+          <div class="meta">Ottimizza le tue impostazioni</div>
+        </div>
+        
+        <div class="adviceContent">
+          <div class="adviceSection">
+            <h3>Disponibilità settimanale</h3>
+            <p><strong>Sii realistico!</strong> È meglio impostare meno ore e rispettarle, piuttosto che esagerare e non riuscire a seguire il piano.</p>
+            <ul class="adviceList">
+              <li>Considera le tue attività quotidiane (lezioni, lavoro, sport, ecc.)</li>
+              <li>Lascia del tempo per imprevisti e riposo</li>
+              <li>Puoi sempre aumentare le ore se ti accorgi di avere più tempo</li>
+              <li>La domenica può essere a 0 se preferisci riposare</li>
+            </ul>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Durata task</h3>
+            <p>La durata ideale dipende da te, ma ecco alcune linee guida:</p>
+            <ul class="adviceList">
+              <li><strong>25 minuti:</strong> Per sessioni brevi e intense (Pomodoro classico)</li>
+              <li><strong>35 minuti:</strong> Bilanciato, buono per la maggior parte degli studenti</li>
+              <li><strong>45-60 minuti:</strong> Per sessioni più lunghe quando hai tempo e concentrazione</li>
+            </ul>
+            <p>Il sistema adatterà automaticamente la durata in base alla difficoltà dell'esame.</p>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Obiettivo</h3>
+            <ul class="adviceList">
+              <li><strong>Sufficiente (18-22):</strong> Focus su esercizi d'esame e punti deboli</li>
+              <li><strong>Buono (23-26):</strong> Bilanciato tra teoria, pratica e ripasso</li>
+              <li><strong>Ottimo (27-30):</strong> Approfondimento teorico e esercizi difficili</li>
+            </ul>
+            <p>Puoi cambiare obiettivo in qualsiasi momento dalla pagina profilo.</p>
+          </div>
+
+          <div class="adviceSection">
+            <h3>Livello iniziale degli esami</h3>
+            <p>Il livello (0-5) indica quanto sei già preparato:</p>
+            <ul class="adviceList">
+              <li><strong>0:</strong> Non hai mai studiato l'argomento</li>
+              <li><strong>1-2:</strong> Hai visto qualcosa ma serve molto studio</li>
+              <li><strong>3:</strong> Hai una base solida ma serve approfondire</li>
+              <li><strong>4-5:</strong> Sei già ben preparato, serve principalmente ripasso</li>
+            </ul>
+            <p>Aggiorna il livello man mano che studi per avere stime più accurate.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    // Importa le funzioni necessarie
+    import { logout } from "./auth.js";
+
+    // Setup menu quando il DOM è pronto
+    document.addEventListener("DOMContentLoaded", () => {
+      const menuBtn = document.getElementById("menu-btn");
+      const menuPanel = document.getElementById("menu-panel");
+      
+      if (menuBtn && menuPanel) {
+        function openMenu(){
+          menuPanel.classList.remove("hidden");
+          menuBtn.setAttribute("aria-expanded", "true");
+        }
+        function closeMenu(){
+          menuPanel.classList.add("hidden");
+          menuBtn.setAttribute("aria-expanded", "false");
+        }
+        function toggleMenu(){
+          const isOpen = !menuPanel.classList.contains("hidden");
+          isOpen ? closeMenu() : openMenu();
+        }
+
+        menuBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleMenu();
+        });
+
+        document.addEventListener("click", (e) => {
+          if (!menuPanel.classList.contains("hidden") && !menuBtn.contains(e.target) && !menuPanel.contains(e.target)) {
+            closeMenu();
+          }
+        });
+
+        menuPanel.addEventListener("click", (e) => e.stopPropagation());
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") closeMenu();
+        });
+      }
+
+      // Logout handler
+      document.getElementById("logout-btn")?.addEventListener("click", async () => {
+        await logout();
+        window.location.assign("./index.html");
+      });
+    });
+  </script>
+</body>
+</html>
+
