@@ -7,27 +7,35 @@
   <link rel="stylesheet" href="./styles.css" />
 
   <style>
-    /* === TIMER RING FIX DEFINITIVO === */
-
+    /* === TIMER RING IMPROVED === */
     .pie{
-      width: 120px;
-      height: 120px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
       position: relative;
       flex-shrink: 0;
-
-      /* anello esterno ROSSO */
       background:
-        radial-gradient(circle at center, #ffffff 68%, transparent 69%),
+        radial-gradient(circle at center, rgba(10, 12, 20, 0.95) 65%, transparent 66%),
         conic-gradient(
-          #dc2626 0deg,           /* rosso */
-          #dc2626 var(--angle, 0deg),
-          #e5e7eb var(--angle, 0deg),
-          #e5e7eb 360deg
+          rgba(99, 102, 241, 0.9) 0deg,
+          rgba(99, 102, 241, 0.9) var(--angle, 0deg),
+          rgba(255, 255, 255, 0.1) var(--angle, 0deg),
+          rgba(255, 255, 255, 0.1) 360deg
         );
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+      transition: box-shadow 0.3s ease;
+    }
+    
+    .pie.running {
+      box-shadow: 0 8px 40px rgba(99, 102, 241, 0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
     }
 
-    /* centro ASSOLUTO, NON FLEX */
     .pieCenter{
       position: absolute;
       top: 50%;
@@ -38,110 +46,444 @@
     }
 
     .piePct{
-      font-size: 20px;
-      font-weight: 800;
+      font-size: 28px;
+      font-weight: 900;
       line-height: 1;
       margin: 0;
       padding: 0;
-      color: #111827;
+      color: rgba(255, 255, 255, 0.95);
+      letter-spacing: -0.02em;
     }
 
     .pieLbl{
-      font-size: 12px;
-      margin-top: 4px;
-      color: #6b7280;
+      font-size: 11px;
+      margin-top: 6px;
+      color: rgba(255, 255, 255, 0.6);
       line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .barWrap{
-      margin-top: 14px;
-      height: 10px;
+      margin-top: 20px;
+      height: 8px;
       border-radius: 999px;
-      background: #e5e7eb;
+      background: rgba(255, 255, 255, 0.1);
       overflow: hidden;
+      position: relative;
     }
 
     .bar{
       height: 100%;
       width: 0%;
-      background: #dc2626; /* rosso coerente */
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9));
       border-radius: 999px;
       transition: width 120ms linear;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+    }
+
+    /* === TASK PAGE LAYOUT === */
+    .taskPageGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .taskPageGrid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* === TIMER CARD === */
+    .taskTimerCard {
+      position: sticky;
+      top: 20px;
+    }
+
+    .timerHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .timerHeader h2 {
+      font-size: 20px;
+      font-weight: 900;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .timerStatusBadge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .timerStatusBadge.running {
+      background: rgba(34, 197, 94, 0.2);
+      color: rgba(34, 197, 94, 1);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+    }
+
+    .timerStatusBadge.paused {
+      background: rgba(245, 158, 11, 0.2);
+      color: rgba(245, 158, 11, 1);
+    }
+
+    .timerStatusBadge.completed {
+      background: rgba(34, 197, 94, 0.2);
+      color: rgba(34, 197, 94, 1);
+    }
+
+    .timerViz {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      margin-bottom: 28px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .timerText {
+      flex: 1;
+    }
+
+    .timerText .muted {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 8px;
+    }
+
+    .taskTimerBig {
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.95);
+      letter-spacing: -0.02em;
+      margin: 8px 0;
+    }
+
+    .taskTimerActions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .taskTimerActions .btn {
+      flex: 1;
+    }
+
+    /* === INFO CARD === */
+    .taskInfoCard {
+      margin-bottom: 20px;
+    }
+
+    .infoSection {
+      margin-bottom: 24px;
+    }
+
+    .infoSection:last-child {
+      margin-bottom: 0;
+    }
+
+    .infoSectionTitle {
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    .infoRow {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .infoRow:last-child {
+      border-bottom: none;
+    }
+
+    .infoLabel {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .infoValue {
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+    }
+
+    .infoValue.highlight {
+      color: rgba(99, 102, 241, 1);
+      font-weight: 700;
+    }
+
+    /* === PROGRESS CARD === */
+    .taskProgressCard {
+      margin-bottom: 20px;
+    }
+
+    .progressStats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .progressStat {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .progressStatLabel {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .progressStatValue {
+      font-size: 24px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.95);
+      line-height: 1;
+    }
+
+    /* === TIPS CARD === */
+    .taskTipsCard {
+      margin-bottom: 20px;
+    }
+
+    .tipItem {
+      padding: 16px;
+      background: rgba(99, 102, 241, 0.08);
+      border-left: 3px solid rgba(99, 102, 241, 0.6);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tipItem:last-child {
+      margin-bottom: 0;
+    }
+
+    .tipIcon {
+      font-size: 20px;
+      margin-right: 12px;
+      display: inline-block;
+    }
+
+    .tipTitle {
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.95);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+    }
+
+    .tipDesc {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin-left: 32px;
+    }
+
+    /* === EXAM CONTEXT CARD === */
+    .examContextCard {
+      margin-bottom: 20px;
+    }
+
+    .examContextInfo {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .examContextRow {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .examContextRow:last-child {
+      border-bottom: none;
+    }
+
+    .examContextLabel {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .examContextValue {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .examContextBadge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.2);
+      color: rgba(99, 102, 241, 1);
     }
   </style>
 </head>
 
 <body>
   <div class="container">
-
     <header class="header">
       <div class="title">
         <h1 id="task-title">Task</h1>
-        <p id="task-subtitle" class="muted">—</p>
+        <p id="task-subtitle" class="meta">—</p>
       </div>
 
       <div class="toolbar">
-        <a class="btn ghost" href="./app.html">Torna alla dashboard</a>
-
-        <div id="menu-panel" class="menuPanel hidden">
-          <button class="menuItem" id="go-today">Vai a oggi</button>
-          <button class="menuItem" id="regen-week-menu">Rigenera settimana</button>
-          <div class="menuSep"></div>
-          <button class="menuItem danger" id="logout-btn">Logout</button>
-        </div>
+        <a class="btn ghost" href="./app.html">← Dashboard</a>
       </div>
     </header>
 
-    <main class="taskGrid">
-      <!-- TIMER -->
-      <section class="card taskTimerCard">
+    <main class="taskPageGrid">
+      <!-- LEFT COLUMN: Timer e Azioni -->
+      <div>
+        <!-- TIMER CARD -->
+        <section class="card taskTimerCard">
+          <div class="timerHeader">
+            <h2>Timer di Studio</h2>
+            <div id="timer-status-badge" class="timerStatusBadge">Pausa</div>
+          </div>
 
-        <div class="timerViz">
-          <div id="pie" class="pie" style="--angle:0deg">
-            <div class="pieCenter">
-              <div id="piePct" class="piePct">0%</div>
-              <div id="pieLbl" class="pieLbl">pausa</div>
+          <div class="timerViz">
+            <div id="pie" class="pie" style="--angle:0deg">
+              <div class="pieCenter">
+                <div id="piePct" class="piePct">0%</div>
+                <div id="pieLbl" class="pieLbl">pausa</div>
+              </div>
+            </div>
+
+            <div class="timerText">
+              <div class="muted small">Tempo rimanente</div>
+              <div id="timer-remaining" class="taskTimerBig">—</div>
+              <div id="timer-meta" class="muted small">—</div>
             </div>
           </div>
 
-          <div class="timerText">
-            <div class="muted small">Tempo rimanente</div>
-            <div id="timer-remaining" class="taskTimerBig">—</div>
-            <div id="timer-meta" class="muted small">—</div>
+          <div class="barWrap">
+            <div id="timer-bar" class="bar"></div>
           </div>
-        </div>
 
-        <div class="barWrap">
-          <div id="timer-bar" class="bar"></div>
-        </div>
+          <div class="taskTimerActions">
+            <button class="btn primary" id="timer-start">▶ Start</button>
+            <button class="btn ghost" id="timer-pause">⏸ Pausa</button>
+            <button class="btn ghost" id="timer-reset">↻ Reset</button>
+          </div>
 
-        <div class="taskTimerActions">
-          <button class="btn" id="timer-start">Start</button>
-          <button class="btn ghost" id="timer-pause">Pausa</button>
-          <button class="btn ghost" id="timer-reset">Reset</button>
-        </div>
+          <div class="taskTimerActions" style="margin-top: 12px;">
+            <button class="btn" id="mark-done" style="width: 100%;">✓ Segna completato</button>
+          </div>
 
-        <div class="taskTimerActions">
-          <button class="btn" id="mark-done">Segna completato</button>
-          <!-- <button class="btn ghost" id="mark-skip">Sotto target</button> -->
-        </div>
+          <p id="task-status" class="muted small" style="margin-top:16px; text-align:center;">—</p>
+        </section>
 
-        <p id="task-status" class="muted small" style="margin-top:10px">—</p>
-      </section>
+        <!-- PROGRESS CARD -->
+        <section class="card taskProgressCard">
+          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Progresso</h2>
+          
+          <div class="progressStats">
+            <div class="progressStat">
+              <div class="progressStatLabel">Tempo pianificato</div>
+              <div id="progress-planned" class="progressStatValue">—</div>
+            </div>
+            <div class="progressStat">
+              <div class="progressStatLabel">Tempo studiato</div>
+              <div id="progress-elapsed" class="progressStatValue">—</div>
+            </div>
+          </div>
+        </section>
+      </div>
 
-      <!-- INFO -->
-      <section class="card taskInfoCard">
-        <h2>Dettagli</h2>
+      <!-- RIGHT COLUMN: Info, Consigli, Contesto -->
+      <div>
+        <!-- INFO CARD -->
+        <section class="card taskInfoCard">
+          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Dettagli Task</h2>
 
-        <div class="infoRow"><div class="muted small">Esame</div><div id="info-exam">—</div></div>
-        <div class="infoRow"><div class="muted small">Task</div><div id="info-label">—</div></div>
-        <div class="infoRow"><div class="muted small">Tipo</div><div id="info-type">—</div></div>
-        <div class="infoRow"><div class="muted small">Pianificato</div><div id="info-minutes">—</div></div>
-        <div class="infoRow"><div class="muted small">Data</div><div id="info-date">—</div></div>
-      </section>
+          <div class="infoSection">
+            <div class="infoRow">
+              <div class="infoLabel">Esame</div>
+              <div id="info-exam" class="infoValue highlight">—</div>
+            </div>
+            <div class="infoRow">
+              <div class="infoLabel">Descrizione</div>
+              <div id="info-label" class="infoValue">—</div>
+            </div>
+            <div class="infoRow">
+              <div class="infoLabel">Tipo</div>
+              <div id="info-type" class="infoValue">—</div>
+            </div>
+            <div class="infoRow">
+              <div class="infoLabel">Durata</div>
+              <div id="info-minutes" class="infoValue">—</div>
+            </div>
+            <div class="infoRow">
+              <div class="infoLabel">Data</div>
+              <div id="info-date" class="infoValue">—</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- EXAM CONTEXT CARD -->
+        <section class="card examContextCard">
+          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">Contesto Esame</h2>
+          
+          <div class="examContextInfo" id="exam-context-info">
+            <div class="examContextRow">
+              <span class="examContextLabel">Caricamento...</span>
+              <span class="examContextValue">—</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- TIPS CARD -->
+        <section class="card taskTipsCard">
+          <h2 style="font-size: 18px; font-weight: 900; margin-bottom: 20px;">💡 Consigli di Studio</h2>
+          
+          <div id="task-tips-list">
+            <div class="tipItem">
+              <div class="tipTitle">
+                <span class="tipIcon">📚</span>
+                <span>Preparati al meglio</span>
+              </div>
+              <div class="tipDesc">Caricamento consigli...</div>
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
 
-    <div id="dbg" class="muted small"></div>
+    <div id="dbg" class="muted small" style="display:none;"></div>
   </div>
 
   <script type="module" src="./app.js"></script>

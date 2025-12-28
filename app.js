@@ -831,27 +831,50 @@ function mountOnboarding() {
 
     await refreshExamList(user.uid);
 
-    qs("save-profile")?.addEventListener("click", async () => {
-      setText(qs("profile-error"), "");
-      setText(qs("profile-saved"), "");
+    // Funzione comune per salvare le impostazioni (usata sia da save-profile che save-strategies)
+    const handleSaveSettings = async () => {
+      const errorEl = qs("profile-error") || qs("strategy-error");
+      const savedEl = qs("profile-saved") || qs("strategy-saved");
+      
+      if (errorEl) setText(errorEl, "");
+      if (savedEl) setText(savedEl, "");
 
       try {
-        const goalMode = qs("goal-mode").value;
-        const weeklyHours = Number(qs("weekly-hours").value || 0);
-        const taskMinutes = Number(qs("task-minutes").value || 35);
+        const goalMode = qs("goal-mode")?.value;
+        const weeklyHours = Number(qs("weekly-hours")?.value || 0);
+        const taskMinutes = Number(qs("task-minutes")?.value || 35);
         const dayMinutes = readDayInputs();
 
+        if (!goalMode) throw new Error("Seleziona un obiettivo di studio.");
+        
         const totalMin = Object.values(dayMinutes).reduce((a, b) => a + Number(b || 0), 0);
         if (totalMin < 60) throw new Error("Disponibilità settimanale troppo bassa (< 60 min).");
         if (weeklyHours < 1) throw new Error("Ore settimanali non valide.");
 
         await setProfile(user.uid, { goalMode, weeklyHours, taskMinutes, dayMinutes });
-        setText(qs("profile-saved"), "Profilo salvato.");
+        
+        if (savedEl) {
+          setText(savedEl, "Impostazioni salvate con successo!");
+        } else {
+          showToast("Impostazioni salvate con successo!");
+        }
+        
+        console.log("[Settings] Profilo salvato:", { goalMode, weeklyHours, taskMinutes, dayMinutes });
       } catch (err) {
         console.error(err);
-        setText(qs("profile-error"), err?.message ?? "Errore salvataggio profilo");
+        if (errorEl) {
+          setText(errorEl, err?.message ?? "Errore salvataggio impostazioni");
+        } else {
+          alert(err?.message ?? "Errore salvataggio impostazioni");
+        }
       }
-    });
+    };
+
+    // Listener per save-profile (onboarding.html)
+    qs("save-profile")?.addEventListener("click", handleSaveSettings);
+    
+    // Listener per save-strategies (strategies.html)
+    qs("save-strategies")?.addEventListener("click", handleSaveSettings);
 
     qs("add-exam")?.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -877,21 +900,60 @@ function mountOnboarding() {
       }
     });
 
-    qs("finish-onboarding")?.addEventListener("click", async () => {
-      const profile2 = await getProfile(user.uid);
-      const exams2 = await listExams(user.uid);
+    // Gestore "Vai alla dashboard" (sia da onboarding che da strategies)
+    const finishBtn = qs("finish-onboarding");
+    const goToDashboardBtn = qs("go-to-dashboard");
+    
+    const handleGoToDashboard = async () => {
+      try {
+        // Forza un piccolo delay per assicurarsi che eventuali salvataggi siano completati
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Ricarica i dati freschi da Firestore
+        const profile2 = await getProfile(user.uid);
+        const exams2 = await listExams(user.uid);
 
-      if (!profile2?.goalMode || !profile2?.dayMinutes) {
-        setText(qs("profile-error"), "Salva prima il profilo.");
-        return;
-      }
-      if (exams2.length === 0) {
-        setText(qs("exam-error"), "Aggiungi almeno un esame.");
-        return;
-      }
+        console.log("[Dashboard] Verifica:", {
+          hasGoalMode: !!profile2?.goalMode,
+          hasDayMinutes: !!profile2?.dayMinutes,
+          examsCount: exams2.length,
+          profile: profile2,
+          exams: exams2
+        });
 
-      window.location.assign("./app.html");
-    });
+        if (!profile2?.goalMode || !profile2?.dayMinutes) {
+          const errorEl = qs("profile-error") || qs("exam-error");
+          if (errorEl) {
+            setText(errorEl, "Salva prima le impostazioni del profilo (obiettivo, ore settimanali, disponibilità).");
+          } else {
+            alert("Salva prima le impostazioni del profilo prima di andare alla dashboard.");
+          }
+          return;
+        }
+        if (exams2.length === 0) {
+          const errorEl = qs("exam-error") || qs("profile-error");
+          if (errorEl) {
+            setText(errorEl, "Aggiungi almeno un esame da preparare.");
+          } else {
+            alert("Aggiungi almeno un esame da preparare prima di andare alla dashboard.");
+          }
+          return;
+        }
+
+        // Tutto ok, vai alla dashboard
+        window.location.assign("./app.html");
+      } catch (err) {
+        console.error("Errore verifica dashboard:", err);
+        alert("Errore durante la verifica. Riprova.");
+      }
+    };
+
+    if (finishBtn) {
+      finishBtn.addEventListener("click", handleGoToDashboard);
+    }
+    if (goToDashboardBtn) {
+      goToDashboardBtn.addEventListener("click", handleGoToDashboard);
+    }
   });
 }
 
@@ -1062,6 +1124,215 @@ function openEditExamModal(uid, exam, onSuccess) {
   });
 }
 
+// ----------------- Edit Personal Info Modal -----------------
+function openEditPersonalInfoModal(user, profile, onSuccess) {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("edit-personal-info-modal")) return;
+
+  // Overlay oscurante
+  const overlay = document.createElement("div");
+  overlay.id = "edit-personal-info-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.75)",
+    zIndex: "10000",
+    padding: "20px",
+  });
+
+  // Contenitore principale con stile card
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "520px";
+  card.style.width = "90%";
+  card.style.padding = "28px";
+  card.style.maxHeight = "90vh";
+  card.style.overflowY = "auto";
+
+  // Titolo modale
+  const title = document.createElement("h2");
+  title.textContent = "Modifica informazioni personali";
+  title.style.marginBottom = "8px";
+  title.style.fontSize = "24px";
+  title.style.fontWeight = "950";
+  card.appendChild(title);
+
+  const subtitle = document.createElement("p");
+  subtitle.textContent = "Aggiorna i tuoi dati personali";
+  subtitle.style.marginBottom = "24px";
+  subtitle.style.color = "rgba(255,255,255,.72)";
+  subtitle.style.fontSize = "14px";
+  card.appendChild(subtitle);
+
+  // Contenitore form
+  const form = document.createElement("div");
+  form.className = "form";
+  form.style.gap = "16px";
+
+  // Campo nome
+  const nameLabel = document.createElement("label");
+  nameLabel.innerHTML = '<span>Nome</span>';
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "epi-name";
+  nameInput.value = profile.name || "";
+  nameInput.required = true;
+  nameInput.autocomplete = "name";
+  nameLabel.appendChild(nameInput);
+
+  // Campo facoltà
+  const facultyLabel = document.createElement("label");
+  facultyLabel.innerHTML = '<span>Facoltà / Corso di studi</span>';
+  const facultyInput = document.createElement("input");
+  facultyInput.type = "text";
+  facultyInput.id = "epi-faculty";
+  facultyInput.value = profile.faculty || "";
+  facultyInput.required = true;
+  facultyInput.autocomplete = "organization";
+  facultyLabel.appendChild(facultyInput);
+
+  // Campo età
+  const ageLabel = document.createElement("label");
+  ageLabel.innerHTML = '<span>Età</span>';
+  const ageInput = document.createElement("input");
+  ageInput.type = "number";
+  ageInput.id = "epi-age";
+  ageInput.min = "16";
+  ageInput.max = "100";
+  ageInput.value = profile.age || "";
+  ageInput.required = true;
+  ageLabel.appendChild(ageInput);
+
+  // Campo tipo sessione
+  const sessionLabel = document.createElement("label");
+  sessionLabel.innerHTML = '<span>Stai preparando</span>';
+  const sessionSelect = document.createElement("select");
+  sessionSelect.id = "epi-session-type";
+  sessionSelect.required = true;
+  const sessionOptions = [
+    { value: "exams", text: "Esami della sessione" },
+    { value: "exemptions", text: "Esoneri" },
+    { value: "both", text: "Entrambi" },
+  ];
+  sessionOptions.forEach((opt) => {
+    const option = document.createElement("option");
+    option.value = opt.value;
+    option.textContent = opt.text;
+    if (opt.value === (profile.sessionType || "exams")) option.selected = true;
+    sessionSelect.appendChild(option);
+  });
+  sessionLabel.appendChild(sessionSelect);
+
+  // Aggiungi tutti i campi al form
+  form.appendChild(nameLabel);
+  form.appendChild(facultyLabel);
+  form.appendChild(ageLabel);
+  form.appendChild(sessionLabel);
+  card.appendChild(form);
+
+  // Messaggio di errore
+  const errorMsg = document.createElement("p");
+  errorMsg.id = "epi-error";
+  errorMsg.className = "error";
+  errorMsg.style.marginTop = "8px";
+  card.appendChild(errorMsg);
+
+  // Azioni (bottoni)
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnRow";
+  btnRow.style.marginTop = "20px";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn primary";
+  saveBtn.type = "button";
+  saveBtn.textContent = "Salva modifiche";
+  saveBtn.style.width = "100%";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn";
+  cancelBtn.type = "button";
+  cancelBtn.textContent = "Annulla";
+  cancelBtn.style.width = "100%";
+  cancelBtn.style.marginTop = "8px";
+
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  // Focus sul primo campo
+  setTimeout(() => nameInput.focus(), 100);
+
+  // Funzione per chiudere la modale
+  function closeModal() {
+    try {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    } catch {}
+  }
+
+  // Gestore Annulla
+  cancelBtn.addEventListener("click", () => {
+    closeModal();
+  });
+
+  // Gestore Salva
+  saveBtn.addEventListener("click", async () => {
+    try {
+      const name = nameInput.value.trim();
+      const faculty = facultyInput.value.trim();
+      const age = Number(ageInput.value || 0);
+      const sessionType = sessionSelect.value;
+
+      if (!name) throw new Error("Nome mancante.");
+      if (!faculty) throw new Error("Facoltà mancante.");
+      if (!age || age < 16 || age > 100) throw new Error("Età non valida (16-100).");
+
+      // Salva le informazioni personali nel profilo
+      await setProfile(user.uid, {
+        name,
+        faculty,
+        age,
+        sessionType,
+      });
+
+      closeModal();
+      if (onSuccess) await onSuccess();
+    } catch (err) {
+      console.error(err);
+      errorMsg.textContent = err?.message ?? "Errore salvataggio informazioni";
+    }
+  });
+
+  // Chiudi con ESC
+  const escHandler = (e) => {
+    if (e.key === "Escape" && document.getElementById("edit-personal-info-modal")) {
+      closeModal();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
+
+  // Enter per salvare
+  [nameInput, facultyInput, ageInput, sessionSelect].forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveBtn.click();
+      }
+    });
+  });
+}
+
 // ----------------- PROFILE PAGE -----------------
 function mountProfile() {
   setupMenu();
@@ -1141,6 +1412,27 @@ function mountProfile() {
 
     // Calcola e mostra statistiche
     await updateStats(user.uid);
+
+    // Gestore modifica informazioni personali
+    const editBtn = qs("edit-personal-info");
+    if (editBtn && !editBtn.dataset.bound) {
+      editBtn.dataset.bound = "1";
+      editBtn.addEventListener("click", () => {
+        openEditPersonalInfoModal(user, profile, async () => {
+          // Ricarica dopo modifica
+          const updatedProfile = await getProfile(user.uid);
+          // Aggiorna visualizzazione
+          if (updatedProfile.name) {
+            const userLine = qs("user-line");
+            if (userLine) {
+              userLine.textContent = `${updatedProfile.name} · ${updatedProfile.faculty || ""}`;
+            }
+          }
+          // Ricarica la pagina per aggiornare tutto
+          window.location.reload();
+        });
+      });
+    }
 
     // Gestore aggiunta esame sostenuto (solo una volta)
     const addBtn = qs("add-passed-exam");
@@ -1737,15 +2029,23 @@ function mountApp() {
 
       const profile = await getProfile(user.uid);
       if (!profile?.goalMode || !profile?.dayMinutes) {
+        console.log("[App] Profilo incompleto, redirect a settings:", {
+          hasGoalMode: !!profile?.goalMode,
+          hasDayMinutes: !!profile?.dayMinutes,
+          profileKeys: profile ? Object.keys(profile) : []
+        });
         window.location.assign("./settings.html");
         return;
       }
 
       const exams = await listExams(user.uid);
       if (exams.length === 0) {
+        console.log("[App] Nessun esame trovato, redirect a settings. Esami:", exams);
         window.location.assign("./settings.html");
         return;
       }
+      
+      console.log("[App] Tutto ok, carico dashboard. Esami:", exams.length);
 
       const weekStart = startOfWeekISO(new Date());
       const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(
@@ -2566,7 +2866,7 @@ function mountTask() {
     window.location.assign("./index.html");
   });
 
-  const bootWithPayload = async (payload) => {
+  const bootWithPayload = async (payload, user = null) => {
     if (!payload?.task) {
       dbg("Task payload mancante.");
       const h = document.getElementById("task-title");
@@ -2595,6 +2895,22 @@ function mountTask() {
     set("info-type", t.type || "—");
     set("info-minutes", `${t.minutes || 0} min`);
     set("info-date", payload.dateISO || "—");
+
+    // Carica informazioni esame per contesto
+    if (user) {
+      try {
+        const exams = await listExams(user.uid);
+        const exam = exams.find(e => e.id === t.examId || e.name === t.examName);
+        if (exam) {
+          renderExamContext(exam, payload.dateISO);
+        }
+      } catch (err) {
+        console.error("Errore caricamento contesto esame:", err);
+      }
+    }
+
+    // Genera consigli di studio
+    generateTaskTips(t, payload.dateISO);
 
     const plannedSec = Math.max(60, Math.round(Number(t.minutes || 0) * 60));
     const timerKey = `sp_timer_${tid}`;
@@ -2665,8 +2981,39 @@ function mountTask() {
 
       const piePct = document.getElementById("piePct");
       const pieLbl = document.getElementById("pieLbl");
+      const pie = document.getElementById("pie");
+      const statusBadge = document.getElementById("timer-status-badge");
+      
       if (piePct) piePct.textContent = `${pct}%`;
-      if (pieLbl) pieLbl.textContent = st.running ? "in corso" : "pausa";
+      if (pieLbl) pieLbl.textContent = st.running ? "in corso" : st.done ? "completato" : "pausa";
+      
+      // Aggiorna stato badge e animazione
+      if (statusBadge) {
+        if (st.done) {
+          statusBadge.textContent = "Completato";
+          statusBadge.className = "timerStatusBadge completed";
+        } else if (st.running) {
+          statusBadge.textContent = "In corso";
+          statusBadge.className = "timerStatusBadge running";
+        } else {
+          statusBadge.textContent = "Pausa";
+          statusBadge.className = "timerStatusBadge paused";
+        }
+      }
+      
+      if (pie) {
+        if (st.running) {
+          pie.classList.add("running");
+        } else {
+          pie.classList.remove("running");
+        }
+      }
+
+      // Aggiorna progresso
+      const progressPlanned = document.getElementById("progress-planned");
+      const progressElapsed = document.getElementById("progress-elapsed");
+      if (progressPlanned) progressPlanned.textContent = fmtMMSS(st.plannedSec);
+      if (progressElapsed) progressElapsed.textContent = fmtMMSS(elapsed);
     }
 
     function tick() {
@@ -2721,6 +3068,11 @@ function mountTask() {
     function markDone() {
       st.done = true;
       st.skipped = false;
+      st.running = false;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
       saveState(st);
 
       try {
@@ -2728,6 +3080,12 @@ function mountTask() {
       } catch {}
 
       renderTimer();
+      
+      const statusEl = document.getElementById("task-status");
+      if (statusEl) {
+        statusEl.textContent = "✓ Task completata! Ottimo lavoro!";
+        statusEl.style.color = "rgba(34, 197, 94, 1)";
+      }
     }
 
     function markSkip() {
@@ -2757,10 +3115,144 @@ function mountTask() {
     }
   };
 
+  // Funzione per renderizzare il contesto dell'esame
+  function renderExamContext(exam, taskDateISO) {
+    const container = document.getElementById("exam-context-info");
+    if (!container) return;
+
+    const daysLeft = daysTo(exam.date);
+    const taskDate = new Date(taskDateISO);
+    const examDate = new Date(exam.date);
+    const isToday = taskDateISO === isoToday();
+
+    let urgencyLevel = "normale";
+    let urgencyColor = "rgba(99, 102, 241, 1)";
+    if (daysLeft < 7) {
+      urgencyLevel = "urgente";
+      urgencyColor = "rgba(251, 113, 133, 1)";
+    } else if (daysLeft < 14) {
+      urgencyLevel = "imminente";
+      urgencyColor = "rgba(245, 158, 11, 1)";
+    }
+
+    container.innerHTML = `
+      <div class="examContextRow">
+        <span class="examContextLabel">Data esame</span>
+        <span class="examContextValue">${exam.date || "—"}</span>
+      </div>
+      <div class="examContextRow">
+        <span class="examContextLabel">Giorni rimanenti</span>
+        <span class="examContextValue">${daysLeft} giorni</span>
+      </div>
+      <div class="examContextRow">
+        <span class="examContextLabel">Urgenza</span>
+        <span class="examContextBadge" style="background: ${urgencyColor}20; color: ${urgencyColor};">${urgencyLevel}</span>
+      </div>
+      <div class="examContextRow">
+        <span class="examContextLabel">CFU</span>
+        <span class="examContextValue">${exam.cfu || "—"}</span>
+      </div>
+      <div class="examContextRow">
+        <span class="examContextLabel">Difficoltà</span>
+        <span class="examContextValue">${exam.difficulty || "—"}/3</span>
+      </div>
+      <div class="examContextRow">
+        <span class="examContextLabel">Livello preparazione</span>
+        <span class="examContextValue">${exam.level || 0}/5</span>
+      </div>
+    `;
+  }
+
+  // Funzione per generare consigli di studio
+  function generateTaskTips(task, taskDateISO) {
+    const container = document.getElementById("task-tips-list");
+    if (!container) return;
+
+    const tips = [];
+    const taskType = (task.type || "").toLowerCase();
+    const isToday = taskDateISO === isoToday();
+
+    // Consigli basati sul tipo di task
+    if (taskType.includes("theory") || taskType.includes("teoria")) {
+      tips.push({
+        icon: "📖",
+        title: "Studio teorico efficace",
+        desc: "Leggi attivamente: prendi appunti, fai domande, crea connessioni. Usa la tecnica Feynman: spiega i concetti come se dovessi insegnarli a qualcuno."
+      });
+      tips.push({
+        icon: "🔄",
+        title: "Ripetizione spaziata",
+        desc: "Rivedi i concetti chiave dopo 24 ore, poi dopo 3 giorni. Questo aiuta la memorizzazione a lungo termine."
+      });
+    } else if (taskType.includes("practice") || taskType.includes("pratica") || taskType.includes("esercizi")) {
+      tips.push({
+        icon: "✏️",
+        title: "Pratica attiva",
+        desc: "Non limitarti a guardare le soluzioni. Prova prima da solo, anche se sbagli. L'errore è parte dell'apprendimento."
+      });
+      tips.push({
+        icon: "🎯",
+        title: "Focus su pattern",
+        desc: "Identifica i pattern ricorrenti negli esercizi. Una volta capito il metodo, applicalo a varianti simili."
+      });
+    } else if (taskType.includes("review") || taskType.includes("ripasso")) {
+      tips.push({
+        icon: "📝",
+        title: "Ripasso attivo",
+        desc: "Non rileggere passivamente. Crea mappe mentali, riassumi a parole tue, risolvi esercizi senza guardare le soluzioni."
+      });
+      tips.push({
+        icon: "🧠",
+        title: "Testa te stesso",
+        desc: "Chiudi il libro e prova a spiegare i concetti. Se non ci riesci, riapri e studia quella parte specifica."
+      });
+    } else {
+      tips.push({
+        icon: "📚",
+        title: "Studio mirato",
+        desc: "Concentrati su un argomento alla volta. Completa questo task prima di passare al successivo."
+      });
+    }
+
+    // Consigli basati sul tempo
+    if (isToday) {
+      tips.push({
+        icon: "⏰",
+        title: "Task di oggi",
+        desc: "Questo task è pianificato per oggi. Completa il timer per mantenere il ritmo di studio."
+      });
+    }
+
+    // Consiglio generale Pomodoro
+    tips.push({
+      icon: "🍅",
+      title: "Tecnica Pomodoro",
+      desc: `Dopo ${task.minutes || 25} minuti di studio, fai una pausa di 5 minuti. Questo mantiene alta la concentrazione.`
+    });
+
+    // Renderizza i tips
+    container.innerHTML = tips.map(tip => `
+      <div class="tipItem">
+        <div class="tipTitle">
+          <span class="tipIcon">${tip.icon}</span>
+          <span>${escapeHtml(tip.title)}</span>
+        </div>
+        <div class="tipDesc">${escapeHtml(tip.desc)}</div>
+      </div>
+    `).join("");
+  }
+
   // 1) storage
   let payload = getStoredTaskPayload(tid);
   if (payload?.task) {
-    bootWithPayload(payload);
+    // Prova a recuperare user da auth
+    watchAuth(async (user) => {
+      if (user) {
+        await bootWithPayload(payload, user);
+      } else {
+        await bootWithPayload(payload);
+      }
+    });
     return;
   }
 
@@ -2789,7 +3281,7 @@ function mountTask() {
         try {
           localStorage.setItem("sp_last_tid", tid);
         } catch {}
-        bootWithPayload(rebuilt);
+        bootWithPayload(rebuilt, user);
       } else {
         dbg(
           "Non trovo il task nel piano salvato (settimana corrente). Rigenera o riapri dalla dashboard."
@@ -2828,10 +3320,10 @@ window.addEventListener("DOMContentLoaded", () => {
     mountProfile();
     return;
   }
-  if (qs("save-strategies") || qs("day-minutes")) {
+  if (qs("save-strategies") || qs("day-minutes") || qs("go-to-dashboard")) {
     // Potrebbe essere strategies.html o onboarding.html
     // Controlla se c'è il bottone save-strategies (strategies) o save-profile (onboarding)
-    if (qs("save-strategies")) {
+    if (qs("save-strategies") || qs("go-to-dashboard")) {
       // TODO: mountStrategies() quando implementato
       mountOnboarding(); // Per ora usa onboarding per strategies
     } else {
