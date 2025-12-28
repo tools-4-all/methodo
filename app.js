@@ -3021,6 +3021,28 @@ function mountProfile() {
       }
     }
     
+    // Gestione premium badge e upgrade button
+    const subscriptionInfo = await getSubscriptionInfo(user.uid);
+    const isPremiumUser = await isPremium(user.uid);
+    
+    const premiumBadge = qs("premium-badge");
+    const upgradeBtn = qs("upgrade-btn");
+    
+    if (premiumBadge) {
+      if (isPremiumUser) {
+        premiumBadge.textContent = "Premium";
+        premiumBadge.className = "badge good";
+        premiumBadge.style.display = "inline-block";
+        if (upgradeBtn) upgradeBtn.style.display = "none";
+      } else {
+        premiumBadge.style.display = "none";
+        if (upgradeBtn) {
+          upgradeBtn.style.display = "inline-block";
+          upgradeBtn.addEventListener("click", () => showUpgradeModal());
+        }
+      }
+    }
+    
     // Mostra informazioni personali nella sezione profilo
     const personalInfoDisplay = qs("personal-info-display");
     if (personalInfoDisplay && profile.name) {
@@ -3127,7 +3149,12 @@ function mountProfile() {
  */
 async function renderSubscription(uid) {
   const container = qs("subscription-display");
-  if (!container) return;
+  if (!container) {
+    console.warn("[Premium] Container subscription-display non trovato nella pagina profilo");
+    return;
+  }
+  
+  console.log("[Premium] Rendering sezione abbonamento per utente:", uid);
   
   const subscriptionInfo = await getSubscriptionInfo(uid);
   const isPremiumUser = await isPremium(uid);
@@ -3893,19 +3920,21 @@ function mountApp() {
         }
       }
       
-      // Aggiungi bottone di test premium (disponibile ovunque)
-      const testBtn = document.createElement("button");
-      testBtn.className = "btn";
-      testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
-      testBtn.textContent = isPremiumUser ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
-      testBtn.addEventListener("click", async () => {
-        await testPremium(!isPremiumUser);
-        setTimeout(() => window.location.reload(), 1000);
-      });
-      const toolbar = document.querySelector(".toolbar");
-      if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
-        testBtn.classList.add("test-premium-btn");
-        toolbar.insertBefore(testBtn, toolbar.firstChild);
+      // Aggiungi bottone di test premium (solo in localhost)
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.href.includes('localhost')) {
+        const testBtn = document.createElement("button");
+        testBtn.className = "btn";
+        testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
+        testBtn.textContent = isPremiumUser ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
+        testBtn.addEventListener("click", async () => {
+          await testPremium(!isPremiumUser);
+          setTimeout(() => window.location.reload(), 1000);
+        });
+        const toolbar = document.querySelector(".toolbar");
+        if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
+          testBtn.classList.add("test-premium-btn");
+          toolbar.insertBefore(testBtn, toolbar.firstChild);
+        }
       }
 
       const exams = await listExams(user.uid);

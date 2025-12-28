@@ -1022,12 +1022,13 @@ window.addEventListener("DOMContentLoaded", ()=>{
       }
     }
     
-    // Aggiungi bottone di test premium (disponibile ovunque)
-    const testBtn = document.createElement("button");
-    testBtn.className = "btn";
-    testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
-    testBtn.textContent = premium ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
-    testBtn.addEventListener("click", async () => {
+    // Aggiungi bottone di test premium (solo in localhost)
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.href.includes('localhost')) {
+      const testBtn = document.createElement("button");
+      testBtn.className = "btn";
+      testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
+      testBtn.textContent = premium ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
+      testBtn.addEventListener("click", async () => {
       // Funzione di test inline per simulations.js
       const user = auth.currentUser;
       if (!user) return;
@@ -1062,11 +1063,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
         alert('❌ Premium disattivato! Ricarica la pagina.');
       }
       setTimeout(() => window.location.reload(), 1000);
-    });
-    const toolbar = document.querySelector('.toolbar');
-    if (toolbar && !toolbar.querySelector('.test-premium-btn')) {
-      testBtn.classList.add('test-premium-btn');
-      toolbar.insertBefore(testBtn, toolbar.firstChild);
+      });
+      const toolbar = document.querySelector('.toolbar');
+      if (toolbar && !toolbar.querySelector('.test-premium-btn')) {
+        testBtn.classList.add('test-premium-btn');
+        toolbar.insertBefore(testBtn, toolbar.firstChild);
+      }
     }
   });
 });
