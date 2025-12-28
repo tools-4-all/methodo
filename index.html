@@ -282,127 +282,242 @@
 
     .heroSection{
       text-align:center;
-      padding:48px 20px;
-      margin-bottom:48px;
+      padding:64px 20px;
+      margin-bottom:64px;
+      position:relative;
     }
 
     .heroTitle{
-      font-size:42px;
+      font-size:48px;
       font-weight:950;
-      letter-spacing:-.03em;
-      margin-bottom:16px;
-      line-height:1.2;
+      letter-spacing:-.04em;
+      margin-bottom:20px;
+      line-height:1.15;
+      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(255,255,255,.85));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .heroSubtitle{
-      font-size:18px;
+      font-size:20px;
       color: var(--muted);
-      line-height:1.6;
-      max-width:680px;
-      margin:0 auto 32px;
+      line-height:1.7;
+      max-width:720px;
+      margin:0 auto 40px;
     }
 
     .featuresGrid{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap:20px;
-      margin-bottom:48px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap:24px;
+      margin-bottom:64px;
     }
 
     .featureCard{
       background: var(--panel);
       border:1px solid var(--border);
       border-radius: var(--r);
-      padding:24px;
+      padding:32px;
       box-shadow: var(--shadow);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .featureCard::before{
+      content:"";
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
+      height:3px;
+      background: linear-gradient(90deg, rgba(99,102,241,.8), rgba(34,197,94,.8));
+      transform: scaleX(0);
+      transition: transform .3s ease;
+    }
+
+    .featureCard:hover{
+      transform: translateY(-4px);
+      box-shadow: 0 24px 70px rgba(0,0,0,.6);
+      border-color: rgba(255,255,255,.22);
+    }
+
+    .featureCard:hover::before{
+      transform: scaleX(1);
     }
 
     .featureIcon{
-      font-size:32px;
-      margin-bottom:12px;
+      font-size:48px;
+      margin-bottom:16px;
       display:block;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,.3));
     }
 
     .featureTitle{
-      font-size:18px;
+      font-size:20px;
       font-weight:950;
-      margin-bottom:8px;
+      margin-bottom:12px;
       color: rgba(255,255,255,.96);
+      letter-spacing:-.01em;
     }
 
     .featureDesc{
+      font-size:15px;
+      color: var(--muted);
+      line-height:1.7;
+    }
+
+    .sectionTitle{
+      font-size:36px;
+      font-weight:950;
+      text-align:center;
+      margin-bottom:48px;
+      letter-spacing:-.03em;
+      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(255,255,255,.85));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .howItWorksSection{
+      margin-bottom:64px;
+    }
+
+    .stepsGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap:32px;
+      margin-bottom:48px;
+    }
+
+    .stepCard{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--r);
+      padding:32px;
+      box-shadow: var(--shadow);
+      text-align:center;
+      position:relative;
+    }
+
+    .stepNumber{
+      width:64px;
+      height:64px;
+      border-radius:50%;
+      background: linear-gradient(135deg, rgba(99,102,241,.9), rgba(34,197,94,.9));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:28px;
+      font-weight:950;
+      color: rgba(255,255,255,.98);
+      margin:0 auto 20px;
+      box-shadow: 0 8px 24px rgba(99,102,241,.4);
+    }
+
+    .stepTitle{
+      font-size:20px;
+      font-weight:950;
+      margin-bottom:12px;
+      color: rgba(255,255,255,.96);
+    }
+
+    .stepDesc{
+      font-size:15px;
+      color: var(--muted);
+      line-height:1.7;
+    }
+
+    .benefitsSection{
+      margin-bottom:64px;
+    }
+
+    .benefitsList{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap:20px;
+      margin-bottom:32px;
+    }
+
+    .benefitItem{
+      display:flex;
+      align-items:flex-start;
+      gap:16px;
+      padding:20px;
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius:16px;
+      transition: transform .2s ease, border-color .2s ease;
+    }
+
+    .benefitItem:hover{
+      transform: translateX(4px);
+      border-color: rgba(34,197,94,.4);
+    }
+
+    .benefitIcon{
+      font-size:24px;
+      flex-shrink:0;
+      width:40px;
+      height:40px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(34,197,94,.15);
+      border-radius:10px;
+    }
+
+    .benefitText{
+      flex:1;
+    }
+
+    .benefitTitle{
+      font-size:16px;
+      font-weight:900;
+      margin-bottom:6px;
+      color: rgba(255,255,255,.96);
+    }
+
+    .benefitDesc{
       font-size:14px;
       color: var(--muted);
       line-height:1.6;
     }
 
-    .testimonialsSection{
-      margin-bottom:48px;
+    .faqSection{
+      margin-bottom:64px;
     }
 
-    .sectionTitle{
-      font-size:28px;
-      font-weight:950;
-      text-align:center;
-      margin-bottom:32px;
-      letter-spacing:-.02em;
-    }
-
-    .testimonialsGrid{
+    .faqGrid{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
       gap:20px;
     }
 
-    .testimonialCard{
+    .faqItem{
       background: var(--panel);
       border:1px solid var(--border);
-      border-radius: var(--r);
+      border-radius:16px;
       padding:24px;
-      box-shadow: var(--shadow);
+      transition: border-color .2s ease;
     }
 
-    .testimonialText{
-      font-size:15px;
-      line-height:1.7;
-      color: rgba(255,255,255,.88);
-      margin-bottom:16px;
-      font-style:italic;
+    .faqItem:hover{
+      border-color: rgba(255,255,255,.22);
     }
 
-    .testimonialAuthor{
-      display:flex;
-      align-items:center;
-      gap:12px;
-    }
-
-    .testimonialAvatar{
-      width:40px;
-      height:40px;
-      border-radius:50%;
-      background: linear-gradient(135deg, rgba(99,102,241,.6), rgba(34,197,94,.6));
-      display:flex;
-      align-items:center;
-      justify-content:center;
+    .faqQuestion{
+      font-size:17px;
       font-weight:900;
-      font-size:16px;
-      color: rgba(255,255,255,.95);
-    }
-
-    .testimonialInfo{
-      flex:1;
-    }
-
-    .testimonialName{
-      font-weight:900;
-      font-size:14px;
+      margin-bottom:10px;
       color: rgba(255,255,255,.96);
-      margin-bottom:2px;
     }
 
-    .testimonialRole{
-      font-size:12px;
+    .faqAnswer{
+      font-size:14px;
       color: var(--muted);
+      line-height:1.7;
     }
 
     .ctaSection{
@@ -489,10 +604,13 @@
 
     @media (max-width: 720px){
       .landingTitle h1{ font-size:28px; }
-      .heroTitle{ font-size:32px; }
-      .heroSubtitle{ font-size:16px; }
+      .heroTitle{ font-size:36px; }
+      .heroSubtitle{ font-size:17px; }
       .featuresGrid{ grid-template-columns:1fr; }
-      .testimonialsGrid{ grid-template-columns:1fr; }
+      .stepsGrid{ grid-template-columns:1fr; }
+      .benefitsList{ grid-template-columns:1fr; }
+      .faqGrid{ grid-template-columns:1fr; }
+      .sectionTitle{ font-size:28px; }
     }
   </style>
 </head>
@@ -618,48 +736,156 @@
       </div>
     </section>
 
-    <!-- Testimonials -->
-    <section class="testimonialsSection">
-      <h2 class="sectionTitle">Cosa dicono gli studenti</h2>
-      <div class="testimonialsGrid">
-        <div class="testimonialCard">
-          <p class="testimonialText">
-            "Finalmente un'app che capisce davvero le mie esigenze. Il piano settimanale 
-            è sempre realistico e mi aiuta a non procrastinare. Ho migliorato i miei voti 
-            del 15% in un semestre!"
+    <!-- Come funziona -->
+    <section class="howItWorksSection">
+      <h2 class="sectionTitle">Come funziona</h2>
+      <div class="stepsGrid">
+        <div class="stepCard">
+          <div class="stepNumber">1</div>
+          <h3 class="stepTitle">Crea il tuo profilo</h3>
+          <p class="stepDesc">
+            Imposta la tua disponibilità settimanale, obiettivo di studio e durata preferita dei task. 
+            Il sistema si adatterà alle tue esigenze.
           </p>
-          <div class="testimonialAuthor">
-            <div class="testimonialAvatar">M</div>
-            <div class="testimonialInfo">
-              <div class="testimonialName">Marco R.</div>
-              <div class="testimonialRole">Studente Ingegneria</div>
+        </div>
+        <div class="stepCard">
+          <div class="stepNumber">2</div>
+          <h3 class="stepTitle">Aggiungi i tuoi esami</h3>
+          <p class="stepDesc">
+            Inserisci gli esami con data, CFU, difficoltà e livello di preparazione attuale. 
+            Più informazioni fornisci, più preciso sarà il piano.
+          </p>
+        </div>
+        <div class="stepCard">
+          <div class="stepNumber">3</div>
+          <h3 class="stepTitle">Ricevi il piano settimanale</h3>
+          <p class="stepDesc">
+            L'algoritmo genera automaticamente un piano ottimizzato con task distribuiti 
+            tra mattina e pomeriggio, rispettando le tue priorità.
+          </p>
+        </div>
+        <div class="stepCard">
+          <div class="stepNumber">4</div>
+          <h3 class="stepTitle">Studia e traccia</h3>
+          <p class="stepDesc">
+            Completa i task, usa il timer integrato e monitora il tuo progresso. 
+            Il sistema ti mostra sempre quanto sei preparato per ogni esame.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vantaggi -->
+    <section class="benefitsSection">
+      <h2 class="sectionTitle">Vantaggi per gli studenti</h2>
+      <div class="benefitsList">
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Riduce lo stress</div>
+            <div class="benefitDesc">
+              Avere un piano chiaro elimina l'ansia da "non so da dove iniziare" e ti permette 
+              di concentrarti solo sullo studio.
             </div>
           </div>
         </div>
-        <div class="testimonialCard">
-          <p class="testimonialText">
-            "L'algoritmo è geniale. Distribuisce automaticamente lo studio in modo bilanciato 
-            e mi ricorda quando è il momento di ripassare. Non potrei più farne a meno."
-          </p>
-          <div class="testimonialAuthor">
-            <div class="testimonialAvatar">S</div>
-            <div class="testimonialInfo">
-              <div class="testimonialName">Sara L.</div>
-              <div class="testimonialRole">Studente Medicina</div>
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Migliora i risultati</div>
+            <div class="benefitDesc">
+              Studiare in modo organizzato e distribuito nel tempo è scientificamente provato 
+              essere più efficace del cramming.
             </div>
           </div>
         </div>
-        <div class="testimonialCard">
-          <p class="testimonialText">
-            "Prima studiavo a caso, ora ho un metodo. Il tracking del progresso mi motiva 
-            e vedere la percentuale di readiness mi fa capire se sono in ritardo o in anticipo."
-          </p>
-          <div class="testimonialAuthor">
-            <div class="testimonialAvatar">L</div>
-            <div class="testimonialInfo">
-              <div class="testimonialName">Luca F.</div>
-              <div class="testimonialRole">Studente Economia</div>
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Risparmia tempo</div>
+            <div class="benefitDesc">
+              Non devi più pensare a cosa studiare: il sistema decide per te in base alle priorità, 
+              lasciandoti più tempo per studiare.
             </div>
+          </div>
+        </div>
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Aumenta la motivazione</div>
+            <div class="benefitDesc">
+              Vedere il progresso e completare i task dà un senso di realizzazione che mantiene 
+              alta la motivazione.
+            </div>
+          </div>
+        </div>
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Equilibrio vita-studio</div>
+            <div class="benefitDesc">
+              Il piano rispetta la tua disponibilità reale, permettendoti di mantenere un equilibrio 
+              tra studio e vita personale.
+            </div>
+          </div>
+        </div>
+        <div class="benefitItem">
+          <div class="benefitIcon">✓</div>
+          <div class="benefitText">
+            <div class="benefitTitle">Prevenzione procrastinazione</div>
+            <div class="benefitDesc">
+              Task piccoli e gestibili prevengono la procrastinazione. Ogni task è progettato 
+              per essere completabile in una sessione.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faqSection">
+      <h2 class="sectionTitle">Domande frequenti</h2>
+      <div class="faqGrid">
+        <div class="faqItem">
+          <div class="faqQuestion">Quanto tempo ci vuole per configurare il profilo?</div>
+          <div class="faqAnswer">
+            Meno di 5 minuti. Devi solo inserire la tua disponibilità settimanale, obiettivo 
+            e aggiungere gli esami con le relative informazioni.
+          </div>
+        </div>
+        <div class="faqItem">
+          <div class="faqQuestion">Posso modificare il piano dopo che è stato generato?</div>
+          <div class="faqAnswer">
+            Sì, puoi rigenerare il piano in qualsiasi momento, aggiungere task manuali, 
+            modificare esami o cambiare le impostazioni del profilo.
+          </div>
+        </div>
+        <div class="faqItem">
+          <div class="faqQuestion">Come funziona l'algoritmo di priorità?</div>
+          <div class="faqAnswer">
+            L'algoritmo considera urgenza (vicinanza all'esame), ignoranza (quanto manca da preparare), 
+            difficoltà e CFU per distribuire il tempo in modo ottimale.
+          </div>
+        </div>
+        <div class="faqItem">
+          <div class="faqQuestion">Cosa succede se non completo tutti i task?</div>
+          <div class="faqAnswer">
+            Nessun problema. Il sistema si adatta e puoi rigenerare il piano quando vuoi. 
+            L'importante è essere onesti con la tua disponibilità.
+          </div>
+        </div>
+        <div class="faqItem">
+          <div class="faqQuestion">I miei dati sono sicuri?</div>
+          <div class="faqAnswer">
+            Sì, utilizziamo Firebase Authentication e Firestore per garantire sicurezza e privacy. 
+            I tuoi dati sono criptati e accessibili solo a te.
+          </div>
+        </div>
+        <div class="faqItem">
+          <div class="faqQuestion">È gratuito?</div>
+          <div class="faqAnswer">
+            Sì, Study Planner è completamente gratuito. Puoi creare un account e iniziare 
+            a usarlo subito senza costi nascosti.
           </div>
         </div>
       </div>
