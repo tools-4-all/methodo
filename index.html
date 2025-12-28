@@ -120,6 +120,19 @@
     .tab.active{
       background: rgba(255,255,255,.12);
       color: var(--text);
+      border-color: var(--orange-border);
+      position:relative;
+    }
+
+    .tab.active::after{
+      content:"";
+      position:absolute;
+      bottom:0;
+      left:0;
+      right:0;
+      height:2px;
+      background: var(--orange);
+      border-radius:0 0 999px 999px;
     }
 
     /* ===== Forms ===== */
@@ -144,8 +157,8 @@
       -webkit-text-fill-color: rgba(255,255,255,.92);
     }
     input:focus,select:focus{
-      border-color: rgba(255,255,255,.22);
-      box-shadow: 0 0 0 4px rgba(255,255,255,.08);
+      border-color: var(--orange-border);
+      box-shadow: 0 0 0 4px rgba(249,115,22,.08);
     }
 
     .error{
@@ -283,6 +296,19 @@
       margin-bottom:12px;
       font-weight:950;
       color: rgba(255,255,255,.98);
+      position:relative;
+      display:inline-block;
+    }
+
+    .landingTitle h1::after{
+      content:"";
+      position:absolute;
+      bottom:-4px;
+      left:0;
+      width:40px;
+      height:3px;
+      background: var(--orange);
+      border-radius:2px;
     }
 
     .landingTitle .tagline{
@@ -337,6 +363,20 @@
       margin:0 0 48px 0;
       font-weight:400;
       letter-spacing:0.01em;
+      position:relative;
+      padding-left:24px;
+    }
+
+    .heroSubtitle::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:8px;
+      width:3px;
+      height:24px;
+      background: var(--orange);
+      border-radius:2px;
+      opacity:0.5;
     }
 
     .featuresGrid{
@@ -419,6 +459,20 @@
       margin-bottom:64px;
       letter-spacing:-.02em;
       color: rgba(255,255,255,.98);
+      position:relative;
+      padding-left:20px;
+    }
+
+    .sectionTitle::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:50%;
+      transform: translateY(-50%);
+      width:4px;
+      height:32px;
+      background: var(--orange);
+      border-radius:2px;
     }
 
     .howItWorksSection{
@@ -538,14 +592,33 @@
       padding:28px;
       background: rgba(255,255,255,.02);
       border:1px solid rgba(255,255,255,.08);
+      border-left:3px solid transparent;
       border-radius:16px;
       transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+      position:relative;
+    }
+
+    .benefitItem::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:28px;
+      bottom:28px;
+      width:3px;
+      background: var(--orange);
+      border-radius:0 2px 2px 0;
+      opacity:0;
+      transition: opacity .3s ease;
     }
 
     .benefitItem:hover{
       transform: translateY(-2px);
       border-color: rgba(255,255,255,.16);
       background: rgba(255,255,255,.04);
+    }
+
+    .benefitItem:hover::before{
+      opacity:1;
     }
 
     .benefitIcon{
@@ -597,14 +670,33 @@
     .faqItem{
       background: rgba(255,255,255,.02);
       border:1px solid rgba(255,255,255,.08);
+      border-left:3px solid transparent;
       border-radius:16px;
       padding:32px;
       transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+      position:relative;
+    }
+
+    .faqItem::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:32px;
+      bottom:32px;
+      width:3px;
+      background: var(--orange);
+      border-radius:0 2px 2px 0;
+      opacity:0;
+      transition: opacity .3s ease;
     }
 
     .faqItem:hover{
       border-color: rgba(255,255,255,.16);
       background: rgba(255,255,255,.04);
+    }
+
+    .faqItem:hover::before{
+      opacity:0.6;
     }
 
     .faqQuestion{
@@ -613,6 +705,21 @@
       margin-bottom:12px;
       color: rgba(255,255,255,.96);
       letter-spacing:-.01em;
+      position:relative;
+      padding-left:20px;
+    }
+
+    .faqQuestion::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:50%;
+      transform: translateY(-50%);
+      width:6px;
+      height:6px;
+      background: var(--orange);
+      border-radius:50%;
+      opacity:0.4;
     }
 
     .faqAnswer{
@@ -748,7 +855,12 @@
       .benefitItem{ padding:24px; }
       .faqGrid{ grid-template-columns:1fr; gap:20px; }
       .faqItem{ padding:24px; }
-      .sectionTitle{ font-size:28px; margin-bottom:48px; }
+      .sectionTitle{ font-size:28px; margin-bottom:48px; padding-left:16px; }
+      .sectionTitle::before{ height:24px; width:3px; }
+      .heroSubtitle{ padding-left:20px; }
+      .heroSubtitle::before{ height:20px; }
+      .faqQuestion{ padding-left:16px; }
+      .faqQuestion::before{ width:5px; height:5px; }
       .ctaSection{ padding:48px 32px; margin-bottom:64px; }
       .ctaTitle{ font-size:28px; }
       .ctaSubtitle{ font-size:16px; }
