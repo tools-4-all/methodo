@@ -5,13 +5,336 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Study Planner — Simulazioni</title>
   <link rel="stylesheet" href="./styles.css?v=12" />
+  <style>
+    /* === SIMULATIONS PAGE IMPROVEMENTS === */
+    .simPageGrid {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 1000px) {
+      .simPageGrid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* === STATS SUMMARY === */
+    .simStatsGrid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .simStatCard {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .simStatLabel {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .simStatValue {
+      font-size: 24px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.95);
+      line-height: 1;
+    }
+
+    .simStatSub {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 4px;
+    }
+
+    /* === IMPROVED PRESETS === */
+    .presetRow {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .chip {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.86);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .chip:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .chip.active {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: rgba(99, 102, 241, 1);
+    }
+
+    /* === IMPROVED PARAM CARDS === */
+    .paramCard {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .paramCard:last-child {
+      margin-bottom: 0;
+    }
+
+    .paramHead {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .paramTitle {
+      font-size: 16px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.95);
+      margin-bottom: 4px;
+    }
+
+    .paramDesc {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      line-height: 1.4;
+    }
+
+    .pillLite {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.15);
+      color: rgba(99, 102, 241, 1);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .paramRow {
+      margin-bottom: 16px;
+    }
+
+    .paramRow:last-child {
+      margin-bottom: 0;
+    }
+
+    .paramLabel {
+      margin-bottom: 8px;
+    }
+
+    .paramLabel > div:first-child {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 4px;
+    }
+
+    .paramHelp {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      line-height: 1.4;
+    }
+
+    .paramControl {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .range {
+      flex: 1;
+      accent-color: rgba(99, 102, 241, 0.8);
+    }
+
+    .num, .numSlim {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.3);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .num:focus, .numSlim:focus {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .num {
+      width: 100px;
+    }
+
+    .numSlim {
+      width: 80px;
+    }
+
+    .select {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.3);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .select:focus {
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .unit {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      white-space: nowrap;
+    }
+
+    .boostLine {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .boostLine .select {
+      flex: 1;
+    }
+
+    /* === CHART SECTION === */
+    .chartSection {
+      position: sticky;
+      top: 20px;
+    }
+
+    .chartWrap {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      background: rgba(10, 12, 20, 0.6);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .chartWrap canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* === IMPROVED LEGEND === */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+    }
+
+    .legendItem {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .legendSwatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* === INFO BOX === */
+    .simInfoBox {
+      padding: 16px;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+
+    .simInfoBox h3 {
+      font-size: 14px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.95);
+      margin-bottom: 8px;
+    }
+
+    .simInfoBox p {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* === EXAM SUMMARY === */
+    .examSummary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .examSummaryItem {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .examSummaryName {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 6px;
+    }
+
+    .examSummaryMeta {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <header class="header">
       <div class="title">
         <h1>Simulazioni</h1>
-        <p id="user-line">—</p>
+        <p id="user-line" class="meta">—</p>
       </div>
 
       <div class="toolbar">
@@ -23,9 +346,8 @@
       
           <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
             <a class="menuItem" role="menuitem" href="./app.html">
-                <span>Dashboard</span>
-              </a>
-      
+              <span>Dashboard</span>
+            </a>
 
             <a class="menuItem" role="menuitem" href="./settings.html">
               <span>Impostazioni</span>
@@ -49,108 +371,125 @@
       </div>
     </header>
 
-    <main class="grid" style="grid-template-columns: .9fr 1.1fr; align-items:start">
-      <!-- Controls -->
-      <section class="card">
-        <div class="cardHeader">
-          <h2>Simulazioni</h2>
-          <div class="meta" id="sim-meta">—</div>
-        </div>
-      
-        <!-- Presets -->
-        <div class="presetRow">
-          <button class="chip" id="preset-realistic" type="button">Realistico</button>
-          <button class="chip" id="preset-optimistic" type="button">Ottimista</button>
-          <button class="chip" id="preset-stress" type="button">Stress test</button>
-        </div>
-      
-        <div class="paramGrid">
-      
-          <!-- Base simulation -->
+    <main class="simPageGrid">
+      <!-- LEFT: Controls -->
+      <div>
+        <section class="card">
+          <div class="cardHeader">
+            <h2>Parametri Simulazione</h2>
+            <div class="meta" id="sim-meta">—</div>
+          </div>
+
+          <!-- Stats Summary -->
+          <div class="simStatsGrid" id="sim-stats" style="display:none;">
+            <div class="simStatCard">
+              <div class="simStatLabel">Esami</div>
+              <div class="simStatValue" id="stat-exams">—</div>
+            </div>
+            <div class="simStatCard">
+              <div class="simStatLabel">Budget</div>
+              <div class="simStatValue" id="stat-budget">—</div>
+              <div class="simStatSub">ore/settimana</div>
+            </div>
+            <div class="simStatCard">
+              <div class="simStatLabel">Orizzonte</div>
+              <div class="simStatValue" id="stat-horizon">—</div>
+              <div class="simStatSub">giorni</div>
+            </div>
+          </div>
+
+          <!-- Presets -->
+          <div class="presetRow">
+            <button class="chip" id="preset-realistic" type="button">Realistico</button>
+            <button class="chip" id="preset-optimistic" type="button">Ottimista</button>
+            <button class="chip" id="preset-stress" type="button">Stress</button>
+          </div>
+
+          <!-- Base Simulation -->
           <div class="paramCard">
             <div class="paramHead">
               <div>
-                <div class="paramTitle">Base</div>
-                <div class="paramDesc">Dinamica della preparazione nel tempo.</div>
+                <div class="paramTitle">Simulazione Base</div>
+                <div class="paramDesc">Parametri per la simulazione baseline</div>
               </div>
               <span class="pillLite">Baseline</span>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Orizzonte</div>
-                <div class="paramHelp">Quanti giorni simulare (7–365).</div>
+                <div>Orizzonte temporale</div>
+                <div class="paramHelp">Quanti giorni simulare (7–365)</div>
               </div>
               <div class="paramControl">
                 <input id="horizon-days" class="num" type="number" min="7" max="365" step="1" value="60" />
                 <span class="unit">giorni</span>
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Decay</div>
-                <div class="paramHelp">Dimenticanza giornaliera (0–0.03).</div>
+                <div>Dimenticanza</div>
+                <div class="paramHelp">Decadimento giornaliero (0–0.03)</div>
               </div>
               <div class="paramControl">
                 <input id="decay" class="range" type="range" min="0" max="0.03" step="0.001" value="0.006" />
                 <input id="decay-num" class="numSlim" type="number" min="0" max="0.03" step="0.001" value="0.006" />
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Imprevisti</div>
-                <div class="paramHelp">Variabilità: 0 = deterministico.</div>
+                <div>Variabilità</div>
+                <div class="paramHelp">Imprevisti e rumore (0 = deterministico)</div>
               </div>
               <div class="paramControl">
                 <input id="noise" class="range" type="range" min="0" max="0.5" step="0.01" value="0.10" />
                 <input id="noise-num" class="numSlim" type="number" min="0" max="0.5" step="0.01" value="0.10" />
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
                 <div>Boost urgenza</div>
-                <div class="paramHelp">Quanto spinge sugli esami vicini (0.5–4).</div>
+                <div class="paramHelp">Quanto spinge sugli esami vicini (0.5–4)</div>
               </div>
               <div class="paramControl">
                 <input id="urgency-boost" class="range" type="range" min="0.5" max="4" step="0.1" value="2.0" />
                 <input id="urgency-boost-num" class="numSlim" type="number" min="0.5" max="4" step="0.1" value="2.0" />
               </div>
             </div>
-      
-            <div class="btnRow">
-              <button class="btn primary" id="run-sim" type="button">Esegui</button>
-              <!-- <button class="btn" id="run-mc" type="button">Monte Carlo (20)</button> -->
+
+            <div class="btnRow" style="margin-top: 16px;">
+              <button class="btn primary" id="run-sim" type="button" style="width: 100%;">▶ Esegui Simulazione</button>
             </div>
           </div>
-      
-          <!-- What-if -->
+
+          <!-- What-if Scenario -->
           <div class="paramCard">
             <div class="paramHead">
               <div>
-                <div class="paramTitle">What-if</div>
-                <div class="paramDesc">Confronta scenario vs baseline</div>
+                <div class="paramTitle">Scenario What-if</div>
+                <div class="paramDesc">Confronta uno scenario alternativo</div>
               </div>
               <span class="pillLite">Scenario</span>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>ore settimanali aggiuntive</div>
-                <div class="paramHelp">Aggiunge/toglie tempo su Lun–Sab</div>
+                <div>Ore aggiuntive</div>
+                <div class="paramHelp">Aggiungi o togli tempo settimanale</div>
               </div>
               <div class="paramControl">
                 <input id="delta-hours" class="range" type="range" min="-10" max="30" step="0.5" value="0" />
                 <input id="delta-hours-num" class="numSlim" type="number" min="-10" max="30" step="0.5" value="0" />
+                <span class="unit">h</span>
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Obiettivo di studio</div>
-                <div class="paramHelp"></div>
+                <div>Obiettivo</div>
+                <div class="paramHelp">Cambia l'obiettivo di studio</div>
               </div>
               <div class="paramControl">
                 <select id="goal-override" class="select">
@@ -161,22 +500,22 @@
                 </select>
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
                 <div>Durata task</div>
-                <div class="paramHelp">Minuti dedicati per singola sessione di studio</div>
+                <div class="paramHelp">Minuti per sessione di studio</div>
               </div>
               <div class="paramControl">
-                <input id="task-override" class="num" type="number" min="15" max="120" step="5" placeholder="(vuoto)" />
+                <input id="task-override" class="num" type="number" min="15" max="120" step="5" placeholder="—" />
                 <span class="unit">min</span>
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Drop esame</div>
-                <div class="paramHelp">Simula che lo rimandi (sparisce dal piano).</div>
+                <div>Rimuovi esame</div>
+                <div class="paramHelp">Simula che rimandi un esame</div>
               </div>
               <div class="paramControl">
                 <select id="drop-exam" class="select">
@@ -184,11 +523,11 @@
                 </select>
               </div>
             </div>
-      
+
             <div class="paramRow">
               <div class="paramLabel">
-                <div>Boost esame</div>
-                <div class="paramHelp">Moltiplica la priorità dell’esame scelto.</div>
+                <div>Priorità esame</div>
+                <div class="paramHelp">Aumenta la priorità di un esame</div>
               </div>
               <div class="paramControl boostLine">
                 <select id="boost-exam" class="select">
@@ -198,49 +537,42 @@
                 <span class="unit">×</span>
               </div>
             </div>
-      
-            <div class="btnRow">
-              <button class="btn primary" id="run-whatif" type="button">Confronta</button>
-              <!-- <button class="btn" id="run-whatif-mc" type="button">What-if MC (20)</button> -->
+
+            <div class="btnRow" style="margin-top: 16px;">
+              <button class="btn primary" id="run-whatif" type="button" style="width: 100%;"> Confronta Scenario</button>
             </div>
-      
-            <!--
-            <div class="statusBox">
-              <div class="statusTitle">Stato</div>
-              <div class="statusText" id="sim-status">—</div>
-            </div>
-            -->
           </div>
-      
-        </div>
-      
-        <div class="divider"></div>
-      
-        <div class="callout">
-          <h3>Come leggerlo</h3>
-          <p>
-            Preparazione 0–100: cresce con lo studio e scende con decay/rumore.
-            Linee piene = baseline, tratteggio = scenario.
-          </p>
-        </div>
-      </section>
-      
 
-      <!-- Chart -->
-      <section class="card">
-        <div class="cardHeader">
-          <h2>Preparazione nel tempo</h2>
-          <div class="meta">una linea per esame</div>
-        </div>
+          <!-- Info Box -->
+          <div class="simInfoBox">
+            <h3>💡 Come leggere il grafico</h3>
+            <p>
+              <strong>Preparazione 0–100:</strong> cresce con lo studio e diminuisce con dimenticanza/rumore.<br>
+              <strong>Linea piena:</strong> baseline attuale.<br>
+              <strong>Linea tratteggiata:</strong> scenario what-if.
+            </p>
+          </div>
+        </section>
+      </div>
 
-        <div class="chartWrap">
-          <canvas id="chart" width="980" height="520"></canvas>
-        </div>
+      <!-- RIGHT: Chart -->
+      <div class="chartSection">
+        <section class="card">
+          <div class="cardHeader">
+            <h2>Preparazione nel Tempo</h2>
+            <div class="meta">Evoluzione della preparazione per esame</div>
+          </div>
 
-        <div class="divider"></div>
+          <div class="chartWrap">
+            <canvas id="chart" width="980" height="520"></canvas>
+          </div>
 
-        <div id="legend" class="legend"></div>
-      </section>
+          <div id="legend" class="legend"></div>
+
+          <!-- Exam Summary -->
+          <div class="examSummary" id="exam-summary" style="display:none;"></div>
+        </section>
+      </div>
     </main>
   </div>
 

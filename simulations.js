@@ -254,22 +254,26 @@ function bindRangePair(rangeId, numId){
     bindRangePair("delta-hours", "delta-hours-num");
   
     // presets
+    const setPreset = (chipId, noise, decay, urgency) => {
+      qs("noise").value = noise; qs("noise-num").value = noise;
+      qs("decay").value = decay; qs("decay-num").value = decay;
+      qs("urgency-boost").value = urgency; qs("urgency-boost-num").value = urgency;
+      
+      // Update active state
+      document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      qs(chipId)?.classList.add("active");
+    };
+    
     qs("preset-realistic")?.addEventListener("click", ()=>{
-      qs("noise").value = "0.12"; qs("noise-num").value = "0.12";
-      qs("decay").value = "0.007"; qs("decay-num").value = "0.007";
-      qs("urgency-boost").value = "2.1"; qs("urgency-boost-num").value = "2.1";
+      setPreset("preset-realistic", "0.12", "0.007", "2.1");
     });
   
     qs("preset-optimistic")?.addEventListener("click", ()=>{
-      qs("noise").value = "0.06"; qs("noise-num").value = "0.06";
-      qs("decay").value = "0.004"; qs("decay-num").value = "0.004";
-      qs("urgency-boost").value = "1.7"; qs("urgency-boost-num").value = "1.7";
+      setPreset("preset-optimistic", "0.06", "0.004", "1.7");
     });
   
     qs("preset-stress")?.addEventListener("click", ()=>{
-      qs("noise").value = "0.22"; qs("noise-num").value = "0.22";
-      qs("decay").value = "0.010"; qs("decay-num").value = "0.010";
-      qs("urgency-boost").value = "2.6"; qs("urgency-boost-num").value = "2.6";
+      setPreset("preset-stress", "0.22", "0.010", "2.6");
     });
   }
   
@@ -459,11 +463,14 @@ function drawChartOverlay(canvas, dates, examsA, seriesA, examsB=null, seriesB=n
 
   ctx.clearRect(0,0,W,H);
 
-  const padL=56, padR=18, padT=22, padB=44;
+  const padL=56, padR=18, padT=32, padB=44;
   const x0=padL, y0=padT, x1=W-padR, y1=H-padB;
 
-  // background
-  ctx.fillStyle = "rgba(0,0,0,.18)";
+  // background gradient
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
+  bgGradient.addColorStop(0, "rgba(10, 12, 20, 0.4)");
+  bgGradient.addColorStop(1, "rgba(10, 12, 20, 0.6)");
+  ctx.fillStyle = bgGradient;
   ctx.fillRect(0,0,W,H);
 
   // axes
@@ -551,9 +558,21 @@ function drawChartOverlay(canvas, dates, examsA, seriesA, examsB=null, seriesB=n
   }
 
   // title
-  ctx.fillStyle = "rgba(255,255,255,.80)";
-  ctx.font = "14px system-ui";
-  ctx.fillText(title || "Baseline vs Scenario", x0, 16);
+  ctx.fillStyle = "rgba(255,255,255,.90)";
+  ctx.font = "bold 15px system-ui";
+  ctx.fillText(title || "Baseline vs Scenario", x0, 20);
+  
+  // axis labels
+  ctx.fillStyle = "rgba(255,255,255,.60)";
+  ctx.font = "11px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("Tempo (giorni)", (x0 + x1) / 2, H - 8);
+  ctx.save();
+  ctx.translate(20, (y0 + y1) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Preparazione (%)", 0, 0);
+  ctx.restore();
+  ctx.textAlign = "left";
 }
 
 // legend
@@ -573,6 +592,31 @@ function renderLegend(exams){
     item.className = "legendItem";
     item.innerHTML = `<span class="legendSwatch" style="background:${hashColor(i)}"></span><span>${escapeHtml(e.name)}</span>`;
     wrap.appendChild(item);
+  });
+}
+
+// Exam summary
+function renderExamSummary(exams){
+  const container = qs("exam-summary");
+  if(!container) return;
+  
+  if(exams.length === 0){
+    container.style.display = "none";
+    return;
+  }
+  
+  container.style.display = "grid";
+  container.innerHTML = "";
+  
+  exams.forEach((e) => {
+    const item = document.createElement("div");
+    item.className = "examSummaryItem";
+    const daysLeft = daysBetween(new Date(), new Date(e.date));
+    item.innerHTML = `
+      <div class="examSummaryName">${escapeHtml(e.name)}</div>
+      <div class="examSummaryMeta">${e.date || "—"} · ${daysLeft} giorni · ${e.cfu || "—"} CFU</div>
+    `;
+    container.appendChild(item);
   });
 }
 
@@ -638,7 +682,23 @@ window.addEventListener("DOMContentLoaded", ()=>{
     }
 
     setText("sim-meta", `Esami: ${exams.length} · Budget settimanale: ${weeklyBudgetHours(profile)}h`);
+    
+    // Mostra statistiche
+    const statsGrid = qs("sim-stats");
+    if (statsGrid) {
+      statsGrid.style.display = "grid";
+      setText("stat-exams", exams.length);
+      setText("stat-budget", weeklyBudgetHours(profile));
+      setText("stat-horizon", "60");
+    }
+    
+    // Aggiorna orizzonte quando cambia
+    qs("horizon-days")?.addEventListener("input", (e) => {
+      setText("stat-horizon", e.target.value || "60");
+    });
+    
     renderLegend(exams);
+    renderExamSummary(exams);
 
     populateSelect(qs("drop-exam"), exams);
     populateSelect(qs("boost-exam"), exams);
