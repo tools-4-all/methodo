@@ -3272,12 +3272,138 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
       ws.appendChild(div);
     }
     if (plan.cut && plan.cut.length) {
+      // Calcola statistiche sui task tagliati
+      const totalCutMinutes = plan.cut.reduce((sum, t) => sum + (t.minutes || 0), 0);
+      const totalCutHours = Math.round((totalCutMinutes / 60) * 10) / 10;
+      const totalCutTasks = plan.cut.length;
+      
+      // Raggruppa per esame
+      const byExam = {};
+      for (const t of plan.cut) {
+        const examName = t.examName || "Sconosciuto";
+        if (!byExam[examName]) {
+          byExam[examName] = { tasks: [], minutes: 0 };
+        }
+        byExam[examName].tasks.push(t);
+        byExam[examName].minutes += t.minutes || 0;
+      }
+      
+      // Calcola percentuale tagliata rispetto al budget settimanale
+      const weeklyBudget = plan.weeklyBudgetMin || 1;
+      const cutPercentage = Math.round((totalCutMinutes / weeklyBudget) * 100);
+      
+      // Determina suggerimenti specifici
+      const suggestions = [];
+      if (cutPercentage > 30) {
+        suggestions.push({
+          icon: "⏰",
+          text: "Tagliato più del 30%: considera di aumentare significativamente le ore settimanali",
+          priority: "high"
+        });
+      } else if (cutPercentage > 15) {
+        suggestions.push({
+          icon: "⏰",
+          text: "Tagliato più del 15%: aumenta le ore settimanali o riduci gli esami attivi",
+          priority: "medium"
+        });
+      }
+      
+      if (Object.keys(byExam).length > 3) {
+        suggestions.push({
+          icon: "📚",
+          text: `Hai ${Object.keys(byExam).length} esami con task tagliati: considera di concentrarti su meno esami alla volta`,
+          priority: "medium"
+        });
+      }
+      
+      if (totalCutHours > 10) {
+        suggestions.push({
+          icon: "🎯",
+          text: `Tagliati ${totalCutHours}h: priorizza gli esami più urgenti nel profilo`,
+          priority: "high"
+        });
+      }
+      
+      // Crea la sezione Realismo migliorata
       const cut = document.createElement("div");
-      cut.className = "callout";
-      cut.innerHTML = `
-        <h3>Realismo</h3>
-        <p>Ho tagliato alcune cose perché la tua disponibilità non copre tutto. Aumenta ore o riduci esami.</p>
+      cut.className = "callout realismCallout";
+      
+      let html = `
+        <div class="realismHeader">
+          <h3>⚠️ Realismo</h3>
+          <div class="realismStats">
+            <div class="realismStat">
+              <span class="realismStatValue">${totalCutHours}h</span>
+              <span class="realismStatLabel">tagliati</span>
+            </div>
+            <div class="realismStat">
+              <span class="realismStatValue">${totalCutTasks}</span>
+              <span class="realismStatLabel">task</span>
+            </div>
+            <div class="realismStat">
+              <span class="realismStatValue">${cutPercentage}%</span>
+              <span class="realismStatLabel">del budget</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="realismMessage">
+          <p>La tua disponibilità settimanale non copre tutti i task pianificati. Alcuni contenuti sono stati esclusi per mantenere il piano realistico.</p>
+        </div>
       `;
+      
+      // Dettaglio per esame
+      if (Object.keys(byExam).length > 0) {
+        html += `<div class="realismDetails">
+          <div class="realismDetailsTitle">Dettaglio per esame:</div>
+          <div class="realismExamList">`;
+        
+        const sortedExams = Object.entries(byExam).sort((a, b) => b[1].minutes - a[1].minutes);
+        for (const [examName, data] of sortedExams) {
+          const examHours = Math.round((data.minutes / 60) * 10) / 10;
+          html += `
+            <div class="realismExamItem">
+              <div class="realismExamName">${escapeHtml(examName)}</div>
+              <div class="realismExamInfo">
+                <span>${data.tasks.length} task</span>
+                <span>·</span>
+                <span>${examHours}h</span>
+              </div>
+            </div>
+          `;
+        }
+        
+        html += `</div></div>`;
+      }
+      
+      // Suggerimenti
+      if (suggestions.length > 0) {
+        html += `<div class="realismSuggestions">
+          <div class="realismSuggestionsTitle">💡 Suggerimenti:</div>
+          <ul class="realismSuggestionsList">`;
+        
+        for (const sug of suggestions) {
+          const priorityClass = sug.priority === "high" ? "realismSuggestionHigh" : "";
+          html += `
+            <li class="realismSuggestion ${priorityClass}">
+              <span class="realismSuggestionIcon">${sug.icon}</span>
+              <span class="realismSuggestionText">${escapeHtml(sug.text)}</span>
+            </li>
+          `;
+        }
+        
+        html += `</ul></div>`;
+      }
+      
+      // Azioni
+      html += `
+        <div class="realismActions">
+          <a href="./settings.html" class="btn tiny">Modifica Profilo</a>
+          <a href="./profile.html" class="btn tiny ghost">Gestisci Esami</a>
+        </div>
+      `;
+      
+      cut.innerHTML = html;
       ws.appendChild(cut);
     }
   }
