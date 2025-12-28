@@ -146,6 +146,11 @@ async function removeExam(uid, examId) {
   await deleteDoc(ref);
 }
 
+async function updateExam(uid, examId, examData) {
+  const ref = doc(db, "users", uid, "exams", examId);
+  await updateDoc(ref, { ...examData, updatedAt: serverTimestamp() });
+}
+
 async function saveWeeklyPlan(uid, weekStartISO, plan) {
   const ref = doc(db, "users", uid, "plans", weekStartISO);
   await setDoc(
@@ -448,9 +453,11 @@ function mountOnboarding() {
       const row = document.createElement("div");
       row.className = "day-row";
       row.innerHTML = `
-        <div class="day-label">${label}</div>
-        <input class="day-input" data-day="${k}" type="number" min="0" max="600" step="5" value="${val}">
-        <div class="muted small">min</div>
+        <label class="day-label" for="day-${k}">${label}</label>
+        <div class="day-input-wrap">
+          <input class="day-input" id="day-${k}" data-day="${k}" type="number" min="0" max="600" step="5" value="${val}">
+          <span class="day-suffix">min</span>
+        </div>
       `;
       dayContainer.appendChild(row);
     }
@@ -472,7 +479,10 @@ function mountOnboarding() {
         <strong>${escapeHtml(exam.name)}</strong>
         <p class="muted small">${escapeHtml(exam.date)} · CFU ${exam.cfu} · livello ${exam.level}/5 · diff ${exam.difficulty}/3</p>
       </div>
-      <button class="btn tiny" type="button" data-del="${exam.id}">Rimuovi</button>
+      <div class="examCardActions">
+        <button class="btn tiny" type="button" data-edit="${exam.id}">Modifica</button>
+        <button class="btn tiny" type="button" data-del="${exam.id}">Rimuovi</button>
+      </div>
     `;
     return d;
   }
@@ -496,6 +506,16 @@ function mountOnboarding() {
       btn.addEventListener("click", async () => {
         await removeExam(uid, btn.dataset.del);
         await refreshExamList(uid);
+      });
+    });
+
+    list.querySelectorAll("button[data-edit]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const examId = btn.dataset.edit;
+        const exam = exams.find((e) => e.id === examId);
+        if (exam) {
+          openEditExamModal(uid, exam, () => refreshExamList(uid));
+        }
       });
     });
   }
@@ -587,6 +607,173 @@ function mountOnboarding() {
 
       window.location.assign("./app.html");
     });
+  });
+}
+
+// ----------------- Modale modifica esame -----------------
+function openEditExamModal(uid, exam, onSuccess) {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("exam-edit-modal")) return;
+
+  // Overlay oscurante
+  const overlay = document.createElement("div");
+  overlay.id = "exam-edit-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.6)",
+    zIndex: "9999",
+  });
+
+  // Contenitore principale con stile card
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "480px";
+  card.style.width = "90%";
+  card.style.padding = "20px";
+
+  // Titolo modale
+  const title = document.createElement("h3");
+  title.textContent = "Modifica esame";
+  title.style.marginBottom = "16px";
+  title.style.fontSize = "18px";
+  card.appendChild(title);
+
+  // Contenitore form
+  const form = document.createElement("div");
+  form.className = "form";
+
+  // Campo nome
+  const nameLabel = document.createElement("label");
+  nameLabel.innerHTML = '<span>Nome</span>';
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "ee-name";
+  nameInput.value = exam.name || "";
+  nameInput.required = true;
+  nameLabel.appendChild(nameInput);
+
+  // Campo data
+  const dateLabel = document.createElement("label");
+  dateLabel.innerHTML = '<span>Data</span>';
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.id = "ee-date";
+  dateInput.value = exam.date || "";
+  dateInput.required = true;
+  dateLabel.appendChild(dateInput);
+
+  // Campo CFU
+  const cfuLabel = document.createElement("label");
+  cfuLabel.innerHTML = '<span>CFU</span>';
+  const cfuInput = document.createElement("input");
+  cfuInput.type = "number";
+  cfuInput.id = "ee-cfu";
+  cfuInput.min = "1";
+  cfuInput.max = "30";
+  cfuInput.value = exam.cfu || 6;
+  cfuInput.required = true;
+  cfuLabel.appendChild(cfuInput);
+
+  // Campo livello
+  const levelLabel = document.createElement("label");
+  levelLabel.innerHTML = '<span>Livello (0-5)</span>';
+  const levelInput = document.createElement("input");
+  levelInput.type = "number";
+  levelInput.id = "ee-level";
+  levelInput.min = "0";
+  levelInput.max = "5";
+  levelInput.value = exam.level || 0;
+  levelInput.required = true;
+  levelLabel.appendChild(levelInput);
+
+  // Campo difficoltà
+  const diffLabel = document.createElement("label");
+  diffLabel.innerHTML = '<span>Difficoltà</span>';
+  const diffSelect = document.createElement("select");
+  diffSelect.id = "ee-diff";
+  diffSelect.required = true;
+  const diffOptions = [
+    { value: "1", text: "1 (facile)" },
+    { value: "2", text: "2 (media)" },
+    { value: "3", text: "3 (difficile)" },
+  ];
+  diffOptions.forEach((opt) => {
+    const option = document.createElement("option");
+    option.value = opt.value;
+    option.textContent = opt.text;
+    if (opt.value === String(exam.difficulty || 2)) option.selected = true;
+    diffSelect.appendChild(option);
+  });
+  diffLabel.appendChild(diffSelect);
+
+  // Aggiungi tutti i campi al form
+  form.appendChild(nameLabel);
+  form.appendChild(dateLabel);
+  form.appendChild(cfuLabel);
+  form.appendChild(levelLabel);
+  form.appendChild(diffLabel);
+  card.appendChild(form);
+
+  // Azioni (bottoni)
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnRow";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn primary";
+  saveBtn.type = "button";
+  saveBtn.textContent = "Salva";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn";
+  cancelBtn.type = "button";
+  cancelBtn.textContent = "Annulla";
+
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  // Funzione per chiudere la modale
+  function closeModal() {
+    try {
+      document.body.removeChild(overlay);
+    } catch {}
+  }
+
+  // Gestore Annulla
+  cancelBtn.addEventListener("click", () => {
+    closeModal();
+  });
+
+  // Gestore Salva
+  saveBtn.addEventListener("click", async () => {
+    try {
+      const name = nameInput.value.trim();
+      const date = dateInput.value;
+      const cfu = Number(cfuInput.value || 0);
+      const level = Number(levelInput.value || 0);
+      const difficulty = Number(diffSelect.value || 2);
+
+      if (!name) throw new Error("Nome esame mancante.");
+      if (!date) throw new Error("Data esame mancante.");
+      if (cfu < 1) throw new Error("CFU non validi.");
+
+      await updateExam(uid, exam.id, { name, cfu, date, level, difficulty });
+      closeModal();
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      console.error(err);
+      alert("Errore modifica esame: " + (err?.message || err));
+    }
   });
 }
 
@@ -910,8 +1097,22 @@ function renderDashboard(plan, exams, profile) {
   if (!todayDay || !todayDay.tasks || todayDay.tasks.length === 0) {
     todayWrap.innerHTML = `<div class="callout"><h3>Vuoto</h3><p>Nessun task oggi. Controlla disponibilità o rigenera.</p></div>`;
   } else {
+    // Raggruppa task per periodo
+    const morningTasks = [];
+    const afternoonTasks = [];
+    
     for (let i = 0; i < todayDay.tasks.length; i++) {
       const t = todayDay.tasks[i];
+      const period = t.period || "morning"; // default a morning se non specificato
+      if (period === "morning") {
+        morningTasks.push({ task: t, index: i });
+      } else {
+        afternoonTasks.push({ task: t, index: i });
+      }
+    }
+
+    // Funzione helper per renderizzare una task compatta
+    const renderCompactTask = (t, i) => {
       const taskId = makeTaskId({
         weekStartISO: plan.weekStart,
         dateISO: todayDay.dateISO,
@@ -930,18 +1131,16 @@ function renderDashboard(plan, exams, profile) {
 
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "task taskClickable";
+      row.className = `task taskClickable taskCompact ${isDone ? "taskDone" : ""}`;
       row.dataset.taskid = taskId;
 
       row.innerHTML = `
-        <div class="taskRow">
-          <input type="checkbox" class="taskChk" ${isDone ? "checked" : ""} />
-          <div style="min-width:0;text-align:left">
-            <div class="taskTitle">${escapeHtml(t.examName)} · ${escapeHtml(t.label)}</div>
-            <div class="taskSub">
-              <span class="tag">${escapeHtml(t.type)}</span>
-              <span style="margin-left:8px">${t.minutes} min</span>
-            </div>
+        <input type="checkbox" class="taskChk" ${isDone ? "checked" : ""} />
+        <div class="taskCompactContent">
+          <div class="taskCompactTitle">${escapeHtml(t.examName)}</div>
+          <div class="taskCompactMeta">
+            <span class="tag tagSmall">${escapeHtml(t.type)}</span>
+            <span class="taskMinutes">${t.minutes}m</span>
           </div>
         </div>
       `;
@@ -954,6 +1153,7 @@ function renderDashboard(plan, exams, profile) {
           if (checked) localStorage.setItem(doneKey, "1");
           else localStorage.removeItem(doneKey);
         } catch {}
+        row.classList.toggle("taskDone", checked);
         // Aggiorna il grafico di completamento
         updateTodayProgress(plan, todayDay);
       });
@@ -967,7 +1167,43 @@ function renderDashboard(plan, exams, profile) {
         });
       });
 
-      todayWrap.appendChild(row);
+      return row;
+    };
+
+    // Renderizza sezione mattina
+    if (morningTasks.length > 0) {
+      const morningSection = document.createElement("div");
+      morningSection.className = "taskPeriodSection";
+      morningSection.innerHTML = `
+        <div class="taskPeriodHeader">
+          <span class="taskPeriodLabel">Mattina</span>
+          <span class="taskPeriodCount">${morningTasks.length}</span>
+        </div>
+        <div class="taskPeriodList"></div>
+      `;
+      const morningList = morningSection.querySelector(".taskPeriodList");
+      morningTasks.forEach(({ task, index }) => {
+        morningList.appendChild(renderCompactTask(task, index));
+      });
+      todayWrap.appendChild(morningSection);
+    }
+
+    // Renderizza sezione pomeriggio
+    if (afternoonTasks.length > 0) {
+      const afternoonSection = document.createElement("div");
+      afternoonSection.className = "taskPeriodSection";
+      afternoonSection.innerHTML = `
+        <div class="taskPeriodHeader">
+          <span class="taskPeriodLabel">Pomeriggio</span>
+          <span class="taskPeriodCount">${afternoonTasks.length}</span>
+        </div>
+        <div class="taskPeriodList"></div>
+      `;
+      const afternoonList = afternoonSection.querySelector(".taskPeriodList");
+      afternoonTasks.forEach(({ task, index }) => {
+        afternoonList.appendChild(renderCompactTask(task, index));
+      });
+      todayWrap.appendChild(afternoonSection);
     }
   }
 
@@ -1242,6 +1478,10 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
         alert("Errore: giorno non trovato.");
         return;
       }
+      // Assegna periodo (mattina/pomeriggio) basato sulla capacità giornaliera
+      const halfCap = (day.capacityMin || 0) / 2;
+      const currentUsed = (day.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
+      newTask.period = (currentUsed + minutesVal) <= halfCap ? "morning" : "afternoon";
       day.tasks = [...(day.tasks || []), newTask];
       // Aggiorna l'allocazione per l'esame in base ai minuti aggiunti
       if (!plan.allocations) plan.allocations = [];
