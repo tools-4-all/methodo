@@ -1900,6 +1900,48 @@ color: rgba(255,255,255,.92);
   font-weight:850;
 }
 
+/* ===== COACH / ALLENATORE ===== */
+.coachProgress{
+  margin-top:16px;
+  padding:16px;
+  background: rgba(99,102,241,.08);
+  border:1px solid rgba(99,102,241,.2);
+  border-radius:12px;
+}
+
+.coachProgressBar{
+  height:12px;
+  border-radius:999px;
+  background: rgba(255,255,255,.1);
+  overflow:hidden;
+  position:relative;
+  margin-bottom:12px;
+}
+
+.coachProgressFill{
+  height:100%;
+  width:0%;
+  background: linear-gradient(90deg, rgba(99,102,241,.9), rgba(139,92,246,.9));
+  border-radius:999px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 12px rgba(99,102,241,.5);
+}
+
+.coachProgressText{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:13px;
+  font-weight:700;
+  color: rgba(255,255,255,.9);
+}
+
+.coachInfo{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.1);
+}
+
 /* ===== CONSIGLI / BLOG PAGE ===== */
 main > section.adviceCard {
   margin-bottom: 20px;

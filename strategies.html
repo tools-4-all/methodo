@@ -90,17 +90,70 @@
 
           <div class="divider"></div>
 
-          <!-- Carico di studio -->
+          <!-- Allenatore di Studio -->
           <div class="formSection">
             <div class="sectionTitle">
-              <h3>Carico di studio settimanale</h3>
-              <p class="meta">Quanto tempo vuoi dedicare allo studio ogni settimana</p>
+              <h3>🏃 Allenatore di Studio</h3>
+              <p class="meta">Imposta il tuo livello attuale e l'obiettivo per un piano progressivo</p>
+            </div>
+
+            <div class="formRow">
+              <label for="current-hours">
+                <span>Ore attuali a settimana</span>
+                <span class="labelHint">Quanto studi attualmente</span>
+              </label>
+              <div class="inputWithSuffix">
+                <input id="current-hours" type="number" min="0" max="80" step="0.5" value="" />
+                <span class="suffix">h</span>
+              </div>
+            </div>
+
+            <div class="formRow">
+              <label for="target-hours">
+                <span>Obiettivo ore a settimana</span>
+                <span class="labelHint">Quanto vorresti studiare</span>
+              </label>
+              <div class="inputWithSuffix">
+                <input id="target-hours" type="number" min="1" max="80" step="0.5" value="" />
+                <span class="suffix">h</span>
+              </div>
+            </div>
+
+            <div id="coach-progress" class="coachProgress" style="display:none;">
+              <div class="coachProgressBar">
+                <div id="coach-progress-fill" class="coachProgressFill"></div>
+              </div>
+              <div class="coachProgressText">
+                <span id="coach-current-text">—</span>
+                <span id="coach-target-text">—</span>
+              </div>
+              <div id="coach-info" class="coachInfo"></div>
+            </div>
+
+            <div class="infoBox">
+              <strong>Come funziona:</strong>
+              <ul class="infoList">
+                <li>L'allenatore crea un piano che aumenta gradualmente il carico settimana dopo settimana</li>
+                <li>Parti dalle tue ore attuali e raggiungi gradualmente l'obiettivo</li>
+                <li>Il piano si adatta automaticamente in base alla distanza degli esami</li>
+                <li>Se l'obiettivo è troppo ambizioso, il sistema ti avviserà</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Carico di studio (ora diventa "Ore settimanali suggerite") -->
+          <div class="formSection">
+            <div class="sectionTitle">
+              <h3>Ore settimanali suggerite</h3>
+              <p class="meta">Calcolate automaticamente dall'allenatore (puoi modificarle manualmente)</p>
             </div>
 
             <div class="formRow">
               <label for="weekly-hours">Ore per settimana</label>
               <div class="inputWithSuffix">
-                <input id="weekly-hours" type="number" min="1" max="80" step="1" value="" />
+                <input id="weekly-hours" type="number" min="1" max="80" step="0.5" value="" />
                 <span class="suffix">h</span>
               </div>
             </div>

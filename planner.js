@@ -37,6 +37,65 @@ function clamp(x, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
 }
 
+/**
+ * Calcola un budget settimanale progressivo basato sull'allenatore di studio.
+ * Aumenta gradualmente il carico settimana dopo settimana per raggiungere l'obiettivo.
+ * 
+ * @param {object} profile - Profilo utente con currentHours, targetHours
+ * @param {Date} weekStartDate - Data di inizio settimana
+ * @param {Array} exams - Array di esami per calcolare la distanza temporale
+ * @returns {number} Budget in minuti per questa settimana
+ */
+function calculateProgressiveWeeklyBudget(profile, weekStartDate, exams) {
+  const currentHours = profile.currentHours || 0;
+  const targetHours = profile.targetHours || 0;
+  
+  if (!currentHours || !targetHours || targetHours <= currentHours) {
+    // Fallback: usa weeklyHours o dayMinutes
+    const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const dayMinutes = profile.dayMinutes || {};
+    const totalMin = dayKeys.reduce((acc, k) => acc + (dayMinutes[k] || 0), 0);
+    return totalMin > 0 ? totalMin : clamp((profile.weeklyHours ?? 10) * 60, 60, 6000);
+  }
+  
+  // Trova l'esame più vicino per calcolare quante settimane abbiamo
+  const now = new Date();
+  const weekStart = new Date(weekStartDate);
+  weekStart.setHours(0, 0, 0, 0);
+  
+  let minWeeksToExam = Infinity;
+  for (const exam of exams) {
+    if (!exam.date) continue;
+    const examDate = new Date(exam.date);
+    const weeksToExam = Math.ceil((examDate - weekStart) / (7 * 24 * 60 * 60 * 1000));
+    if (weeksToExam > 0 && weeksToExam < minWeeksToExam) {
+      minWeeksToExam = weeksToExam;
+    }
+  }
+  
+  // Se non ci sono esami o sono troppo lontani, usa un default di 8 settimane
+  const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
+  
+  // Calcola quale settimana siamo (0 = prima settimana, totalWeeks-1 = ultima)
+  // Per ora assumiamo che questa sia la settimana 0 (inizio)
+  // In futuro potremmo tracciare quante settimane sono passate dall'inizio
+  const currentWeek = 0; // TODO: tracciare settimane passate
+  
+  // Calcola incremento settimanale
+  const totalIncrease = targetHours - currentHours;
+  const incrementPerWeek = totalIncrease / Math.max(1, totalWeeks - 1);
+  
+  // Calcola ore per questa settimana (progressivo)
+  const hoursThisWeek = Math.min(
+    currentHours + (incrementPerWeek * currentWeek),
+    targetHours
+  );
+  
+  // Converti in minuti e assicurati che sia ragionevole
+  const budgetMin = Math.round(hoursThisWeek * 60);
+  return clamp(budgetMin, 60, 6000);
+}
+
 function examUrgencyScore(exam, now) {
   const examDate = new Date(exam.date);
   const d = clamp(daysBetween(now, examDate), 0, 3650);
@@ -190,8 +249,17 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
   // Calcola budget settimanale reale
-  const weeklyBudgetMin = dayKeys.reduce((acc, k) => acc + (dayMinutes[k] || 0), 0);
-  const weeklyBudget = weeklyBudgetMin > 0 ? weeklyBudgetMin : clamp((profile.weeklyHours ?? 10) * 60, 60, 6000);
+  let weeklyBudgetMin = dayKeys.reduce((acc, k) => acc + (dayMinutes[k] || 0), 0);
+  
+  // Se c'è un allenatore attivo, calcola un budget progressivo
+  if (profile.currentHours && profile.targetHours && profile.targetHours > profile.currentHours) {
+    weeklyBudgetMin = calculateProgressiveWeeklyBudget(profile, weekStartDate, validExams);
+  } else {
+    // Budget normale: usa dayMinutes o weeklyHours
+    weeklyBudgetMin = weeklyBudgetMin > 0 ? weeklyBudgetMin : clamp((profile.weeklyHours ?? 10) * 60, 60, 6000);
+  }
+  
+  const weeklyBudget = weeklyBudgetMin;
 
   const validExams = (exams || [])
     .filter((e) => e?.name && e?.date)

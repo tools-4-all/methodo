@@ -828,6 +828,13 @@ function mountOnboarding() {
     if (profile?.goalMode) qs("goal-mode").value = profile.goalMode;
     if (profile?.weeklyHours) qs("weekly-hours").value = profile.weeklyHours;
     if (profile?.taskMinutes) qs("task-minutes").value = String(profile.taskMinutes);
+    
+    // Carica dati allenatore
+    if (profile?.currentHours) qs("current-hours").value = profile.currentHours;
+    if (profile?.targetHours) qs("target-hours").value = profile.targetHours;
+    
+    // Aggiorna visualizzazione allenatore
+    updateCoachDisplay(profile);
 
     await refreshExamList(user.uid);
 
@@ -844,6 +851,8 @@ function mountOnboarding() {
         const weeklyHours = Number(qs("weekly-hours")?.value || 0);
         const taskMinutes = Number(qs("task-minutes")?.value || 35);
         const dayMinutes = readDayInputs();
+        const currentHours = Number(qs("current-hours")?.value || 0);
+        const targetHours = Number(qs("target-hours")?.value || 0);
 
         if (!goalMode) throw new Error("Seleziona un obiettivo di studio.");
         
@@ -851,7 +860,24 @@ function mountOnboarding() {
         if (totalMin < 60) throw new Error("Disponibilità settimanale troppo bassa (< 60 min).");
         if (weeklyHours < 1) throw new Error("Ore settimanali non valide.");
 
-        await setProfile(user.uid, { goalMode, weeklyHours, taskMinutes, dayMinutes });
+        // Validazione allenatore
+        if (currentHours > 0 && targetHours > 0) {
+          if (targetHours <= currentHours) {
+            throw new Error("L'obiettivo deve essere maggiore delle ore attuali.");
+          }
+          if (targetHours - currentHours > 15) {
+            throw new Error("L'incremento è troppo grande (max 15h). Sii realistico.");
+          }
+        }
+
+        await setProfile(user.uid, { 
+          goalMode, 
+          weeklyHours, 
+          taskMinutes, 
+          dayMinutes,
+          currentHours: currentHours > 0 ? currentHours : null,
+          targetHours: targetHours > 0 ? targetHours : null
+        });
         
         if (savedEl) {
           setText(savedEl, "Impostazioni salvate con successo!");
@@ -904,6 +930,32 @@ function mountOnboarding() {
     
     categorySelect?.addEventListener("change", updateCategoryInfo);
     updateCategoryInfo(); // Mostra info iniziale se non è "auto"
+
+    // Aggiorna visualizzazione allenatore quando cambiano i valori
+    const currentHoursInput = qs("current-hours");
+    const targetHoursInput = qs("target-hours");
+    const weeklyHoursInput = qs("weekly-hours");
+    
+    const updateCoachOnChange = () => {
+      const profile = {
+        currentHours: Number(currentHoursInput?.value || 0),
+        targetHours: Number(targetHoursInput?.value || 0),
+        weeklyHours: Number(weeklyHoursInput?.value || 0)
+      };
+      updateCoachDisplay(profile);
+      
+      // Se l'allenatore è attivo, aggiorna automaticamente weekly-hours
+      if (profile.currentHours > 0 && profile.targetHours > 0 && profile.targetHours > profile.currentHours) {
+        // Calcola ore suggerite per questa settimana (inizio della progressione)
+        const suggestedHours = calculateSuggestedWeeklyHours(profile.currentHours, profile.targetHours);
+        if (weeklyHoursInput && (!weeklyHoursInput.value || weeklyHoursInput.value === "0")) {
+          weeklyHoursInput.value = suggestedHours.toFixed(1);
+        }
+      }
+    };
+    
+    currentHoursInput?.addEventListener("input", updateCoachOnChange);
+    targetHoursInput?.addEventListener("input", updateCoachOnChange);
 
     qs("add-exam")?.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -1009,6 +1061,59 @@ function mountOnboarding() {
       goToDashboardBtn.addEventListener("click", handleGoToDashboard);
     }
   });
+}
+
+// ----------------- Allenatore di Studio -----------------
+function calculateSuggestedWeeklyHours(currentHours, targetHours) {
+  // Calcola le ore suggerite per questa settimana
+  // Inizia con un incremento moderato (circa 10-15% rispetto a current)
+  const increment = Math.min((targetHours - currentHours) * 0.15, 2); // Max 2h di incremento
+  return Math.min(currentHours + increment, targetHours);
+}
+
+function calculateProgressionWeeks(currentHours, targetHours) {
+  // Calcola quante settimane servono per raggiungere l'obiettivo
+  // Incremento consigliato: 1-2h a settimana
+  const incrementPerWeek = 1.5; // Incremento medio settimanale
+  const totalIncrease = targetHours - currentHours;
+  return Math.ceil(totalIncrease / incrementPerWeek);
+}
+
+function updateCoachDisplay(profile) {
+  const progressContainer = qs("coach-progress");
+  const progressFill = qs("coach-progress-fill");
+  const currentText = qs("coach-current-text");
+  const targetText = qs("coach-target-text");
+  const coachInfo = qs("coach-info");
+  
+  if (!progressContainer || !progressFill || !currentText || !targetText || !coachInfo) return;
+  
+  const current = profile?.currentHours || 0;
+  const target = profile?.targetHours || 0;
+  
+  if (current > 0 && target > 0 && target > current) {
+    progressContainer.style.display = "block";
+    
+    // Calcola percentuale di progresso (da current a target)
+    const progress = Math.min((current / target) * 100, 100);
+    progressFill.style.width = `${progress}%`;
+    
+    currentText.textContent = `${current.toFixed(1)}h attuali`;
+    targetText.textContent = `Obiettivo: ${target.toFixed(1)}h`;
+    
+    const weeks = calculateProgressionWeeks(current, target);
+    const suggested = calculateSuggestedWeeklyHours(current, target);
+    
+    coachInfo.innerHTML = `
+      <div style="font-size:12px; color:rgba(255,255,255,.7); margin-top:8px; line-height:1.5;">
+        <strong style="color:rgba(255,255,255,.9);">Piano progressivo:</strong><br>
+        Questa settimana: <strong>${suggested.toFixed(1)}h</strong> suggerite<br>
+        Tempo stimato per raggiungere l'obiettivo: <strong>${weeks} settimane</strong>
+      </div>
+    `;
+  } else {
+    progressContainer.style.display = "none";
+  }
 }
 
 // ----------------- Auto-rilevamento categoria esame -----------------
