@@ -640,6 +640,83 @@ function setupMenu() {
 }
 
 // ----------------- DASHBOARD -----------------
+function updateTodayProgress(plan, todayDay) {
+  const $ = (id) => document.getElementById(id);
+  const safeHTML = (id, html) => {
+    const el = $(id);
+    if (el) el.innerHTML = html ?? "";
+    return el;
+  };
+
+  const todayTotal = (todayDay?.tasks || []).reduce((a, t) => a + Number(t.minutes || 0), 0);
+  const totalTasks = todayDay?.tasks?.length || 0;
+  
+  let completedTasks = 0;
+  let completedMinutes = 0;
+  
+  if (todayDay?.tasks) {
+    for (let i = 0; i < todayDay.tasks.length; i++) {
+      const t = todayDay.tasks[i];
+      const taskId = makeTaskId({
+        weekStartISO: plan.weekStart,
+        dateISO: todayDay.dateISO,
+        t,
+        index: i,
+      });
+      const doneKey = `sp_task_done_${taskId}`;
+      try {
+        if (localStorage.getItem(doneKey) === "1") {
+          completedTasks++;
+          completedMinutes += Number(t.minutes || 0);
+        }
+      } catch {}
+    }
+  }
+
+  const progressWrap = safeHTML("today-progress", "");
+  if (progressWrap && totalTasks > 0) {
+    const taskPct = Math.round((completedTasks / totalTasks) * 100);
+    const minutesPct = todayTotal > 0 ? Math.round((completedMinutes / todayTotal) * 100) : 0;
+    
+    progressWrap.innerHTML = `
+      <div class="progressCard">
+        <div class="progressHeader">
+          <h3>Completamento</h3>
+        </div>
+        <div class="progressContent">
+          <div class="progressDonut">
+            <div class="donutLarge" style="--p:${taskPct}">
+              <div class="donutLabelLarge">
+                <div class="donutPct">${taskPct}%</div>
+                <div class="donutSub">${completedTasks}/${totalTasks} task</div>
+              </div>
+            </div>
+          </div>
+          <div class="progressStats">
+            <div class="progressStat">
+              <div class="statLabel">Task</div>
+              <div class="statValue">${completedTasks} / ${totalTasks}</div>
+            </div>
+            <div class="progressStat">
+              <div class="statLabel">Minuti</div>
+              <div class="statValue">${Math.round(completedMinutes)} / ${Math.round(todayTotal)}</div>
+            </div>
+            <div class="progressBarWrap">
+              <div class="progressBarLabel">Progresso minuti</div>
+              <div class="progressBar">
+                <div class="progressBarFill" style="width: ${minutesPct}%"></div>
+              </div>
+              <div class="progressBarText">${minutesPct}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (progressWrap) {
+    progressWrap.innerHTML = "";
+  }
+}
+
 function mountApp() {
   const dbg = (msg) => {
     console.log("[APP]", msg);
@@ -756,6 +833,74 @@ function renderDashboard(plan, exams, profile) {
     `Target oggi: ${Math.round(todayTotal)} min · ${Math.round((todayTotal / 60) * 10) / 10}h`
   );
 
+  // Calcola statistiche di completamento
+  let completedTasks = 0;
+  let completedMinutes = 0;
+  const totalTasks = todayDay?.tasks?.length || 0;
+  
+  if (todayDay?.tasks) {
+    for (let i = 0; i < todayDay.tasks.length; i++) {
+      const t = todayDay.tasks[i];
+      const taskId = makeTaskId({
+        weekStartISO: plan.weekStart,
+        dateISO: todayDay.dateISO,
+        t,
+        index: i,
+      });
+      const doneKey = `sp_task_done_${taskId}`;
+      try {
+        if (localStorage.getItem(doneKey) === "1") {
+          completedTasks++;
+          completedMinutes += Number(t.minutes || 0);
+        }
+      } catch {}
+    }
+  }
+
+  // Renderizza grafico di completamento
+  const progressWrap = safeHTML("today-progress", "");
+  if (progressWrap && totalTasks > 0) {
+    const taskPct = Math.round((completedTasks / totalTasks) * 100);
+    const minutesPct = todayTotal > 0 ? Math.round((completedMinutes / todayTotal) * 100) : 0;
+    
+    progressWrap.innerHTML = `
+      <div class="progressCard">
+        <div class="progressHeader">
+          <h3>Completamento</h3>
+        </div>
+        <div class="progressContent">
+          <div class="progressDonut">
+            <div class="donutLarge" style="--p:${taskPct}">
+              <div class="donutLabelLarge">
+                <div class="donutPct">${taskPct}%</div>
+                <div class="donutSub">${completedTasks}/${totalTasks} task</div>
+              </div>
+            </div>
+          </div>
+          <div class="progressStats">
+            <div class="progressStat">
+              <div class="statLabel">Task</div>
+              <div class="statValue">${completedTasks} / ${totalTasks}</div>
+            </div>
+            <div class="progressStat">
+              <div class="statLabel">Minuti</div>
+              <div class="statValue">${Math.round(completedMinutes)} / ${Math.round(todayTotal)}</div>
+            </div>
+            <div class="progressBarWrap">
+              <div class="progressBarLabel">Progresso minuti</div>
+              <div class="progressBar">
+                <div class="progressBarFill" style="width: ${minutesPct}%"></div>
+              </div>
+              <div class="progressBarText">${minutesPct}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (progressWrap) {
+    progressWrap.innerHTML = "";
+  }
+
   const todayWrap = safeHTML("today-tasks", "");
   if (!todayWrap) {
     safeText("status-line", "Dashboard HTML incompleta: manca #today-tasks.");
@@ -809,6 +954,8 @@ function renderDashboard(plan, exams, profile) {
           if (checked) localStorage.setItem(doneKey, "1");
           else localStorage.removeItem(doneKey);
         } catch {}
+        // Aggiorna il grafico di completamento
+        updateTodayProgress(plan, todayDay);
       });
 
       row.addEventListener("click", () => {
