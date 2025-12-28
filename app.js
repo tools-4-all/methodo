@@ -965,14 +965,14 @@ function mountApp() {
         await saveWeeklyPlan(user.uid, weekStartISO, plan);
       }
 
-      renderDashboard(plan, exams, profile);
+      renderDashboard(plan, exams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, exams, profile, user, weekStartISO);
 
       document.getElementById("regen-week")?.addEventListener("click", async () => {
         const plan2 = generateWeeklyPlan(profile, exams, weekStart);
         await saveWeeklyPlan(user.uid, weekStartISO, plan2);
-        renderDashboard(plan2, exams, profile);
+        renderDashboard(plan2, exams, profile, user, weekStartISO);
         // Ricollega il bottone per il nuovo piano
         bindAddTaskButton(plan2, exams, profile, user, weekStartISO);
       });
@@ -991,7 +991,7 @@ function mountApp() {
   });
 }
 
-function renderDashboard(plan, exams, profile) {
+function renderDashboard(plan, exams, profile, user = null, weekStartISO = null) {
   const $ = (id) => document.getElementById(id);
 
   const safeText = (id, txt) => {
@@ -1112,7 +1112,7 @@ function renderDashboard(plan, exams, profile) {
     }
 
     // Funzione helper per renderizzare una task compatta
-    const renderCompactTask = (t, i) => {
+    const renderCompactTask = (t, i, period) => {
       const taskId = makeTaskId({
         weekStartISO: plan.weekStart,
         dateISO: todayDay.dateISO,
@@ -1129,12 +1129,15 @@ function renderDashboard(plan, exams, profile) {
         }
       })();
 
-      const row = document.createElement("button");
-      row.type = "button";
+      const row = document.createElement("div");
       row.className = `task taskClickable taskCompact ${isDone ? "taskDone" : ""}`;
       row.dataset.taskid = taskId;
+      row.draggable = true;
+      row.dataset.originalIndex = i;
+      row.dataset.period = period;
 
       row.innerHTML = `
+        <div class="taskDragHandle" title="Trascina per riordinare">⋮⋮</div>
         <input type="checkbox" class="taskChk" ${isDone ? "checked" : ""} />
         <div class="taskCompactContent">
           <div class="taskCompactTitle">${escapeHtml(t.examName)}</div>
@@ -1148,6 +1151,9 @@ function renderDashboard(plan, exams, profile) {
       const chk = row.querySelector(".taskChk");
       chk?.addEventListener("click", (e) => {
         e.stopPropagation();
+        // Non preventDefault per permettere il toggle naturale del checkbox
+      });
+      chk?.addEventListener("change", (e) => {
         const checked = chk.checked;
         try {
           if (checked) localStorage.setItem(doneKey, "1");
@@ -1158,53 +1164,275 @@ function renderDashboard(plan, exams, profile) {
         updateTodayProgress(plan, todayDay);
       });
 
-      row.addEventListener("click", () => {
-        openTaskPage({
-          taskId,
-          dateISO: todayDay.dateISO,
-          weekStartISO: plan.weekStart,
-          task: t,
+      // Click handler (solo se non è un drag)
+      let dragStartTime = 0;
+      row.addEventListener("mousedown", () => {
+        dragStartTime = Date.now();
+      });
+      row.addEventListener("click", (e) => {
+        // Se il click è avvenuto subito dopo il mousedown (non è un drag), apri la pagina
+        if (Date.now() - dragStartTime < 200) {
+          openTaskPage({
+            taskId,
+            dateISO: todayDay.dateISO,
+            weekStartISO: plan.weekStart,
+            task: t,
+          });
+        }
+      });
+
+      // Drag handlers - solo sull'handle
+      const dragHandle = row.querySelector(".taskDragHandle");
+      if (dragHandle) {
+        dragHandle.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
         });
+      }
+
+      row.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", taskId);
+        row.classList.add("dragging");
+        // Crea un'immagine personalizzata per il drag
+        const dragImage = row.cloneNode(true);
+        dragImage.style.opacity = "0.8";
+        dragImage.style.transform = "rotate(2deg)";
+        document.body.appendChild(dragImage);
+        dragImage.style.position = "absolute";
+        dragImage.style.top = "-1000px";
+        e.dataTransfer.setDragImage(dragImage, e.offsetX, e.offsetY);
+        setTimeout(() => document.body.removeChild(dragImage), 0);
+      });
+
+      row.addEventListener("dragend", (e) => {
+        row.classList.remove("dragging");
+        document.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
       });
 
       return row;
     };
 
-    // Renderizza sezione mattina
-    if (morningTasks.length > 0) {
-      const morningSection = document.createElement("div");
-      morningSection.className = "taskPeriodSection";
-      morningSection.innerHTML = `
-        <div class="taskPeriodHeader">
-          <span class="taskPeriodLabel">Mattina</span>
-          <span class="taskPeriodCount">${morningTasks.length}</span>
-        </div>
-        <div class="taskPeriodList"></div>
-      `;
-      const morningList = morningSection.querySelector(".taskPeriodList");
-      morningTasks.forEach(({ task, index }) => {
-        morningList.appendChild(renderCompactTask(task, index));
+    // Funzione per setup drag & drop su una lista
+    const setupDragAndDrop = (listElement, targetPeriod) => {
+      let dropIndicator = null;
+      let lastInsertPosition = -1;
+      let throttleTimeout = null;
+      
+      listElement.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        listElement.classList.add("drag-over");
+        
+        // Throttle per evitare troppi aggiornamenti
+        if (throttleTimeout) return;
+        throttleTimeout = setTimeout(() => {
+          throttleTimeout = null;
+        }, 50);
+        
+        // Trova l'elemento dopo il cursore (senza spostare nulla)
+        const afterElement = getDragAfterElement(listElement, e.clientY);
+        
+        // Calcola la posizione di inserimento
+        const allTasks = Array.from(listElement.querySelectorAll(".taskCompact:not(.dragging)"));
+        let insertPosition;
+        if (afterElement) {
+          insertPosition = allTasks.indexOf(afterElement);
+        } else {
+          insertPosition = allTasks.length;
+        }
+        
+        // Solo aggiorna se la posizione è cambiata
+        if (insertPosition !== lastInsertPosition) {
+          lastInsertPosition = insertPosition;
+          
+          // Rimuovi indicatore precedente se esiste
+          if (dropIndicator && dropIndicator.parentNode) {
+            dropIndicator.remove();
+          }
+          
+          // Crea nuovo indicatore
+          dropIndicator = document.createElement("div");
+          dropIndicator.className = "drop-indicator";
+          
+          if (afterElement == null || insertPosition >= allTasks.length) {
+            listElement.appendChild(dropIndicator);
+          } else {
+            listElement.insertBefore(dropIndicator, afterElement);
+          }
+        }
       });
-      todayWrap.appendChild(morningSection);
-    }
+
+      listElement.addEventListener("dragleave", (e) => {
+        // Controlla se stiamo realmente uscendo dalla lista
+        const rect = listElement.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        // Se il mouse è fuori dai bordi della lista
+        if (x < rect.left - 10 || x > rect.right + 10 || y < rect.top - 10 || y > rect.bottom + 10) {
+          listElement.classList.remove("drag-over");
+          if (dropIndicator && dropIndicator.parentNode) {
+            dropIndicator.remove();
+            dropIndicator = null;
+          }
+          lastInsertPosition = -1;
+        }
+      });
+
+      listElement.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        listElement.classList.remove("drag-over");
+        lastInsertPosition = -1;
+        if (throttleTimeout) {
+          clearTimeout(throttleTimeout);
+          throttleTimeout = null;
+        }
+        
+        const taskId = e.dataTransfer.getData("text/plain");
+        const draggedElement = document.querySelector(`[data-taskid="${taskId}"]`);
+        if (!draggedElement || !user || !weekStartISO) {
+          if (dropIndicator && dropIndicator.parentNode) {
+            dropIndicator.remove();
+            dropIndicator = null;
+          }
+          return;
+        }
+
+        // Calcola la posizione di drop usando l'indicatore
+        const allTasksInList = Array.from(listElement.querySelectorAll(".taskCompact:not(.dragging)"));
+        let dropIndex = allTasksInList.length;
+        
+        if (dropIndicator && dropIndicator.parentNode) {
+          // Trova la posizione dell'indicatore
+          const allChildren = Array.from(listElement.children);
+          const indicatorPos = allChildren.indexOf(dropIndicator);
+          
+          // Conta le task prima dell'indicatore
+          dropIndex = 0;
+          for (let i = 0; i < indicatorPos; i++) {
+            if (allChildren[i].classList.contains("taskCompact")) {
+              dropIndex++;
+            }
+          }
+          
+          dropIndicator.remove();
+          dropIndicator = null;
+        }
+        
+        // Aggiorna il piano
+        const originalIndex = parseInt(draggedElement.dataset.originalIndex);
+        const originalPeriod = draggedElement.dataset.period;
+        const newPeriod = targetPeriod;
+        
+        // Rimuovi la task dalla posizione originale
+        const taskToMove = todayDay.tasks[originalIndex];
+        todayDay.tasks.splice(originalIndex, 1);
+        
+        // Raggruppa le task rimanenti per periodo
+        const remainingMorning = [];
+        const remainingAfternoon = [];
+        todayDay.tasks.forEach((t) => {
+          const p = t.period || "morning";
+          if (p === "morning") remainingMorning.push(t);
+          else remainingAfternoon.push(t);
+        });
+        
+        // Aggiorna il periodo
+        taskToMove.period = newPeriod;
+        
+        // Calcola l'indice corretto considerando se stiamo cambiando periodo
+        let insertIndex;
+        if (newPeriod === "morning") {
+          if (originalPeriod === "afternoon") {
+            // Viene da pomeriggio, inserisci alla posizione dropIndex
+            insertIndex = Math.min(dropIndex, remainingMorning.length);
+          } else {
+            // Stesso periodo, aggiusta per la rimozione
+            const adjustedIndex = originalIndex < dropIndex ? dropIndex - 1 : dropIndex;
+            insertIndex = Math.max(0, Math.min(adjustedIndex, remainingMorning.length));
+          }
+          remainingMorning.splice(insertIndex, 0, taskToMove);
+        } else {
+          if (originalPeriod === "morning") {
+            // Viene da mattina, inserisci alla posizione dropIndex
+            insertIndex = Math.min(dropIndex, remainingAfternoon.length);
+          } else {
+            // Stesso periodo, aggiusta per la rimozione
+            const morningCount = remainingMorning.length;
+            const adjustedIndex = (originalIndex - morningCount) < dropIndex ? dropIndex - 1 : dropIndex;
+            insertIndex = Math.max(0, Math.min(adjustedIndex, remainingAfternoon.length));
+          }
+          remainingAfternoon.splice(insertIndex, 0, taskToMove);
+        }
+        
+        // Ricostruisci l'array tasks
+        todayDay.tasks = [...remainingMorning, ...remainingAfternoon];
+        
+        // Salva il piano aggiornato
+        try {
+          await saveWeeklyPlan(user.uid, weekStartISO, plan);
+          // Ri-renderizza per aggiornare gli indici
+          renderDashboard(plan, exams, profile, user, weekStartISO);
+          bindAddTaskButton(plan, exams, profile, user, weekStartISO);
+        } catch (err) {
+          console.error("Errore salvataggio dopo drag:", err);
+          alert("Errore durante lo spostamento. Riprova.");
+        }
+      });
+    };
+
+    // Funzione helper per trovare l'elemento dopo il cursore
+    const getDragAfterElement = (container, y) => {
+      const draggableElements = [...container.querySelectorAll(".taskCompact:not(.dragging)")];
+      
+      if (draggableElements.length === 0) return null;
+      
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    };
+
+    // Renderizza sempre entrambe le sezioni (anche se vuote) per permettere il drop
+    const morningSection = document.createElement("div");
+    morningSection.className = "taskPeriodSection";
+    morningSection.innerHTML = `
+      <div class="taskPeriodHeader">
+        <span class="taskPeriodLabel">Mattina</span>
+        <span class="taskPeriodCount">${morningTasks.length}</span>
+      </div>
+      <div class="taskPeriodList" data-period="morning"></div>
+    `;
+    const morningList = morningSection.querySelector(".taskPeriodList");
+    morningTasks.forEach(({ task, index }) => {
+      morningList.appendChild(renderCompactTask(task, index, "morning"));
+    });
+    setupDragAndDrop(morningList, "morning");
+    todayWrap.appendChild(morningSection);
 
     // Renderizza sezione pomeriggio
-    if (afternoonTasks.length > 0) {
-      const afternoonSection = document.createElement("div");
-      afternoonSection.className = "taskPeriodSection";
-      afternoonSection.innerHTML = `
-        <div class="taskPeriodHeader">
-          <span class="taskPeriodLabel">Pomeriggio</span>
-          <span class="taskPeriodCount">${afternoonTasks.length}</span>
-        </div>
-        <div class="taskPeriodList"></div>
-      `;
-      const afternoonList = afternoonSection.querySelector(".taskPeriodList");
-      afternoonTasks.forEach(({ task, index }) => {
-        afternoonList.appendChild(renderCompactTask(task, index));
-      });
-      todayWrap.appendChild(afternoonSection);
-    }
+    const afternoonSection = document.createElement("div");
+    afternoonSection.className = "taskPeriodSection";
+    afternoonSection.innerHTML = `
+      <div class="taskPeriodHeader">
+        <span class="taskPeriodLabel">Pomeriggio</span>
+        <span class="taskPeriodCount">${afternoonTasks.length}</span>
+      </div>
+      <div class="taskPeriodList" data-period="afternoon"></div>
+    `;
+    const afternoonList = afternoonSection.querySelector(".taskPeriodList");
+    afternoonTasks.forEach(({ task, index }) => {
+      afternoonList.appendChild(renderCompactTask(task, index, "afternoon"));
+    });
+    setupDragAndDrop(afternoonList, "afternoon");
+    todayWrap.appendChild(afternoonSection);
   }
 
   const ws = safeHTML("week-summary", "");
@@ -1497,7 +1725,7 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       }
       // Salva e ri-renderizza
       await saveWeeklyPlan(user.uid, weekStartISO, plan);
-      renderDashboard(plan, exams, profile);
+      renderDashboard(plan, exams, profile, user, weekStartISO);
       bindAddTaskButton(plan, exams, profile, user, weekStartISO);
       closeModal();
     } catch (err) {
