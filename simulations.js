@@ -70,6 +70,145 @@ async function getProfile(uid){
   return snap.exists() ? snap.data() : null;
 }
 
+// ----------------- Premium helpers -----------------
+/**
+ * Controlla se l'utente ha un abbonamento premium attivo
+ */
+async function isPremium(uid) {
+  const profile = await getProfile(uid);
+  if (!profile) return false;
+  
+  // Controlla abbonamento premium
+  if (profile.subscription?.status === 'active') {
+    const endDate = profile.subscription?.endDate?.toDate ? 
+                    profile.subscription.endDate.toDate() : 
+                    new Date(profile.subscription?.endDate);
+    return endDate > new Date();
+  }
+  
+  return false;
+}
+
+/**
+ * Mostra modale per upgrade a premium
+ */
+function showUpgradeModal() {
+  if (document.getElementById("upgrade-modal")) return;
+  
+  const overlay = document.createElement("div");
+  overlay.id = "upgrade-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.4)",
+    zIndex: "10001",
+    padding: "20px",
+    animation: "fadeIn 0.2s ease-out",
+    backdropFilter: "blur(4px)",
+  });
+  
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "600px";
+  card.style.width = "95%";
+  card.style.padding = "32px";
+  card.style.position = "relative";
+  card.style.animation = "slideUp 0.3s ease-out";
+  card.style.background = "rgba(10, 12, 20, 0.95)";
+  card.style.backdropFilter = "blur(10px)";
+  card.style.border = "1px solid rgba(255, 255, 255, 0.15)";
+  
+  card.innerHTML = `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h2 style="font-size: 28px; font-weight: 900; margin: 0 0 8px 0; color: rgba(255,255,255,0.95);">
+        Funzionalità Premium
+      </h2>
+      <p style="color: rgba(255,255,255,0.7); font-size: 15px; margin: 0;">
+        Questa funzionalità richiede un abbonamento Premium
+      </p>
+    </div>
+    
+    <div style="background: rgba(99,102,241,0.1); border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(99,102,241,0.3);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <div>
+          <div style="font-size: 32px; font-weight: 900; color: rgba(255,255,255,0.95);">€5<span style="font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.6);">/mese</span></div>
+        </div>
+      </div>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Esami illimitati</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Simulazione appelli avanzata</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Simulazioni avanzate</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Statistiche dettagliate</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Pianificazione multi-settimana</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Esportazione piano di studio</span>
+        </li>
+      </ul>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <button id="upgrade-subscribe-btn" class="btn primary" style="width: 100%; padding: 14px; font-size: 16px; font-weight: 700;">
+        Passa a Premium
+      </button>
+      <button id="upgrade-close-btn" class="btn ghost" style="width: 100%;">
+        Forse più tardi
+      </button>
+    </div>
+  `;
+  
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";
+  
+  const closeModal = () => {
+    overlay.style.animation = "fadeOut 0.2s ease-out";
+    card.style.animation = "slideDown 0.2s ease-out";
+    setTimeout(() => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.body.style.overflow = "";
+    }, 200);
+  };
+  
+  qs("upgrade-close-btn")?.addEventListener("click", closeModal);
+  qs("upgrade-subscribe-btn")?.addEventListener("click", () => {
+    // TODO: Integrare con Stripe
+    alert("Integrazione Stripe in arrivo! Per ora questa funzionalità è disponibile solo per utenti Premium.");
+    closeModal();
+  });
+  
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("upgrade-modal")) {
+      closeModal();
+    }
+  });
+}
+
 async function listExams(uid){
   const colref = collection(db, "users", uid, "exams");
   const snap = await getDocs(colref);
@@ -669,6 +808,42 @@ window.addEventListener("DOMContentLoaded", ()=>{
     if(!user){ location.href="./index.html"; return; }
     setText("user-line", user.email ?? "—");
 
+    // Controllo premium - mostra popup ma lascia vedere la pagina sotto
+    const premium = await isPremium(user.uid);
+    if (!premium) {
+      // Mostra popup premium ma lascia vedere la pagina
+      setTimeout(() => {
+        showUpgradeModal();
+      }, 500);
+      
+      // Disabilita i bottoni di simulazione
+      const disableButtons = () => {
+        const runSimBtn = qs("run-sim");
+        const runWhatIfBtn = qs("run-whatif");
+        if (runSimBtn) {
+          runSimBtn.disabled = true;
+          runSimBtn.style.opacity = "0.5";
+          runSimBtn.style.cursor = "not-allowed";
+          runSimBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            showUpgradeModal();
+          });
+        }
+        if (runWhatIfBtn) {
+          runWhatIfBtn.disabled = true;
+          runWhatIfBtn.style.opacity = "0.5";
+          runWhatIfBtn.style.cursor = "not-allowed";
+          runWhatIfBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            showUpgradeModal();
+          });
+        }
+      };
+      
+      // Disabilita dopo che la pagina è caricata
+      setTimeout(disableButtons, 100);
+    }
+
     const profile = await getProfile(user.uid);
     const exams = await listExams(user.uid);
 
@@ -711,6 +886,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
 
     // ---- Run functions ----
     const runBaseline = ()=>{
+      // Controllo premium
+      if (!premium) {
+        showUpgradeModal();
+        return;
+      }
+      
       const params = readParams();
       const out = simulate(profile, exams, params, 123, null);
       drawChartOverlay(canvas, out.dates, out.exams, out.series, null, null, "Simulazione (Baseline)");
@@ -718,6 +899,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
     };
 
     const runMCBaseline = ()=>{
+      // Controllo premium
+      if (!premium) {
+        showUpgradeModal();
+        return;
+      }
+      
       const params = readParams();
       const runs = [];
       for(let k=0;k<20;k++){
@@ -730,6 +917,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
     };
 
     const runWhatIf = ()=>{
+      // Controllo premium
+      if (!premium) {
+        showUpgradeModal();
+        return;
+      }
+      
       const params = readParams();
       const ov = readScenarioOverrides();
 
@@ -755,6 +948,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
     };
 
     const runWhatIfMC = ()=>{
+      // Controllo premium
+      if (!premium) {
+        showUpgradeModal();
+        return;
+      }
+      
       const params = readParams();
       const ov = readScenarioOverrides();
 
@@ -790,7 +989,86 @@ window.addEventListener("DOMContentLoaded", ()=>{
     qs("run-whatif")?.addEventListener("click", runWhatIf);
     qs("run-whatif-mc")?.addEventListener("click", runWhatIfMC);
 
-    // autorun baseline
-    runBaseline();
+    // autorun baseline solo se premium
+    if (premium) {
+      runBaseline();
+    } else {
+      // Mostra messaggio placeholder sul canvas
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(255,255,255,.60)";
+      ctx.font = "bold 16px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Passa a Premium per vedere le simulazioni", canvas.width / 2, canvas.height / 2);
+      setText("sim-status", "Passa a Premium per eseguire simulazioni");
+    }
+    
+    // Gestione premium badge e upgrade button
+    const premiumBadge = qs("premium-badge");
+    const upgradeBtn = qs("upgrade-btn");
+    
+    if (premiumBadge) {
+      if (premium) {
+        premiumBadge.textContent = "Premium";
+        premiumBadge.className = "badge good";
+        premiumBadge.style.display = "inline-block";
+        if (upgradeBtn) upgradeBtn.style.display = "none";
+      } else {
+        premiumBadge.style.display = "none";
+        if (upgradeBtn) {
+          upgradeBtn.style.display = "inline-block";
+          upgradeBtn.addEventListener("click", () => showUpgradeModal());
+        }
+      }
+    }
+    
+    // Aggiungi bottone di test premium (solo in sviluppo)
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.href.includes('localhost')) {
+      const testBtn = document.createElement("button");
+      testBtn.className = "btn";
+      testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
+      testBtn.textContent = premium ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
+      testBtn.addEventListener("click", async () => {
+        // Funzione di test inline per simulations.js
+        const user = auth.currentUser;
+        if (!user) return;
+        
+        const activate = !premium;
+        if (activate) {
+          const endDate = new Date();
+          endDate.setDate(endDate.getDate() + 30);
+          const { doc, updateDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
+          const ref = doc(db, "users", user.uid);
+          await updateDoc(ref, {
+            subscription: {
+              status: 'active',
+              startDate: serverTimestamp(),
+              endDate: endDate.toISOString(),
+              type: 'monthly',
+              price: 5
+            },
+            updatedAt: serverTimestamp()
+          });
+          alert("✅ Premium attivato! Ricarica la pagina.");
+        } else {
+          const { doc, updateDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
+          const ref = doc(db, "users", user.uid);
+          await updateDoc(ref, {
+            subscription: {
+              status: 'cancelled',
+              endDate: new Date().toISOString()
+            },
+            updatedAt: serverTimestamp()
+          });
+          alert("❌ Premium disattivato! Ricarica la pagina.");
+        }
+        setTimeout(() => window.location.reload(), 1000);
+      });
+      const toolbar = document.querySelector(".toolbar");
+      if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
+        testBtn.classList.add("test-premium-btn");
+        toolbar.insertBefore(testBtn, toolbar.firstChild);
+      }
+    }
   });
 });

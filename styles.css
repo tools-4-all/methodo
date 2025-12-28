@@ -74,6 +74,141 @@
   }
 }
 
+/* === SUBSCRIPTION DISPLAY === */
+.subscriptionDisplay {
+  margin-top: 0;
+}
+
+.subscriptionCard {
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.subscriptionCard.active {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.subscriptionCard.inactive {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.subscriptionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.subscriptionStatus {
+  margin-bottom: 12px;
+}
+
+.subscriptionTitle {
+  font-size: 20px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.subscriptionPrice {
+  font-size: 28px;
+  font-weight: 900;
+  color: rgba(99, 102, 241, 1);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.subscriptionPrice span {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.subscriptionDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.subscriptionDetailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.subscriptionDetailRow:last-child {
+  border-bottom: none;
+}
+
+.subscriptionDetailLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.subscriptionDetailValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.subscriptionDetailValue.warn {
+  color: rgba(245, 158, 11, 1);
+}
+
+.subscriptionBenefits {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.subscriptionBenefitsTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 12px;
+}
+
+.subscriptionBenefitsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscriptionBenefitsList li {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subscriptionActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.subscriptionActions .btn {
+  flex: 1;
+}
+
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 

@@ -30,7 +30,18 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js";
+
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
+
+// ----------------- Firebase Functions -----------------
+let functions, createCheckoutSession;
+try {
+  functions = getFunctions();
+  createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+} catch (e) {
+  console.warn("Firebase Functions non disponibili:", e);
+}
 
 // ----------------- Utils -----------------
 function qs(id) {
@@ -117,10 +128,253 @@ async function getProfile(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
+// ----------------- Premium helpers -----------------
+/**
+ * Controlla se l'utente ha un abbonamento premium attivo
+ */
+async function isPremium(uid) {
+  const profile = await getProfile(uid);
+  if (!profile) return false;
+  
+  // Controlla abbonamento premium
+  if (profile.subscription?.status === 'active') {
+    const endDate = profile.subscription?.endDate?.toDate ? 
+                    profile.subscription.endDate.toDate() : 
+                    new Date(profile.subscription?.endDate);
+    return endDate > new Date();
+  }
+  
+  return false;
+}
+
+/**
+ * Ottiene informazioni dettagliate sull'abbonamento
+ */
+async function getSubscriptionInfo(uid) {
+  const profile = await getProfile(uid);
+  if (!profile) return null;
+  
+  return {
+    isPremium: await isPremium(uid),
+    isTrial: false,
+    trialDaysLeft: 0,
+    subscription: profile.subscription || null,
+    createdAt: profile.createdAt
+  };
+}
+
+/**
+ * Mostra modale per upgrade a premium
+ */
+function showUpgradeModal(onClose = null) {
+  if (document.getElementById("upgrade-modal")) return;
+  
+  const overlay = document.createElement("div");
+  overlay.id = "upgrade-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.4)",
+    zIndex: "10001",
+    padding: "20px",
+    animation: "fadeIn 0.2s ease-out",
+    backdropFilter: "blur(4px)",
+  });
+  
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "600px";
+  card.style.width = "95%";
+  card.style.padding = "32px";
+  card.style.position = "relative";
+  card.style.animation = "slideUp 0.3s ease-out";
+  card.style.background = "rgba(10, 12, 20, 0.95)";
+  card.style.backdropFilter = "blur(10px)";
+  card.style.border = "1px solid rgba(255, 255, 255, 0.15)";
+  
+  card.innerHTML = `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h2 style="font-size: 28px; font-weight: 900; margin: 0 0 8px 0; color: rgba(255,255,255,0.95);">
+        Sblocca Premium
+      </h2>
+      <p style="color: rgba(255,255,255,0.7); font-size: 15px; margin: 0;">
+        Accedi a tutte le funzionalità avanzate
+      </p>
+    </div>
+    
+    <div style="background: rgba(99,102,241,0.1); border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(99,102,241,0.3);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <div>
+          <div style="font-size: 32px; font-weight: 900; color: rgba(255,255,255,0.95);">€5<span style="font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.6);">/mese</span></div>
+        </div>
+      </div>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Esami illimitati</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Simulazione appelli avanzata</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Statistiche dettagliate</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Pianificazione multi-settimana</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+          <span style="color: rgba(34,197,94,1);">✓</span>
+          <span>Esportazione piano di studio</span>
+        </li>
+      </ul>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <button id="upgrade-subscribe-btn" class="btn primary" style="width: 100%; padding: 14px; font-size: 16px; font-weight: 700;">
+        Passa a Premium
+      </button>
+      <button id="upgrade-close-btn" class="btn ghost" style="width: 100%;">
+        Forse più tardi
+      </button>
+    </div>
+    <div id="upgrade-loading" style="display: none; text-align: center; padding: 12px; color: rgba(255,255,255,0.7); font-size: 13px;">
+      Caricamento...
+    </div>
+  `;
+  
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";
+  
+  const closeModal = () => {
+    overlay.style.animation = "fadeOut 0.2s ease-out";
+    card.style.animation = "slideDown 0.2s ease-out";
+    setTimeout(() => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.body.style.overflow = "";
+      if (onClose) onClose();
+    }, 200);
+  };
+  
+  qs("upgrade-close-btn")?.addEventListener("click", closeModal);
+  qs("upgrade-subscribe-btn")?.addEventListener("click", async () => {
+    const subscribeBtn = qs("upgrade-subscribe-btn");
+    const loadingEl = qs("upgrade-loading");
+    const user = auth.currentUser;
+    
+    if (!user) {
+      showToast("Devi essere loggato per passare a Premium", 3000);
+      return;
+    }
+    
+    try {
+      // Disabilita il bottone e mostra loading
+      if (subscribeBtn) {
+        subscribeBtn.disabled = true;
+        subscribeBtn.style.opacity = "0.6";
+      }
+      if (loadingEl) loadingEl.style.display = "block";
+      
+      // Chiama Firebase Functions per creare la sessione Stripe
+      const result = await createCheckoutSession({
+        email: user.email,
+        successUrl: `${window.location.origin}${window.location.pathname.includes('profile') ? '/profile.html' : '/app.html'}?premium=success`,
+        cancelUrl: `${window.location.origin}${window.location.pathname.includes('profile') ? '/profile.html' : '/app.html'}?premium=canceled`
+      });
+      
+      // Reindirizza a Stripe Checkout
+      if (result.data?.url) {
+        window.location.href = result.data.url;
+      } else {
+        throw new Error("URL di checkout non ricevuto");
+      }
+    } catch (error) {
+      console.error("Errore durante la creazione della sessione di pagamento:", error);
+      showToast(error.message || "Errore durante l'avvio del pagamento. Riprova più tardi.", 5000);
+      
+      // Riabilita il bottone
+      if (subscribeBtn) {
+        subscribeBtn.disabled = false;
+        subscribeBtn.style.opacity = "1";
+      }
+      if (loadingEl) loadingEl.style.display = "none";
+    }
+  });
+  
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("upgrade-modal")) {
+      closeModal();
+    }
+  });
+}
+
 async function setProfile(uid, data) {
   const ref = doc(db, "users", uid);
   await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
 }
+
+// ----------------- Premium Testing Helper -----------------
+/**
+ * Funzione di test per attivare/disattivare premium manualmente
+ * Usa questa funzione dalla console del browser per testare:
+ * 
+ * Esempio:
+ *   await testPremium(true)  // Attiva premium
+ *   await testPremium(false) // Disattiva premium
+ */
+async function testPremium(activate = true) {
+  const user = auth.currentUser;
+  if (!user) {
+    console.error("Nessun utente loggato");
+    return;
+  }
+  
+  if (activate) {
+    // Attiva premium per 30 giorni
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30);
+    
+    await setProfile(user.uid, {
+      subscription: {
+        status: 'active',
+        startDate: serverTimestamp(),
+        endDate: endDate.toISOString(),
+        type: 'monthly',
+        price: 5
+      }
+    });
+    
+    console.log("✅ Premium attivato! Ricarica la pagina per vedere i cambiamenti.");
+    showToast("Premium attivato per test! Ricarica la pagina.", 5000);
+  } else {
+    // Disattiva premium
+    await setProfile(user.uid, {
+      subscription: {
+        status: 'cancelled',
+        endDate: new Date().toISOString()
+      }
+    });
+    
+    console.log("❌ Premium disattivato! Ricarica la pagina per vedere i cambiamenti.");
+    showToast("Premium disattivato per test! Ricarica la pagina.", 5000);
+  }
+}
+
+// Esponi la funzione globalmente per uso dalla console
+window.testPremium = testPremium;
 
 async function listExams(uid) {
   const col = collection(db, "users", uid, "exams");
@@ -1229,8 +1483,41 @@ function mountOnboarding() {
   }
 
   async function refreshExamList(uid) {
-    const list = qs("exam-list");
+    // Mostra badge premium e limiti
+    const subscriptionInfo = await getSubscriptionInfo(uid);
     const exams = await listExams(uid);
+    const isPremiumUser = await isPremium(uid);
+    
+    // Aggiorna badge premium se presente
+    const premiumBadge = qs("premium-badge");
+    if (premiumBadge) {
+      if (isPremiumUser) {
+        premiumBadge.textContent = "Premium";
+        premiumBadge.className = "badge good";
+        premiumBadge.style.display = "inline-block";
+      } else {
+        premiumBadge.style.display = "none";
+      }
+    }
+    
+    // Mostra limite esami se non premium
+    const examLimitNotice = qs("exam-limit-notice");
+    if (examLimitNotice && !isPremiumUser) {
+      const remaining = Math.max(0, 3 - exams.length);
+      if (remaining > 0) {
+        examLimitNotice.textContent = `${remaining} esami rimasti nella versione gratuita`;
+        examLimitNotice.style.display = "block";
+      } else {
+        examLimitNotice.textContent = "Limite raggiunto! Passa a Premium per esami illimitati";
+        examLimitNotice.style.display = "block";
+        examLimitNotice.style.color = "var(--warn)";
+      }
+    } else if (examLimitNotice) {
+      examLimitNotice.style.display = "none";
+    }
+    
+    // Continua con refresh normale
+    const list = qs("exam-list");
     list.innerHTML = "";
 
     if (exams.length === 0) {
@@ -1319,6 +1606,13 @@ function mountOnboarding() {
   
   // Esegue la simulazione
   async function runSimulation(uid) {
+    // Controllo premium per simulazione
+    const premium = await isPremium(uid);
+    if (!premium) {
+      showUpgradeModal();
+      return;
+    }
+    
     const resultsContainer = qs("simulation-results");
     if (!resultsContainer) return;
     
@@ -1682,6 +1976,33 @@ function mountOnboarding() {
       }
     }
     
+    // Gestione premium badge e upgrade button
+    const subscriptionInfo = await getSubscriptionInfo(user.uid);
+    const isPremiumUser = await isPremium(user.uid);
+    
+    const premiumBadge = qs("premium-badge");
+    const upgradeBtn = qs("upgrade-btn");
+    
+    if (premiumBadge) {
+      if (isPremiumUser) {
+        if (subscriptionInfo?.isTrial) {
+          premiumBadge.textContent = `Prova Gratuita (${subscriptionInfo.trialDaysLeft} giorni)`;
+          premiumBadge.className = "badge warn";
+        } else {
+          premiumBadge.textContent = "Premium";
+          premiumBadge.className = "badge good";
+        }
+        premiumBadge.style.display = "inline-block";
+        if (upgradeBtn) upgradeBtn.style.display = "none";
+      } else {
+        premiumBadge.style.display = "none";
+        if (upgradeBtn) {
+          upgradeBtn.style.display = "inline-block";
+          upgradeBtn.addEventListener("click", () => showUpgradeModal());
+        }
+      }
+    }
+    
     // Mostra informazioni personali nella sezione profilo
     const personalInfoDisplay = qs("personal-info-display");
     if (personalInfoDisplay && profile.name) {
@@ -1872,6 +2193,13 @@ function mountOnboarding() {
         if (!name) throw new Error("Nome esame mancante.");
         if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
         if (cfu < 1) throw new Error("CFU non validi.");
+
+        // Controllo limite esami per versione free
+        const canAdd = await canAddExam(user.uid);
+        if (!canAdd.allowed) {
+          showUpgradeModal();
+          throw new Error(canAdd.message);
+        }
 
         // Auto-rileva categoria se non specificata
         let finalCategory = category;
@@ -2730,6 +3058,9 @@ function mountProfile() {
     // Calcola e mostra statistiche
     await updateStats(user.uid);
 
+    // Mostra e gestisci abbonamento
+    await renderSubscription(user.uid);
+
     // Gestore modifica informazioni personali
     const editBtn = qs("edit-personal-info");
     if (editBtn && !editBtn.dataset.bound) {
@@ -2789,6 +3120,191 @@ function mountProfile() {
       });
     }
   });
+}
+
+/**
+ * Renderizza la sezione abbonamento nel profilo
+ */
+async function renderSubscription(uid) {
+  const container = qs("subscription-display");
+  if (!container) return;
+  
+  const subscriptionInfo = await getSubscriptionInfo(uid);
+  const isPremiumUser = await isPremium(uid);
+  const profile = await getProfile(uid);
+  const subscription = profile?.subscription || null;
+  
+  if (isPremiumUser && subscription) {
+    // Utente premium attivo
+    let endDate, startDate;
+    
+    // Gestisci endDate (può essere Timestamp, stringa ISO, o null)
+    if (subscription.endDate) {
+      if (subscription.endDate.toDate && typeof subscription.endDate.toDate === 'function') {
+        endDate = subscription.endDate.toDate();
+      } else if (typeof subscription.endDate === 'string') {
+        endDate = new Date(subscription.endDate);
+      } else {
+        endDate = new Date(subscription.endDate);
+      }
+    } else {
+      endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default: 30 giorni da ora
+    }
+    
+    // Gestisci startDate (può essere Timestamp, stringa ISO, o null)
+    if (subscription.startDate) {
+      if (subscription.startDate.toDate && typeof subscription.startDate.toDate === 'function') {
+        startDate = subscription.startDate.toDate();
+      } else if (typeof subscription.startDate === 'string') {
+        startDate = new Date(subscription.startDate);
+      } else {
+        startDate = new Date(subscription.startDate);
+      }
+    } else {
+      startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default: 7 giorni fa
+    }
+    
+    const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+    const formattedEndDate = endDate.toLocaleDateString('it-IT', { 
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+    const formattedStartDate = startDate.toLocaleDateString('it-IT', { 
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+    
+    container.innerHTML = `
+      <div class="subscriptionCard active">
+        <div class="subscriptionHeader">
+          <div>
+            <div class="subscriptionStatus">
+              <span class="badge good">Premium Attivo</span>
+            </div>
+            <div class="subscriptionTitle">Abbonamento Premium</div>
+            <div class="subscriptionPrice">€${subscription.price || 5}/mese</div>
+          </div>
+        </div>
+        
+        <div class="subscriptionDetails">
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Data inizio</span>
+            <span class="subscriptionDetailValue">${formattedStartDate}</span>
+          </div>
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Data scadenza</span>
+            <span class="subscriptionDetailValue">${formattedEndDate}</span>
+          </div>
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Giorni rimanenti</span>
+            <span class="subscriptionDetailValue ${daysLeft <= 7 ? 'warn' : ''}">${daysLeft} giorni</span>
+          </div>
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Tipo</span>
+            <span class="subscriptionDetailValue">${subscription.type === 'monthly' ? 'Mensile' : subscription.type || 'Mensile'}</span>
+          </div>
+        </div>
+        
+        <div class="subscriptionActions">
+          <button class="btn" id="cancel-subscription-btn" type="button">Annulla abbonamento</button>
+          <button class="btn primary" id="renew-subscription-btn" type="button">Rinnova</button>
+        </div>
+      </div>
+    `;
+    
+    // Gestore annullamento
+    qs("cancel-subscription-btn")?.addEventListener("click", async () => {
+      if (confirm("Sei sicuro di voler annullare l'abbonamento? Perderai l'accesso a Premium alla scadenza.")) {
+        try {
+          await setProfile(uid, {
+            subscription: {
+              ...subscription,
+              status: 'cancelled',
+              cancelledAt: new Date().toISOString()
+            }
+          });
+          showToast("Abbonamento annullato. Rimarrà attivo fino alla scadenza.");
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+          console.error(err);
+          alert("Errore durante l'annullamento: " + (err?.message || err));
+        }
+      }
+    });
+    
+    // Gestore rinnovo
+    qs("renew-subscription-btn")?.addEventListener("click", async () => {
+      try {
+        const newEndDate = new Date(endDate);
+        newEndDate.setMonth(newEndDate.getMonth() + 1);
+        
+        await setProfile(uid, {
+          subscription: {
+            ...subscription,
+            status: 'active',
+            endDate: newEndDate.toISOString(),
+            renewedAt: new Date().toISOString()
+          }
+        });
+        showToast("Abbonamento rinnovato con successo!");
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (err) {
+        console.error(err);
+        alert("Errore durante il rinnovo: " + (err?.message || err));
+      }
+    });
+    
+  } else {
+    // Utente non premium
+    container.innerHTML = `
+      <div class="subscriptionCard inactive">
+        <div class="subscriptionHeader">
+          <div>
+            <div class="subscriptionStatus">
+              <span class="badge warn">Non Premium</span>
+            </div>
+            <div class="subscriptionTitle">Versione Gratuita</div>
+            <div class="subscriptionPrice">€0/mese</div>
+          </div>
+        </div>
+        
+        <div class="subscriptionDetails">
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Limite esami</span>
+            <span class="subscriptionDetailValue">3 esami</span>
+          </div>
+          <div class="subscriptionDetailRow">
+            <span class="subscriptionDetailLabel">Funzionalità</span>
+            <span class="subscriptionDetailValue">Base</span>
+          </div>
+        </div>
+        
+        <div class="subscriptionBenefits">
+          <div class="subscriptionBenefitsTitle">Passa a Premium per:</div>
+          <ul class="subscriptionBenefitsList">
+            <li>✓ Esami illimitati</li>
+            <li>✓ Simulazione appelli avanzata</li>
+            <li>✓ Simulazioni avanzate</li>
+            <li>✓ Timer di studio</li>
+            <li>✓ Statistiche dettagliate</li>
+            <li>✓ Pianificazione multi-settimana</li>
+          </ul>
+        </div>
+        
+        <div class="subscriptionActions">
+          <button class="btn primary" id="upgrade-subscription-btn" type="button" style="width: 100%;">
+            Passa a Premium - €5/mese
+          </button>
+        </div>
+      </div>
+    `;
+    
+    qs("upgrade-subscription-btn")?.addEventListener("click", () => {
+      showUpgradeModal();
+    });
+  }
 }
 
 async function refreshPassedExamsList(uid) {
@@ -3353,6 +3869,45 @@ function mountApp() {
         });
         window.location.assign("./settings.html");
         return;
+      }
+      
+      // Gestione premium badge e upgrade button
+      const subscriptionInfo = await getSubscriptionInfo(user.uid);
+      const isPremiumUser = await isPremium(user.uid);
+      
+      const premiumBadge = qs("premium-badge");
+      const upgradeBtn = qs("upgrade-btn");
+      
+      if (premiumBadge) {
+        if (isPremiumUser) {
+          premiumBadge.textContent = "Premium";
+          premiumBadge.className = "badge good";
+          premiumBadge.style.display = "inline-block";
+          if (upgradeBtn) upgradeBtn.style.display = "none";
+        } else {
+          premiumBadge.style.display = "none";
+          if (upgradeBtn) {
+            upgradeBtn.style.display = "inline-block";
+            upgradeBtn.addEventListener("click", () => showUpgradeModal());
+          }
+        }
+      }
+      
+      // Aggiungi bottone di test premium (solo in sviluppo)
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.href.includes('localhost')) {
+        const testBtn = document.createElement("button");
+        testBtn.className = "btn";
+        testBtn.style.cssText = "margin-right: 12px; font-size: 11px; padding: 6px 12px; background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: rgba(245,158,11,1);";
+        testBtn.textContent = isPremiumUser ? "🧪 Test: Disattiva Premium" : "🧪 Test: Attiva Premium";
+        testBtn.addEventListener("click", async () => {
+          await testPremium(!isPremiumUser);
+          setTimeout(() => window.location.reload(), 1000);
+        });
+        const toolbar = document.querySelector(".toolbar");
+        if (toolbar && !toolbar.querySelector(".test-premium-btn")) {
+          testBtn.classList.add("test-premium-btn");
+          toolbar.insertBefore(testBtn, toolbar.firstChild);
+        }
       }
 
       const exams = await listExams(user.uid);
@@ -4350,6 +4905,12 @@ function mountTask() {
       if (sub) sub.textContent = "Aprilo dalla dashboard.";
       return;
     }
+    
+    // Controllo premium per timer
+    let isPremiumUser = false;
+    if (user) {
+      isPremiumUser = await isPremium(user.uid);
+    }
 
     const t = payload.task;
 
@@ -4575,9 +5136,34 @@ function mountTask() {
       renderTimer();
     }
 
-    document.getElementById("timer-start")?.addEventListener("click", start);
-    document.getElementById("timer-pause")?.addEventListener("click", pause);
-    document.getElementById("timer-reset")?.addEventListener("click", reset);
+    // Wrapper per controlli premium sul timer
+    const premiumStart = () => {
+      if (!isPremiumUser) {
+        showUpgradeModal();
+        return;
+      }
+      start();
+    };
+    
+    const premiumPause = () => {
+      if (!isPremiumUser) {
+        showUpgradeModal();
+        return;
+      }
+      pause();
+    };
+    
+    const premiumReset = () => {
+      if (!isPremiumUser) {
+        showUpgradeModal();
+        return;
+      }
+      reset();
+    };
+    
+    document.getElementById("timer-start")?.addEventListener("click", premiumStart);
+    document.getElementById("timer-pause")?.addEventListener("click", premiumPause);
+    document.getElementById("timer-reset")?.addEventListener("click", premiumReset);
     document.getElementById("mark-done")?.addEventListener("click", markDone);
     document.getElementById("mark-skip")?.addEventListener("click", markSkip);
 
