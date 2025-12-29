@@ -53,7 +53,36 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
     let customerId;
 
     if (userData && userData.stripeCustomerId) {
-      customerId = userData.stripeCustomerId;
+      // Verifica che il customer esista ancora in Stripe
+      try {
+        await stripe.customers.retrieve(userData.stripeCustomerId);
+        customerId = userData.stripeCustomerId;
+      } catch (error) {
+        // Se il customer non esiste (errore 404 o simile), creane uno nuovo
+        if (error.code === 'resource_missing' || error.statusCode === 404) {
+          console.warn(`Customer ${userData.stripeCustomerId} non trovato, ne creo uno nuovo`);
+          // Rimuovi il customer ID invalido dal database
+          await db.collection('users').doc(uid).update({
+            stripeCustomerId: admin.firestore.FieldValue.delete(),
+          });
+          // Crea un nuovo customer
+          const customer = await stripe.customers.create({
+            email: email,
+            metadata: {
+              firebaseUID: uid,
+            },
+          });
+          customerId = customer.id;
+
+          // Salva il nuovo customer ID nel profilo utente
+          await db.collection('users').doc(uid).update({
+            stripeCustomerId: customerId,
+          });
+        } else {
+          // Se è un altro tipo di errore, rilancialo
+          throw error;
+        }
+      }
     } else {
       // Crea un nuovo customer
       const customer = await stripe.customers.create({
