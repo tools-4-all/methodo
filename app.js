@@ -1646,8 +1646,19 @@ function initAppelliInterface() {
     if (e.target.classList.contains("remove-appello")) {
       const item = e.target.closest(".appelloItem");
       if (item && container.children.length > 1) {
+        const removedRadio = item.querySelector('input[name="primary-appello"]');
+        const wasPrimary = removedRadio && removedRadio.checked;
+        
         item.remove();
         updateRemoveButtons(container);
+        
+        // Se è stato rimosso l'appello primario, seleziona il primo rimanente
+        if (wasPrimary) {
+          const firstRemainingRadio = container.querySelector('input[name="primary-appello"]');
+          if (firstRemainingRadio) {
+            firstRemainingRadio.checked = true;
+          }
+        }
       }
     }
   });
@@ -1658,12 +1669,20 @@ function addAppelloItem(container) {
   const index = container.children.length;
   const item = document.createElement("div");
   item.className = "appelloItem";
+  
+  // Controlla se è il primo appello (sarà primario di default)
+  const isFirst = index === 0;
+  
   item.innerHTML = `
     <div class="appelloInputRow">
       <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
         <label class="appelloDateLabel" for="appello-date-${index}">Data</label>
         <input type="date" id="appello-date-${index}" class="appelloDate" />
       </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
+            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
+            <input type="radio" name="primary-appello" value="${index}" class="primary-appello-radio" ${isFirst ? 'checked' : ''} style="cursor: pointer;" />
+          </div>
       <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
     </div>
   `;
@@ -1688,13 +1707,17 @@ function getAppelliFromForm() {
   if (!container) return [];
   
   const appelli = [];
-  container.querySelectorAll(".appelloItem").forEach((item) => {
+  const primaryRadio = container.querySelector('input[name="primary-appello"]:checked');
+  const primaryIndex = primaryRadio ? parseInt(primaryRadio.value) : 0;
+  
+  container.querySelectorAll(".appelloItem").forEach((item, idx) => {
     const dateInput = item.querySelector(".appelloDate");
     if (dateInput && dateInput.value) {
       appelli.push({
         date: dateInput.value,
         type: "esame", // Sempre esame
-        selected: true // Di default tutti selezionati
+        selected: true, // Di default tutti selezionati
+        primary: idx === primaryIndex // Marca come primario se è quello selezionato
       });
     }
   });
@@ -1710,7 +1733,13 @@ function populateAppelliForm(appelli) {
   container.innerHTML = "";
   
   if (appelli && appelli.length > 0) {
-    appelli.forEach((appello) => {
+    // Determina quale appello è primario (se nessuno è marcato, usa il primo)
+    let hasPrimary = appelli.some(a => a.primary === true);
+    if (!hasPrimary && appelli.length > 0) {
+      appelli[0].primary = true;
+    }
+    
+    appelli.forEach((appello, idx) => {
       const item = document.createElement("div");
       item.className = "appelloItem";
       item.innerHTML = `
@@ -1718,6 +1747,10 @@ function populateAppelliForm(appelli) {
           <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
             <label class="appelloDateLabel" for="appello-date-${idx}">Data</label>
             <input type="date" id="appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
+            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
+            <input type="radio" name="primary-appello" value="${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
           </div>
           <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
         </div>
@@ -1931,17 +1964,29 @@ function mountOnboarding() {
     d.className = "exam-card plain";
     
     // Mostra appelli se disponibili, altrimenti usa date legacy
-    const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+    const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true, primary: true }] : []);
     const selectedAppelli = appelli.filter(a => a.selected !== false);
-    const appelliText = selectedAppelli.length > 0 
+    const primaryAppello = selectedAppelli.find(a => a.primary === true) || selectedAppelli[0];
+    
+    let appelliText = selectedAppelli.length > 0 
       ? selectedAppelli.map(a => a.date).join(", ")
       : (exam.date || "Nessuna data");
+    
+    // Aggiungi indicazione dell'appello primario
+    if (selectedAppelli.length > 1 && primaryAppello) {
+        appelliText = selectedAppelli.map(a => {
+        if (a.date === primaryAppello.date) {
+          return `<strong>${a.date}</strong> (principale)`;
+        }
+        return a.date;
+      }).join(", ");
+    }
     
     d.innerHTML = `
       <div style="flex: 1; min-width: 0;">
         <strong>${escapeHtml(exam.name)}</strong>
-        <p class="muted small">${escapeHtml(appelliText)} · CFU ${exam.cfu} · livello ${exam.level}/5 · diff ${exam.difficulty}/3</p>
-        ${appelli.length > 1 ? `<p class="muted small" style="margin-top:4px;">${appelli.length} appelli totali · ${selectedAppelli.length} selezionati</p>` : ""}
+        <p class="muted small">${appelliText} · CFU ${exam.cfu} · livello ${exam.level}/5 · diff ${exam.difficulty}/3</p>
+        ${appelli.length > 1 ? `<p class="muted small" style="margin-top:4px;">${appelli.length} appelli totali · ${selectedAppelli.length} selezionati${primaryAppello ? ` · Appello principale: ${primaryAppello.date}` : ''}</p>` : ""}
       </div>
       <div class="examCardActions">
         <button class="btn tiny" type="button" data-edit="${exam.id}">Modifica</button>
@@ -2108,6 +2153,14 @@ function mountOnboarding() {
     const appelliAnalysis = [];
     const weekStart = startOfWeekISO(new Date());
     
+    // Genera il piano settimanale per ottenere le allocazioni
+    const normalizedExams = exams.map(e => ({
+      ...e,
+      category: e.category || detectExamCategory(e.name || "") || "mixed"
+    }));
+    const plan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+    const allocMap = new Map((plan.allocations || []).map((a) => [a.examId, a.targetMin]));
+    
     // Per ogni esame, analizza tutti gli appelli disponibili
     examsWithAppelli.forEach(exam => {
       const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
@@ -2163,6 +2216,16 @@ function mountOnboarding() {
       }
     });
     
+    // Calcola statistiche totali
+    const totalExams = examsWithAppelli.length;
+    const totalAppelli = examsWithAppelli.reduce((sum, exam) => {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+      return sum + appelli.filter(a => a.selected !== false).length;
+    }, 0);
+    const avgReadiness = appelliAnalysis.length > 0 
+      ? Math.round(appelliAnalysis.reduce((sum, a) => sum + (a.best.readiness || 0), 0) / appelliAnalysis.length)
+      : 0;
+    
     // Mostra risultati
     let html = `
       <div class="simulationSummary">
@@ -2177,7 +2240,7 @@ function mountOnboarding() {
             <div class="simulationStatLabel">Appelli</div>
           </div>
           <div class="simulationStat">
-            <div class="simulationStatValue">${Math.round(appelliAnalysis.reduce((sum, a) => sum + (a.best.readiness || 0), 0) / totalExams)}%</div>
+            <div class="simulationStatValue">${avgReadiness}%</div>
             <div class="simulationStatLabel">Readiness media</div>
           </div>
         </div>
@@ -2259,8 +2322,8 @@ function mountOnboarding() {
               <div class="simulationAppelloComparisonHeader">
                 <span class="simulationAppelloDate">${escapeHtml(comp.appello.date)}</span>
                 <div style="display:flex; gap:8px; align-items:center;">
-                  ${isBest ? '<span class="simulationBestBadge">⭐ Consigliato</span>' : ''}
-                  ${isAlternative ? '<span class="simulationBestBadge" style="background:rgba(99,102,241,0.2); color:rgba(99,102,241,1);">💡 Alternativa</span>' : ''}
+                  ${isBest ? '<span class="simulationBestBadge">Consigliato</span>' : ''}
+                  ${isAlternative ? '<span class="simulationBestBadge" style="background:rgba(99,102,241,0.2); color:rgba(99,102,241,1);">Alternativa</span>' : ''}
                 </div>
               </div>
               <div class="simulationAppelloComparisonStats">
@@ -2624,7 +2687,49 @@ function mountOnboarding() {
     initAppelliInterface();
     
     // Collega il bottone di simulazione (dopo che uid è disponibile)
-    qs("run-simulation")?.addEventListener("click", () => runSimulation(user.uid));
+    const setupSimulationButton = () => {
+      const runSimBtn = document.getElementById("run-simulation");
+      if (!runSimBtn) {
+        console.warn("[Strategies] Bottone run-simulation non trovato, riprovo...");
+        setTimeout(setupSimulationButton, 200);
+        return;
+      }
+      
+      // Rimuovi tutti gli event listener precedenti clonando il bottone
+      const newBtn = runSimBtn.cloneNode(true);
+      if (runSimBtn.parentNode) {
+        runSimBtn.parentNode.replaceChild(newBtn, runSimBtn);
+      }
+      
+      // Aggiungi il nuovo listener
+      const handleClick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[Strategies] Click su Esegui Simulazione");
+        try {
+          await runSimulation(user.uid);
+        } catch (error) {
+          console.error("[Strategies] Errore nella simulazione:", error);
+          alert("Errore durante l'esecuzione della simulazione: " + (error.message || error));
+        }
+      };
+      
+      newBtn.addEventListener("click", handleClick);
+      newBtn.onclick = handleClick; // Fallback per compatibilità
+      
+      // Assicurati che il bottone sia cliccabile
+      newBtn.style.pointerEvents = "auto";
+      newBtn.style.cursor = "pointer";
+      newBtn.disabled = false;
+      newBtn.type = "button";
+      newBtn.removeAttribute("disabled");
+      
+      console.log("[Strategies] Bottone simulazione collegato:", newBtn);
+    };
+    
+    // Prova subito e poi dopo un breve delay
+    setupSimulationButton();
+    setTimeout(setupSimulationButton, 300);
     
     // Aggiorna visualizzazione allenatore quando cambiano i valori
     const currentHoursInput = qs("current-hours");
@@ -2980,7 +3085,20 @@ function openEditExamModal(uid, exam, onSuccess) {
   appelliContainer.className = "appelliContainer";
   
   // Popola con appelli esistenti o crea uno vuoto
-  const examAppelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+  const examAppelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true, primary: true }] : []);
+  
+  // Determina quale appello è primario (se nessuno è marcato, usa il primo o quello più prossimo)
+  let hasPrimary = examAppelli.some(a => a.primary === true);
+  if (!hasPrimary && examAppelli.length > 0) {
+    // Se nessuno è primario, marca il più prossimo come primario
+    const sortedByDate = [...examAppelli].sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA - dateB;
+    });
+    sortedByDate[0].primary = true;
+  }
+  
   if (examAppelli.length === 0) {
     const item = document.createElement("div");
     item.className = "appelloItem";
@@ -2989,6 +3107,10 @@ function openEditExamModal(uid, exam, onSuccess) {
         <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
           <label class="appelloDateLabel" for="ee-appello-date-0">Data</label>
           <input type="date" id="ee-appello-date-0" class="appelloDate" />
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
+          <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
+          <input type="radio" name="ee-primary-appello" value="0" class="primary-appello-radio" checked style="cursor: pointer;" />
         </div>
         <button type="button" class="btn tiny remove-appello" style="display:none; align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
       </div>
@@ -3003,6 +3125,10 @@ function openEditExamModal(uid, exam, onSuccess) {
           <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
             <label class="appelloDateLabel" for="ee-appello-date-${idx}">Data</label>
             <input type="date" id="ee-appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
+            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
+            <input type="radio" name="ee-primary-appello" value="${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
           </div>
           <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
         </div>
@@ -3029,6 +3155,10 @@ function openEditExamModal(uid, exam, onSuccess) {
           <label class="appelloDateLabel" for="ee-appello-date-${index}">Data</label>
           <input type="date" id="ee-appello-date-${index}" class="appelloDate" />
         </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
+          <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
+          <input type="radio" name="ee-primary-appello" value="${index}" class="primary-appello-radio" style="cursor: pointer;" />
+        </div>
         <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
       </div>
     `;
@@ -3041,8 +3171,19 @@ function openEditExamModal(uid, exam, onSuccess) {
     if (e.target.classList.contains("remove-appello")) {
       const item = e.target.closest(".appelloItem");
       if (item && appelliContainer.children.length > 1) {
+        const removedRadio = item.querySelector('input[name="ee-primary-appello"]');
+        const wasPrimary = removedRadio && removedRadio.checked;
+        
         item.remove();
         updateRemoveButtons(appelliContainer);
+        
+        // Se è stato rimosso l'appello primario, seleziona il primo rimanente
+        if (wasPrimary) {
+          const firstRemainingRadio = appelliContainer.querySelector('input[name="ee-primary-appello"]');
+          if (firstRemainingRadio) {
+            firstRemainingRadio.checked = true;
+          }
+        }
       }
     }
   });
@@ -3053,13 +3194,17 @@ function openEditExamModal(uid, exam, onSuccess) {
   // Funzione helper per leggere appelli dalla modale
   const getAppelliFromModal = () => {
     const appelli = [];
-    appelliContainer.querySelectorAll(".appelloItem").forEach((item) => {
+    const primaryRadio = appelliContainer.querySelector('input[name="ee-primary-appello"]:checked');
+    const primaryIndex = primaryRadio ? parseInt(primaryRadio.value) : 0;
+    
+    appelliContainer.querySelectorAll(".appelloItem").forEach((item, idx) => {
       const dateInput = item.querySelector(".appelloDate");
       if (dateInput && dateInput.value) {
         appelli.push({
           date: dateInput.value,
           type: "esame", // Sempre esame
-          selected: true
+          selected: true,
+          primary: idx === primaryIndex // Marca come primario se è quello selezionato
         });
       }
     });
@@ -4190,7 +4335,7 @@ function generatePersonalizedTips(exams, avg, weightedAvg) {
   if (exams.length === 0) {
     tipsContainer.innerHTML = `
       <div class="tipCard">
-        <div class="tipIcon">💡</div>
+        <div class="tipIcon">ℹ</div>
         <div class="tipContent">
           <div class="tipTitle">Aggiungi i tuoi esami</div>
           <div class="tipDesc">Inizia aggiungendo gli esami che hai già sostenuto per vedere statistiche e consigli personalizzati.</div>
@@ -5347,12 +5492,50 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
     const allocSorted = [...(plan.allocations || [])].sort(
       (a, b) => (b.targetMin || 0) - (a.targetMin || 0)
     );
+    
+    // Raggruppa per esame originale (per evitare duplicati quando ci sono più appelli)
+    const examGroups = new Map();
     for (const a of allocSorted) {
+      // Estrai l'ID originale dell'esame (rimuovi il suffisso della data se presente)
+      const originalId = a.examId.includes('_') ? a.examId.split('_').slice(0, -1).join('_') : a.examId;
+      
+      if (!examGroups.has(originalId)) {
+        examGroups.set(originalId, {
+          name: a.name,
+          totalMin: 0,
+          examId: a.examId,
+          date: a.date
+        });
+      }
+      // Somma le ore se ci sono più appelli (dovrebbe essere raro ora, ma per sicurezza)
+      examGroups.get(originalId).totalMin += a.targetMin || 0;
+    }
+    
+    // Mostra ogni esame una sola volta con le ore totali
+    for (const [originalId, group] of examGroups) {
       const div = document.createElement("div");
       div.className = "weekItem";
+      
+      // Se l'esame ha più appelli, mostra anche la data dell'appello considerato
+      const exam = exams.find(e => e.id === originalId || e.id === group.examId);
+      let dateInfo = "";
+      if (exam && exam.appelli && exam.appelli.length > 1) {
+        const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
+        if (selectedAppelli.length > 1) {
+          // Trova l'appello primario (quello usato nel piano)
+          const primaryAppello = selectedAppelli.find(a => a.primary === true);
+          const appelloToShow = primaryAppello || selectedAppelli.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            return dateA - dateB;
+          })[0];
+          dateInfo = ` <span style="font-size:11px; color:rgba(255,255,255,0.6);">Appello principale: ${appelloToShow.date}</span>`;
+        }
+      }
+      
       div.innerHTML = `
-        <strong>${escapeHtml(a.name)}</strong>
-        <span>${Math.round(((a.targetMin || 0) / 60) * 10) / 10}h</span>
+        <strong>${escapeHtml(group.name)}</strong>${dateInfo}
+        <span>${Math.round((group.totalMin / 60) * 10) / 10}h</span>
       `;
       ws.appendChild(div);
     }
@@ -5464,7 +5647,7 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
       // Suggerimenti
       if (suggestions.length > 0) {
         html += `<div class="realismSuggestions">
-          <div class="realismSuggestionsTitle">💡 Suggerimenti:</div>
+          <div class="realismSuggestionsTitle">Suggerimenti:</div>
           <ul class="realismSuggestionsList">`;
         
         for (const sug of suggestions) {
@@ -5500,11 +5683,72 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
   }
 
   const allocMap = new Map((plan.allocations || []).map((a) => [a.examId, a.targetMin]));
-  const sortedExams = [...(exams || [])].sort((a, b) =>
+  
+  // Raggruppa esami per ID originale per evitare duplicati quando ci sono più appelli
+  // Gli esami in `exams` sono originali, mentre `plan.allocations` contiene esami virtuali
+  const examGroups = new Map();
+  
+  // Prima, crea una mappa degli esami originali
+  const originalExamsMap = new Map();
+  for (const e of exams || []) {
+    originalExamsMap.set(e.id, e);
+  }
+  
+  // Poi, raggruppa le allocazioni per esame originale
+  for (const alloc of plan.allocations || []) {
+    // Estrai l'ID originale dall'examId virtuale (formato: originalId_date)
+    const examIdParts = alloc.examId.split('_');
+    const originalId = examIdParts.length > 1 
+      ? examIdParts.slice(0, -1).join('_') 
+      : alloc.examId;
+    
+    const originalExam = originalExamsMap.get(originalId);
+    if (!originalExam) continue;
+    
+    if (!examGroups.has(originalId)) {
+      examGroups.set(originalId, {
+        originalExam: originalExam,
+        virtualAllocs: []
+      });
+    }
+    
+    // Crea un esame virtuale per questa allocazione
+    const virtualExam = {
+      ...originalExam,
+      id: alloc.examId,
+      date: alloc.date || originalExam.date
+    };
+    
+    examGroups.get(originalId).virtualAllocs.push({
+      exam: virtualExam,
+      alloc: alloc
+    });
+  }
+  
+  // Per ogni gruppo, usa l'esame virtuale con la data più prossima (quello considerato nel piano)
+  const uniqueExams = [];
+  for (const [originalId, group] of examGroups) {
+    // Ordina per data e prendi il primo (più prossimo)
+    const sorted = group.virtualAllocs.sort((a, b) => {
+      const dateA = new Date(a.exam.date);
+      const dateB = new Date(b.exam.date);
+      return dateA - dateB;
+    });
+    uniqueExams.push(sorted[0].exam);
+  }
+  
+  const sortedExams = uniqueExams.sort((a, b) =>
     String(a.date).localeCompare(String(b.date))
   );
 
   for (const e of sortedExams) {
+    // Trova l'esame originale
+    const examIdParts = e.id.split('_');
+    const originalId = examIdParts.length > 1 
+      ? examIdParts.slice(0, -1).join('_') 
+      : e.id;
+    const originalExam = originalExamsMap.get(originalId);
+    
     const dleft = daysTo(e.date);
     const allocThisWeek = Number(allocMap.get(e.id) || 0);
 
@@ -5513,6 +5757,20 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
 
     const required = estimateRequiredMinutes(e, profile);
     const cap = estimateCapacityUntilExamMinutes(e, profile);
+    
+    // Mostra info su appelli multipli se presenti
+    let appelliInfo = "";
+    if (originalExam && originalExam.appelli && originalExam.appelli.length > 1) {
+      const selectedAppelli = originalExam.appelli.filter(a => a.selected !== false);
+      const primaryAppello = selectedAppelli.find(a => a.primary === true);
+      if (selectedAppelli.length > 1) {
+        if (primaryAppello && primaryAppello.date === e.date) {
+          appelliInfo = ` · ${selectedAppelli.length} appelli selezionati · Questo è l'appello principale`;
+        } else {
+          appelliInfo = ` · ${selectedAppelli.length} appelli selezionati · Appello principale: ${primaryAppello?.date || e.date}`;
+        }
+      }
+    }
 
     const card = document.createElement("div");
     card.className = "examCard";
@@ -5524,12 +5782,12 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
         <div style="min-width:0">
           <div class="examName">${escapeHtml(e.name)}</div>
           <div class="examMeta">
-            ${escapeHtml(e.date)} · tra ${dleft}g · CFU ${e.cfu} · livello ${e.level}/5 · diff ${e.difficulty}/3
+            ${escapeHtml(e.date)} · tra ${dleft}g · CFU ${e.cfu} · livello ${e.level}/5 · diff ${e.difficulty}/3${appelliInfo}
           </div>
           <div class="examMeta">
             Piano settimanale: <b>${Math.round((allocThisWeek / 60) * 10) / 10}h</b> ·
             Necessario stimato: <b>${Math.round(required / 60)}h</b> ·
-            Capacità fino all’esame: <b>${Math.round(cap / 60)}h</b>
+            Capacità fino all'esame: <b>${Math.round(cap / 60)}h</b>
           </div>
         </div>
       </div>

@@ -254,19 +254,32 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
   for (const exam of exams || []) {
     if (!exam?.name) continue;
     
-    // Se ha appelli, usa solo quelli selezionati
+    // Se ha appelli, usa quello marcato come "primary" o il più prossimo
     if (exam.appelli && Array.isArray(exam.appelli) && exam.appelli.length > 0) {
       const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
       if (selectedAppelli.length === 0) continue; // Salta se nessun appello selezionato
       
-      // Crea un esame virtuale per ogni appello selezionato
-      selectedAppelli.forEach(appello => {
-        validExams.push({
-          ...exam,
-          id: `${exam.id}_${appello.date}`,
-          date: appello.date,
-          appelloType: appello.type
+      // Cerca l'appello marcato come "primary"
+      let primaryAppello = selectedAppelli.find(a => a.primary === true);
+      
+      // Se nessuno è marcato come primary, usa il più prossimo
+      if (!primaryAppello) {
+        const sortedAppelli = [...selectedAppelli].sort((a, b) => {
+          const dateA = new Date(a.date);
+          const dateB = new Date(b.date);
+          return dateA - dateB;
         });
+        primaryAppello = sortedAppelli[0];
+      }
+      
+      // Crea un solo esame virtuale per l'appello primario
+      validExams.push({
+        ...exam,
+        id: `${exam.id}_${primaryAppello.date}`,
+        date: primaryAppello.date,
+        appelloType: primaryAppello.type,
+        originalExamId: exam.id, // Mantieni riferimento all'esame originale
+        allSelectedAppelli: selectedAppelli // Salva tutti gli appelli selezionati per riferimento
       });
     } else if (exam.date) {
       // Compatibilità con esami vecchi (solo date)
