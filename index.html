@@ -780,6 +780,344 @@
       letter-spacing:0.01em;
     }
 
+    /* ===== Demo Charts Section ===== */
+    .demoSection{
+      margin-bottom:120px;
+      padding:80px 0;
+      background: rgba(255,255,255,.02);
+      border-radius:24px;
+      margin-left:-24px;
+      margin-right:-24px;
+      padding-left:48px;
+      padding-right:48px;
+      border:1px solid rgba(255,255,255,.06);
+    }
+
+    .demoChartsGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap:32px;
+      max-width:1000px;
+      margin:0 auto;
+    }
+
+    .demoChartCard{
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:20px;
+      padding:32px;
+      text-align:center;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .demoChartCard:hover{
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,.2);
+      background: rgba(255,255,255,.05);
+      box-shadow: 0 12px 40px rgba(0,0,0,.2);
+    }
+
+    .demoChartHeader{
+      margin-bottom:24px;
+    }
+
+    .demoChartStatus{
+      margin-top:20px;
+      padding:12px 16px;
+      border-radius:12px;
+      font-size:14px;
+      font-weight:600;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+    }
+
+    .demoChartStatus.good{
+      background: rgba(34,197,94,.15);
+      color: rgba(34,197,94,1);
+      border:1px solid rgba(34,197,94,.3);
+    }
+
+    .demoChartStatus.warn{
+      background: rgba(245,158,11,.15);
+      color: rgba(245,158,11,1);
+      border:1px solid rgba(245,158,11,.3);
+    }
+
+    .statusIcon{
+      font-size:18px;
+    }
+
+    /* ===== Pricing Section ===== */
+    .pricingSection{
+      margin-bottom:120px;
+    }
+
+    .pricingGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap:32px;
+      max-width:900px;
+      margin:0 auto;
+    }
+
+    .pricingCard{
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:24px;
+      padding:40px;
+      position:relative;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .pricingCard:hover{
+      transform: translateY(-6px);
+      border-color: rgba(255,255,255,.2);
+      background: rgba(255,255,255,.05);
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+
+    .pricingCard.featured{
+      background: linear-gradient(135deg, rgba(249,115,22,.1), rgba(249,115,22,.05));
+      border:2px solid var(--orange-border);
+      box-shadow: 0 20px 60px rgba(249,115,22,.2);
+    }
+
+    .pricingCard.featured:hover{
+      box-shadow: 0 24px 80px rgba(249,115,22,.3);
+    }
+
+    .pricingBadge{
+      position:absolute;
+      top:-12px;
+      left:50%;
+      transform: translateX(-50%);
+      background: var(--orange);
+      color: rgba(255,255,255,1);
+      padding:6px 20px;
+      border-radius:20px;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:0.02em;
+    }
+
+    .pricingHeader{
+      text-align:center;
+      margin-bottom:32px;
+    }
+
+    .pricingPrice{
+      margin:16px 0;
+    }
+
+    .pricingFeatures{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      margin-bottom:24px;
+    }
+
+    .pricingFeature{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      font-size:15px;
+      color: rgba(255,255,255,.85);
+    }
+
+    .featureCheck{
+      width:24px;
+      height:24px;
+      border-radius:50%;
+      background: rgba(34,197,94,.2);
+      color: rgba(34,197,94,1);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      font-size:14px;
+      flex-shrink:0;
+    }
+
+    .featureCheck.premium{
+      background: rgba(249,115,22,.2);
+      color: var(--orange);
+    }
+
+    /* ===== Simulation Section ===== */
+    .simulationSection{
+      margin-bottom:120px;
+      padding:80px 0;
+      background: rgba(255,255,255,.02);
+      border-radius:24px;
+      margin-left:-24px;
+      margin-right:-24px;
+      padding-left:48px;
+      padding-right:48px;
+      border:1px solid rgba(255,255,255,.06);
+    }
+
+    .simulationDemo{
+      max-width:1000px;
+      margin:0 auto;
+    }
+
+    .simulationExampleCard{
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:20px;
+      padding:40px;
+      margin-bottom:48px;
+    }
+
+    .simulationExampleHeader{
+      text-align:center;
+      margin-bottom:32px;
+    }
+
+    .appelliComparison{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap:20px;
+    }
+
+    .appelloCard{
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:16px;
+      padding:24px;
+      position:relative;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .appelloCard:hover{
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,.2);
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 12px 40px rgba(0,0,0,.2);
+    }
+
+    .appelloCard.best{
+      background: linear-gradient(135deg, rgba(249,115,22,.15), rgba(249,115,22,.08));
+      border:2px solid var(--orange-border);
+      box-shadow: 0 8px 32px rgba(249,115,22,.2);
+    }
+
+    .appelloBadge{
+      position:absolute;
+      top:-10px;
+      right:16px;
+      background: var(--orange);
+      color: rgba(255,255,255,1);
+      padding:4px 12px;
+      border-radius:12px;
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:0.02em;
+    }
+
+    .appelloDate{
+      font-size:18px;
+      font-weight:700;
+      margin-bottom:20px;
+      color: rgba(255,255,255,.95);
+    }
+
+    .appelloStats{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .appelloStat{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+
+    .appelloStat:last-child{
+      border-bottom:none;
+    }
+
+    .statLabel{
+      font-size:13px;
+      color:rgba(255,255,255,.6);
+    }
+
+    .statValue{
+      font-size:15px;
+      font-weight:700;
+      color:rgba(255,255,255,.9);
+    }
+
+    .statValue.good{
+      color:rgba(34,197,94,1);
+    }
+
+    .statValue.warn{
+      color:rgba(245,158,11,1);
+    }
+
+    .statValue.best{
+      color:var(--orange);
+      font-size:16px;
+    }
+
+    .appelloReason{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:12px;
+      background:rgba(255,255,255,.05);
+      border-radius:10px;
+      font-size:13px;
+      color:rgba(255,255,255,.8);
+      margin-top:16px;
+    }
+
+    .reasonIcon{
+      font-size:16px;
+    }
+
+    .simulationFeatures{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap:24px;
+    }
+
+    .simulationFeatureCard{
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:16px;
+      padding:28px;
+      text-align:center;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .simulationFeatureCard:hover{
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,.2);
+      background: rgba(255,255,255,.05);
+      box-shadow: 0 12px 40px rgba(0,0,0,.2);
+    }
+
+    .simulationFeatureIcon{
+      width:64px;
+      height:64px;
+      border-radius:16px;
+      background: var(--orange-bg);
+      border:1px solid var(--orange-border);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:28px;
+      margin:0 auto 20px;
+    }
+
     .loginModal{
       position:fixed;
       top:0;
@@ -864,6 +1202,16 @@
       .ctaSection{ padding:48px 32px; margin-bottom:64px; }
       .ctaTitle{ font-size:28px; }
       .ctaSubtitle{ font-size:16px; }
+      .demoSection{ margin-left:-24px; margin-right:-24px; padding:60px 24px; }
+      .demoChartsGrid{ grid-template-columns:1fr; gap:24px; }
+      .demoChartCard{ padding:24px; }
+      .pricingGrid{ grid-template-columns:1fr; gap:24px; }
+      .pricingCard{ padding:32px; }
+      .simulationSection{ margin-left:-24px; margin-right:-24px; padding:60px 24px; }
+      .appelliComparison{ grid-template-columns:1fr; gap:16px; }
+      .appelloCard{ padding:20px; }
+      .simulationFeatures{ grid-template-columns:1fr; gap:20px; }
+      .simulationFeatureCard{ padding:24px; }
     }
   </style>
 </head>
@@ -925,11 +1273,11 @@
 
     <!-- Hero Section -->
     <section class="heroSection">
-      <h2 class="heroTitle">Organizza il tuo studio con un algoritmo intelligente</h2>
+      <h2 class="heroTitle">Piano di studio generato automaticamente in base alla tua vita e ai tuoi obiettivi</h2>
       <p class="heroSubtitle">
-        Study Planner crea automaticamente un piano di studio settimanale personalizzato, 
-        distribuendo i task in base alle tue priorità, disponibilità e obiettivi. 
-        Studia in modo più efficace e raggiungi i tuoi traguardi.
+        Non sai da dove iniziare? Study Planner analizza i tuoi esami, la tua disponibilità e i tuoi obiettivi 
+        per creare un piano personalizzato. <strong>Se continui così, questo esame lo dovrai rifare.</strong> 
+        Con Study Planner, sai sempre cosa studiare e quando.
       </p>
       <button class="btn primary ctaButton" id="cta-login">Inizia ora</button>
     </section>
@@ -1026,10 +1374,185 @@
         <div class="stepCard">
           <div class="stepNumber">4</div>
           <div class="stepContent">
+            <h3 class="stepTitle">Simula e scegli l'appello migliore</h3>
+            <p class="stepDesc">
+              Usa le simulazioni per confrontare diversi appelli e scoprire quale ti conviene di più. 
+              Il sistema analizza automaticamente preparazione, tempo disponibile e conflitti per suggerirti la scelta ottimale.
+            </p>
+          </div>
+        </div>
+        <div class="stepCard">
+          <div class="stepNumber">5</div>
+          <div class="stepContent">
             <h3 class="stepTitle">Studia e traccia</h3>
             <p class="stepDesc">
               Completa i task, usa il timer integrato e monitora il tuo progresso in tempo reale. 
-              Il sistema ti mostra sempre quanto sei preparato per ogni esame.
+              Il sistema ti mostra sempre quanto sei preparato per ogni esame e ti avvisa se sei in ritardo.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sezione Grafici Readiness -->
+    <section class="demoSection">
+      <h2 class="sectionTitle">Vedi sempre quanto sei preparato</h2>
+      <p style="text-align:center; color:rgba(255,255,255,.7); font-size:18px; margin-bottom:48px; max-width:700px; margin-left:auto; margin-right:auto;">
+        Il sistema calcola automaticamente la tua "readiness" per ogni esame. 
+        Monitora il progresso in tempo reale e sappi sempre se sei in ritardo.
+      </p>
+      <div class="demoChartsGrid">
+        <div class="demoChartCard">
+          <div class="demoChartHeader">
+            <h3 style="margin:0 0 8px 0; font-size:20px; font-weight:700;">Analisi 2</h3>
+            <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">15 giorni all'appello</p>
+          </div>
+          <canvas id="demo-chart-1" width="200" height="200"></canvas>
+          <div class="demoChartStatus good">
+            <span class="statusIcon">✓</span>
+            <span>Readiness: 78% - In linea</span>
+          </div>
+        </div>
+        <div class="demoChartCard">
+          <div class="demoChartHeader">
+            <h3 style="margin:0 0 8px 0; font-size:20px; font-weight:700;">Fisica</h3>
+            <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">8 giorni all'appello</p>
+          </div>
+          <canvas id="demo-chart-2" width="200" height="200"></canvas>
+          <div class="demoChartStatus warn">
+            <span class="statusIcon">⚠</span>
+            <span>Readiness: 45% - Attenzione!</span>
+          </div>
+        </div>
+        <div class="demoChartCard">
+          <div class="demoChartHeader">
+            <h3 style="margin:0 0 8px 0; font-size:20px; font-weight:700;">Storia</h3>
+            <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">22 giorni all'appello</p>
+          </div>
+          <canvas id="demo-chart-3" width="200" height="200"></canvas>
+          <div class="demoChartStatus good">
+            <span class="statusIcon">✓</span>
+            <span>Readiness: 62% - Buono</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sezione Simulazioni e Suggerimenti Appelli -->
+    <section class="simulationSection">
+      <h2 class="sectionTitle">Simulazioni intelligenti: scegli l'appello giusto</h2>
+      <p style="text-align:center; color:rgba(255,255,255,.7); font-size:18px; margin-bottom:64px; max-width:800px; margin-left:auto; margin-right:auto;">
+        Non sai quale appello sostenere? Il sistema confronta automaticamente tutti gli appelli disponibili 
+        e ti suggerisce quello migliore in base alla tua preparazione, tempo disponibile e obiettivi.
+      </p>
+      
+      <div class="simulationDemo">
+        <!-- Esempio Esame con Appelli -->
+        <div class="simulationExampleCard">
+          <div class="simulationExampleHeader">
+            <h3 style="margin:0 0 8px 0; font-size:22px; font-weight:700;">Analisi 2</h3>
+            <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">3 appelli disponibili</p>
+          </div>
+          
+          <div class="appelliComparison">
+            <!-- Appello 1 - Consigliato -->
+            <div class="appelloCard best">
+              <div class="appelloBadge">⭐ Consigliato</div>
+              <div class="appelloDate">15 Gennaio 2025</div>
+              <div class="appelloStats">
+                <div class="appelloStat">
+                  <span class="statLabel">Giorni</span>
+                  <span class="statValue">45g</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Readiness</span>
+                  <span class="statValue good">82%</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Score</span>
+                  <span class="statValue best">92/100</span>
+                </div>
+              </div>
+              <div class="appelloReason">
+                <span class="reasonIcon">💡</span>
+                <span>Hai tempo sufficiente per prepararti bene</span>
+              </div>
+            </div>
+            
+            <!-- Appello 2 -->
+            <div class="appelloCard">
+              <div class="appelloDate">8 Gennaio 2025</div>
+              <div class="appelloStats">
+                <div class="appelloStat">
+                  <span class="statLabel">Giorni</span>
+                  <span class="statValue">38g</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Readiness</span>
+                  <span class="statValue warn">65%</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Score</span>
+                  <span class="statValue">71/100</span>
+                </div>
+              </div>
+              <div class="appelloReason">
+                <span class="reasonIcon">⚠️</span>
+                <span>Poco tempo, rischio preparazione insufficiente</span>
+              </div>
+            </div>
+            
+            <!-- Appello 3 -->
+            <div class="appelloCard">
+              <div class="appelloDate">22 Gennaio 2025</div>
+              <div class="appelloStats">
+                <div class="appelloStat">
+                  <span class="statLabel">Giorni</span>
+                  <span class="statValue">52g</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Readiness</span>
+                  <span class="statValue good">88%</span>
+                </div>
+                <div class="appelloStat">
+                  <span class="statLabel">Score</span>
+                  <span class="statValue">85/100</span>
+                </div>
+              </div>
+              <div class="appelloReason">
+                <span class="reasonIcon">📅</span>
+                <span>Più tempo ma conflitto con altri esami</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Funzionalità Simulazioni -->
+        <div class="simulationFeatures">
+          <div class="simulationFeatureCard">
+            <div class="simulationFeatureIcon">🎯</div>
+            <h4 style="margin:0 0 8px 0; font-size:18px; font-weight:700;">Confronto Automatico</h4>
+            <p style="margin:0; color:rgba(255,255,255,.7); font-size:14px; line-height:1.6;">
+              Il sistema analizza tutti gli appelli disponibili e calcola un punteggio di convenienza 
+              basato su tempo, preparazione e capacità.
+            </p>
+          </div>
+          
+          <div class="simulationFeatureCard">
+            <div class="simulationFeatureIcon">📊</div>
+            <h4 style="margin:0 0 8px 0; font-size:18px; font-weight:700;">Simulazioni "What-If"</h4>
+            <p style="margin:0; color:rgba(255,255,255,.7); font-size:14px; line-height:1.6;">
+              Vedi cosa succede se studi di più, cambi obiettivo o rimuovi un esame. 
+              Confronta scenari diversi per prendere decisioni informate.
+            </p>
+          </div>
+          
+          <div class="simulationFeatureCard">
+            <div class="simulationFeatureIcon">⚡</div>
+            <h4 style="margin:0 0 8px 0; font-size:18px; font-weight:700;">Ottimizzazione Intelligente</h4>
+            <p style="margin:0; color:rgba(255,255,255,.7); font-size:14px; line-height:1.6;">
+              L'algoritmo considera urgenza, difficoltà, CFU e livello di preparazione 
+              per suggerirti la strategia migliore.
             </p>
           </div>
         </div>
@@ -1148,6 +1671,94 @@
             Crea un account, configura il tuo profilo con disponibilità e obiettivi, 
             aggiungi i tuoi esami e ricevi immediatamente un piano di studio personalizzato.
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="pricingSection">
+      <h2 class="sectionTitle">Scegli il piano giusto per te</h2>
+      <p style="text-align:center; color:rgba(255,255,255,.7); font-size:18px; margin-bottom:64px; max-width:700px; margin-left:auto; margin-right:auto;">
+        Inizia gratis e passa a Premium quando vuoi per sbloccare tutte le funzionalità avanzate
+      </p>
+      <div class="pricingGrid">
+        <!-- Free Plan -->
+        <div class="pricingCard">
+          <div class="pricingHeader">
+            <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:700;">Gratis</h3>
+            <div class="pricingPrice">
+              <span style="font-size:48px; font-weight:900;">€0</span>
+              <span style="font-size:18px; color:rgba(255,255,255,.6);">/mese</span>
+            </div>
+            <p style="margin:16px 0 0 0; color:rgba(255,255,255,.6); font-size:14px;">Perfetto per iniziare</p>
+          </div>
+          <div class="pricingFeatures">
+            <div class="pricingFeature">
+              <span class="featureCheck">✓</span>
+              <span>Piano di studio settimanale</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck">✓</span>
+              <span>Fino a 3 esami</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck">✓</span>
+              <span>Timer di studio base</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck">✓</span>
+              <span>Tracking progresso</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck">✓</span>
+              <span>Algoritmo intelligente</span>
+            </div>
+          </div>
+          <button class="btn" style="width:100%; margin-top:24px;" id="cta-login-free">Inizia gratis</button>
+        </div>
+
+        <!-- Premium Plan -->
+        <div class="pricingCard featured">
+          <div class="pricingBadge">Consigliato</div>
+          <div class="pricingHeader">
+            <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:700;">Premium</h3>
+            <div class="pricingPrice">
+              <span style="font-size:48px; font-weight:900;">€5</span>
+              <span style="font-size:18px; color:rgba(255,255,255,.6);">/mese</span>
+            </div>
+            <p style="margin:16px 0 0 0; color:rgba(255,255,255,.6); font-size:14px;">Per studenti seri</p>
+          </div>
+          <div class="pricingFeatures">
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span><strong>Tutto del piano Gratis</strong></span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Esami illimitati</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Simulazione appelli avanzata</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Simulazioni "what-if"</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Statistiche dettagliate</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Pianificazione multi-settimana</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Esportazione piano di studio</span>
+            </div>
+          </div>
+          <button class="btn primary" style="width:100%; margin-top:24px;" id="cta-login-premium">Passa a Premium</button>
         </div>
       </div>
     </section>
@@ -1303,6 +1914,58 @@
     // Debug UX: evita doppio submit in caso di Enter ripetuti
     $("login-form").addEventListener("submit", () => showToast("Accesso in corso…", 1600));
     $("signup-form").addEventListener("submit", () => showToast("Creazione account…", 1600));
+
+    // ========= Demo Charts =========
+    function drawPieChart(canvasId, percentage, color) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext("2d");
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 80;
+      
+      // Sfondo
+      ctx.fillStyle = "rgba(255,255,255,.05)";
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Arco principale
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + (percentage / 100) * Math.PI * 2;
+      
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 16;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.stroke();
+      
+      // Testo percentuale
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.font = "bold 32px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${percentage}%`, centerX, centerY - 8);
+      
+      ctx.fillStyle = "rgba(255,255,255,.6)";
+      ctx.font = "14px system-ui";
+      ctx.fillText("Readiness", centerX, centerY + 16);
+    }
+
+    // Disegna i grafici quando la pagina è caricata
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => {
+        drawPieChart("demo-chart-1", 78, "rgba(34,197,94,1)");
+        drawPieChart("demo-chart-2", 45, "rgba(245,158,11,1)");
+        drawPieChart("demo-chart-3", 62, "rgba(99,102,241,1)");
+      }, 100);
+    });
+
+    // Handler per i bottoni pricing
+    document.getElementById("cta-login-free")?.addEventListener("click", openLoginModal);
+    document.getElementById("cta-login-premium")?.addEventListener("click", openLoginModal);
   </script>
 </body>
 </html>
