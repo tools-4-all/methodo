@@ -2531,6 +2531,9 @@ function openEditExamModal(uid, exam, onSuccess) {
     });
   }
   
+  // Aggiorna la visibilità dei bottoni rimuovi dopo aver popolato gli appelli
+  updateRemoveButtons(appelliContainer);
+  
   const addAppelloBtn = document.createElement("button");
   addAppelloBtn.type = "button";
   addAppelloBtn.className = "btn tiny";
@@ -2751,15 +2754,21 @@ function openEditExamModal(uid, exam, onSuccess) {
         finalCategory = detectExamCategory(name);
       }
 
-      await updateExam(uid, exam.id, { 
+      // Prepara i dati per l'aggiornamento
+      // Mantieni date per compatibilità (primo appello)
+      const firstAppello = appelli.length > 0 ? appelli[0] : null;
+      const updateData = {
         name, 
         cfu, 
-        date, 
+        date: firstAppello ? firstAppello.date : null,
+        appelli,
         level, 
         difficulty,
         category: finalCategory,
         topics
-      });
+      };
+
+      await updateExam(uid, exam.id, updateData);
       closeModal();
       if (onSuccess) onSuccess();
     } catch (err) {
