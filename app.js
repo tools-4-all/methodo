@@ -1966,53 +1966,154 @@ function mountOnboarding() {
   /**
    * Inizializza l'interfaccia per la distribuzione personalizzata dei task
    */
-  function initTaskDistribution() {
+  function initTaskDistribution(isPremiumUser = true) {
     const container = qs("task-distribution-container");
     const toggleBtn = qs("toggle-task-distribution");
     const resetBtn = qs("reset-task-distribution");
+    const taskDistSection = toggleBtn?.closest(".formSection");
     
     if (!container || !toggleBtn) return;
     
-    // Toggle mostra/nascondi
-    toggleBtn.addEventListener("click", () => {
-      const isVisible = container.style.display !== "none";
-      if (isVisible) {
-        container.style.display = "none";
-        toggleBtn.textContent = "Personalizza distribuzione task";
-        resetTaskDistribution();
-      } else {
-        container.style.display = "block";
-        toggleBtn.textContent = "Nascondi personalizzazione";
-      }
-    });
-    
-    // Reset distribuzione
-    resetBtn?.addEventListener("click", () => {
-      resetTaskDistribution();
-    });
-    
-    // Aggiorna valori quando cambiano gli slider
-    const types = ["theory", "practice", "exam", "review", "spaced"];
-    types.forEach(type => {
-      const slider = qs(`task-dist-${type}`);
-      const valueSpan = qs(`task-dist-${type}-value`);
+    if (isPremiumUser) {
+      // Utente premium: abilita la sezione
+      // Rimuovi overlay premium se presente
+      const premiumOverlay = taskDistSection?.querySelector(".premium-overlay");
+      if (premiumOverlay) premiumOverlay.remove();
       
-      if (slider && valueSpan) {
-        slider.addEventListener("input", () => {
-          updateTaskDistributionDisplay();
-        });
+      // Toggle mostra/nascondi
+      toggleBtn.disabled = false;
+      toggleBtn.style.opacity = "1";
+      toggleBtn.style.cursor = "pointer";
+      toggleBtn.addEventListener("click", () => {
+        const isVisible = container.style.display !== "none";
+        if (isVisible) {
+          container.style.display = "none";
+          toggleBtn.textContent = "Personalizza distribuzione task";
+          resetTaskDistribution();
+        } else {
+          container.style.display = "block";
+          toggleBtn.textContent = "Nascondi personalizzazione";
+        }
+      });
+      
+      // Reset distribuzione
+      resetBtn?.addEventListener("click", () => {
+        resetTaskDistribution();
+      });
+      
+      // Aggiorna valori quando cambiano gli slider
+      const types = ["theory", "practice", "exam", "review", "spaced"];
+      types.forEach(type => {
+        const slider = qs(`task-dist-${type}`);
+        const valueSpan = qs(`task-dist-${type}-value`);
+        
+        if (slider && valueSpan) {
+          slider.disabled = false;
+          slider.style.opacity = "1";
+          slider.style.cursor = "pointer";
+          slider.addEventListener("input", () => {
+            updateTaskDistributionDisplay();
+          });
+        }
+      });
+      
+      // Inizializza display
+      updateTaskDistributionDisplay();
+    } else {
+      // Utente non premium: disabilita la sezione
+      toggleBtn.disabled = true;
+      toggleBtn.style.opacity = "0.5";
+      toggleBtn.style.cursor = "not-allowed";
+      container.style.display = "none";
+      
+      // Disabilita tutti gli slider
+      const types = ["theory", "practice", "exam", "review", "spaced"];
+      types.forEach(type => {
+        const slider = qs(`task-dist-${type}`);
+        if (slider) {
+          slider.disabled = true;
+          slider.style.opacity = "0.5";
+          slider.style.cursor = "not-allowed";
+        }
+      });
+      
+      if (resetBtn) {
+        resetBtn.disabled = true;
+        resetBtn.style.opacity = "0.5";
+        resetBtn.style.cursor = "not-allowed";
       }
-    });
-    
-    // Inizializza display
-    updateTaskDistributionDisplay();
+      
+      // Aggiungi overlay premium se non presente
+      if (taskDistSection && !taskDistSection.querySelector(".premium-overlay")) {
+        const overlay = document.createElement("div");
+        overlay.className = "premium-overlay";
+        overlay.style.cssText = `
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(10, 12, 20, 0.85);
+          backdrop-filter: blur(4px);
+          border-radius: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          z-index: 10;
+          cursor: pointer;
+        `;
+        overlay.innerHTML = `
+          <div style="text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 12px;">⭐</div>
+            <div style="font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.95); margin-bottom: 8px;">
+              Funzionalità Premium
+            </div>
+            <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px; line-height: 1.5;">
+              La personalizzazione della distribuzione task è disponibile solo per gli utenti Premium.<br>
+              Passa a Premium per personalizzare come vengono distribuiti i tuoi task di studio.
+            </div>
+            <button class="btn primary" style="margin-top: 8px;">
+              Passa a Premium
+            </button>
+          </div>
+        `;
+        
+        // Posiziona il formSection come relative se non lo è già
+        if (taskDistSection) {
+          const currentPosition = window.getComputedStyle(taskDistSection).position;
+          if (currentPosition === "static") {
+            taskDistSection.style.position = "relative";
+          }
+        }
+        
+        overlay.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showUpgradeModal();
+        });
+        
+        taskDistSection.appendChild(overlay);
+      }
+      
+      // Disabilita anche il click sul bottone toggle
+      toggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        showUpgradeModal();
+      });
+    }
   }
   
   /**
    * Legge la distribuzione task dal form
    * @returns {object|null} Oggetto con percentuali o null se non personalizzata
    */
-  function getTaskDistribution() {
+  function getTaskDistribution(isPremiumUser = true) {
+    // Se non è premium, non restituire distribuzione personalizzata
+    if (!isPremiumUser) {
+      return null;
+    }
+    
     const container = qs("task-distribution-container");
     if (!container || container.style.display === "none") {
       return null;
@@ -3040,9 +3141,6 @@ function mountOnboarding() {
 
     setText(qs("user-line"), user.email ?? "—");
     await ensureUserDoc(user);
-    
-    // Inizializza distribuzione task
-    initTaskDistribution();
 
     const profile = await getProfile(user.uid);
     
@@ -3066,6 +3164,9 @@ function mountOnboarding() {
     // Gestione premium badge e upgrade button
     const subscriptionInfo = await getSubscriptionInfo(user.uid);
     const isPremiumUser = await isPremium(user.uid);
+    
+    // Inizializza distribuzione task (con controllo premium) - DOPO aver verificato isPremiumUser
+    initTaskDistribution(isPremiumUser);
     
     const premiumBadge = qs("premium-badge");
     const upgradeBtn = qs("upgrade-btn");
@@ -3127,12 +3228,138 @@ function mountOnboarding() {
     if (profile?.weeklyHours) qs("weekly-hours").value = profile.weeklyHours;
     if (profile?.taskMinutes) qs("task-minutes").value = String(profile.taskMinutes);
     
-    // Carica dati allenatore
-    if (profile?.currentHours) qs("current-hours").value = profile.currentHours;
-    if (profile?.targetHours) qs("target-hours").value = profile.targetHours;
+    // Carica dati allenatore (solo se premium)
+    const currentHoursInput = qs("current-hours");
+    const targetHoursInput = qs("target-hours");
+    const coachSection = currentHoursInput?.closest(".formSection");
     
-    // Aggiorna visualizzazione allenatore
-    updateCoachDisplay(profile);
+    if (isPremiumUser) {
+      // Utente premium: abilita la sezione
+      if (profile?.currentHours && currentHoursInput) currentHoursInput.value = profile.currentHours;
+      if (profile?.targetHours && targetHoursInput) targetHoursInput.value = profile.targetHours;
+      
+      // Rimuovi overlay premium se presente
+      const premiumOverlay = coachSection?.querySelector(".premium-overlay");
+      if (premiumOverlay) premiumOverlay.remove();
+      
+      // Abilita input
+      if (currentHoursInput) {
+        currentHoursInput.disabled = false;
+        currentHoursInput.style.opacity = "1";
+        currentHoursInput.style.cursor = "text";
+      }
+      if (targetHoursInput) {
+        targetHoursInput.disabled = false;
+        targetHoursInput.style.opacity = "1";
+        targetHoursInput.style.cursor = "text";
+      }
+      
+      // Aggiorna visualizzazione allenatore
+      updateCoachDisplay(profile, true);
+    } else {
+      // Utente non premium: disabilita la sezione
+      if (currentHoursInput) {
+        currentHoursInput.disabled = true;
+        currentHoursInput.style.opacity = "0.5";
+        currentHoursInput.style.cursor = "not-allowed";
+        currentHoursInput.value = "";
+      }
+      if (targetHoursInput) {
+        targetHoursInput.disabled = true;
+        targetHoursInput.style.opacity = "0.5";
+        targetHoursInput.style.cursor = "not-allowed";
+        targetHoursInput.value = "";
+      }
+      
+      // Nascondi progress bar
+      const coachProgress = qs("coach-progress");
+      if (coachProgress) coachProgress.style.display = "none";
+      
+      // Aggiungi overlay premium se non presente
+      if (coachSection && !coachSection.querySelector(".premium-overlay")) {
+        const overlay = document.createElement("div");
+        overlay.className = "premium-overlay";
+        overlay.style.cssText = `
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(10, 12, 20, 0.85);
+          backdrop-filter: blur(4px);
+          border-radius: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          z-index: 10;
+          cursor: pointer;
+        `;
+        overlay.innerHTML = `
+          <div style="text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 12px;">⭐</div>
+            <div style="font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.95); margin-bottom: 8px;">
+              Funzionalità Premium
+            </div>
+            <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px; line-height: 1.5;">
+              L'Allenatore di Studio è disponibile solo per gli utenti Premium.<br>
+              Passa a Premium per creare un piano progressivo personalizzato.
+            </div>
+            <button class="btn primary" style="margin-top: 8px;">
+              Passa a Premium
+            </button>
+          </div>
+        `;
+        
+        // Posiziona il formSection come relative se non lo è già
+        if (coachSection) {
+          const currentPosition = window.getComputedStyle(coachSection).position;
+          if (currentPosition === "static") {
+            coachSection.style.position = "relative";
+          }
+        }
+        
+        overlay.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showUpgradeModal();
+        });
+        
+        coachSection.appendChild(overlay);
+      }
+      
+      // Disabilita anche gli event listener sugli input
+      if (currentHoursInput) {
+        currentHoursInput.addEventListener("focus", (e) => {
+          if (!isPremiumUser) {
+            e.preventDefault();
+            e.target.blur();
+            showUpgradeModal();
+          }
+        });
+        currentHoursInput.addEventListener("click", (e) => {
+          if (!isPremiumUser) {
+            e.preventDefault();
+            showUpgradeModal();
+          }
+        });
+      }
+      if (targetHoursInput) {
+        targetHoursInput.addEventListener("focus", (e) => {
+          if (!isPremiumUser) {
+            e.preventDefault();
+            e.target.blur();
+            showUpgradeModal();
+          }
+        });
+        targetHoursInput.addEventListener("click", (e) => {
+          if (!isPremiumUser) {
+            e.preventDefault();
+            showUpgradeModal();
+          }
+        });
+      }
+    }
 
     await refreshExamList(user.uid);
 
@@ -3158,14 +3385,20 @@ function mountOnboarding() {
         if (totalMin < 60) throw new Error("Disponibilità settimanale troppo bassa (< 60 min).");
         if (weeklyHours < 1) throw new Error("Ore settimanali non valide.");
 
-        // Validazione allenatore
-        if (currentHours > 0 && targetHours > 0) {
-          if (targetHours <= currentHours) {
-            throw new Error("L'obiettivo deve essere maggiore delle ore attuali.");
+        // Validazione allenatore (solo se premium)
+        if (isPremiumUser) {
+          if (currentHours > 0 && targetHours > 0) {
+            if (targetHours <= currentHours) {
+              throw new Error("L'obiettivo deve essere maggiore delle ore attuali.");
+            }
+            if (targetHours - currentHours > 15) {
+              throw new Error("L'incremento è troppo grande (max 15h). Sii realistico.");
+            }
           }
-          if (targetHours - currentHours > 15) {
-            throw new Error("L'incremento è troppo grande (max 15h). Sii realistico.");
-          }
+        } else {
+          // Utente non premium: forza currentHours e targetHours a null
+          currentHours = 0;
+          targetHours = 0;
         }
 
         await setProfile(user.uid, { 
@@ -3173,8 +3406,8 @@ function mountOnboarding() {
           weeklyHours, 
           taskMinutes, 
           dayMinutes,
-          currentHours: currentHours > 0 ? currentHours : null,
-          targetHours: targetHours > 0 ? targetHours : null
+          currentHours: isPremiumUser && currentHours > 0 ? currentHours : null,
+          targetHours: isPremiumUser && targetHours > 0 ? targetHours : null
         });
         
         if (savedEl) {
@@ -3281,20 +3514,22 @@ function mountOnboarding() {
     setTimeout(setupSimulationButton, 300);
     
     // Aggiorna visualizzazione allenatore quando cambiano i valori
-    const currentHoursInput = qs("current-hours");
-    const targetHoursInput = qs("target-hours");
+    // Nota: currentHoursInput e targetHoursInput sono già dichiarate sopra (riga 3131-3132)
     const weeklyHoursInput = qs("weekly-hours");
     
     const updateCoachOnChange = () => {
+      // Riusa le variabili già dichiarate
+      const currentHoursVal = Number(qs("current-hours")?.value || 0);
+      const targetHoursVal = Number(qs("target-hours")?.value || 0);
       const profile = {
-        currentHours: Number(currentHoursInput?.value || 0),
-        targetHours: Number(targetHoursInput?.value || 0),
+        currentHours: currentHoursVal,
+        targetHours: targetHoursVal,
         weeklyHours: Number(weeklyHoursInput?.value || 0)
       };
-      updateCoachDisplay(profile);
+      updateCoachDisplay(profile, isPremiumUser);
       
-      // Se l'allenatore è attivo, aggiorna automaticamente weekly-hours
-      if (profile.currentHours > 0 && profile.targetHours > 0 && profile.targetHours > profile.currentHours) {
+      // Se l'allenatore è attivo, aggiorna automaticamente weekly-hours (solo se premium)
+      if (isPremiumUser && profile.currentHours > 0 && profile.targetHours > 0 && profile.targetHours > profile.currentHours) {
         // Calcola ore suggerite per questa settimana (inizio della progressione)
         const suggestedHours = calculateSuggestedWeeklyHours(profile.currentHours, profile.targetHours);
         if (weeklyHoursInput && (!weeklyHoursInput.value || weeklyHoursInput.value === "0")) {
@@ -3303,8 +3538,11 @@ function mountOnboarding() {
       }
     };
     
-    currentHoursInput?.addEventListener("input", updateCoachOnChange);
-    targetHoursInput?.addEventListener("input", updateCoachOnChange);
+    // Aggiungi event listener solo se premium
+    if (isPremiumUser) {
+      currentHoursInput?.addEventListener("input", updateCoachOnChange);
+      targetHoursInput?.addEventListener("input", updateCoachOnChange);
+    }
 
     qs("add-exam")?.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -3336,8 +3574,8 @@ function mountOnboarding() {
           finalCategory = detectExamCategory(name);
         }
 
-        // Leggi distribuzione task se personalizzata
-        const taskDistribution = getTaskDistribution();
+        // Leggi distribuzione task se personalizzata (solo se premium)
+        const taskDistribution = getTaskDistribution(isPremiumUser);
         
         await addExam(user.uid, { 
           name, 
@@ -3487,7 +3725,14 @@ function calculateProgressionWeeks(currentHours, targetHours) {
   return Math.ceil(totalIncrease / incrementPerWeek);
 }
 
-function updateCoachDisplay(profile) {
+function updateCoachDisplay(profile, isPremium = true) {
+  // Se non è premium, non mostrare nulla
+  if (!isPremium) {
+    const coachProgress = qs("coach-progress");
+    if (coachProgress) coachProgress.style.display = "none";
+    return;
+  }
+  
   const progressContainer = qs("coach-progress");
   const progressFill = qs("coach-progress-fill");
   const currentText = qs("coach-current-text");
@@ -3562,9 +3807,12 @@ function detectExamCategory(examName) {
 }
 
 // ----------------- Modale modifica esame -----------------
-function openEditExamModal(uid, exam, onSuccess) {
+async function openEditExamModal(uid, exam, onSuccess) {
   // Evita di aprire più modali contemporaneamente
   if (document.getElementById("exam-edit-modal")) return;
+  
+  // Verifica se l'utente è premium
+  const isPremiumUser = await isPremium(uid);
 
   // Overlay oscurante
   const overlay = document.createElement("div");
@@ -3909,30 +4157,88 @@ function openEditExamModal(uid, exam, onSuccess) {
   taskDistSection.appendChild(taskDistContainer);
   taskDistSection.appendChild(taskDistToggleBtn);
   
-  // Inizializza distribuzione task nella modale
-  const taskDist = exam.taskDistribution || null;
-  if (taskDist) {
-    types.forEach(type => {
-      const slider = document.getElementById(`ee-task-dist-${type.key}`);
-      if (slider) slider.value = taskDist[type.key] || 0;
+  // Controllo premium per distribuzione task
+  if (!isPremiumUser) {
+    taskDistToggleBtn.disabled = true;
+    taskDistToggleBtn.style.opacity = "0.5";
+    taskDistToggleBtn.style.cursor = "not-allowed";
+    taskDistContainer.style.display = "none";
+    
+    // Aggiungi overlay premium sulla sezione distribuzione task
+    if (taskDistSection && !taskDistSection.querySelector(".premium-overlay-modal")) {
+      const overlay = document.createElement("div");
+      overlay.className = "premium-overlay-modal";
+      overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 12, 20, 0.85);
+        backdrop-filter: blur(4px);
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 10;
+        cursor: pointer;
+      `;
+      overlay.innerHTML = `
+        <div style="text-align: center;">
+          <div style="font-size: 24px; margin-bottom: 8px;">⭐</div>
+          <div style="font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.95); margin-bottom: 6px;">
+            Funzionalità Premium
+          </div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.4;">
+            Personalizzazione distribuzione task disponibile solo per Premium
+          </div>
+        </div>
+      `;
+      
+      const currentPosition = window.getComputedStyle(taskDistSection).position;
+      if (currentPosition === "static") {
+        taskDistSection.style.position = "relative";
+      }
+      overlay.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showUpgradeModal();
+      });
+      taskDistSection.appendChild(overlay);
+    }
+    
+    taskDistToggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      showUpgradeModal();
     });
-    taskDistContainer.style.display = "block";
-    taskDistToggleBtn.textContent = "Nascondi personalizzazione";
-    updateTaskDistributionDisplayInModal();
-  }
-  
-  // Event listeners per modale
-  taskDistToggleBtn.addEventListener("click", () => {
-    const isVisible = taskDistContainer.style.display !== "none";
-    if (isVisible) {
-      taskDistContainer.style.display = "none";
-      taskDistToggleBtn.textContent = "Personalizza distribuzione task";
-      resetTaskDistributionInModal();
-    } else {
+  } else {
+    // Inizializza distribuzione task nella modale (solo se premium)
+    const taskDist = exam.taskDistribution || null;
+    if (taskDist) {
+      types.forEach(type => {
+        const slider = document.getElementById(`ee-task-dist-${type.key}`);
+        if (slider) slider.value = taskDist[type.key] || 0;
+      });
       taskDistContainer.style.display = "block";
       taskDistToggleBtn.textContent = "Nascondi personalizzazione";
+      updateTaskDistributionDisplayInModal();
     }
-  });
+    
+    // Event listeners per modale (solo se premium)
+    taskDistToggleBtn.addEventListener("click", () => {
+      const isVisible = taskDistContainer.style.display !== "none";
+      if (isVisible) {
+        taskDistContainer.style.display = "none";
+        taskDistToggleBtn.textContent = "Personalizza distribuzione task";
+        resetTaskDistributionInModal();
+      } else {
+        taskDistContainer.style.display = "block";
+        taskDistToggleBtn.textContent = "Nascondi personalizzazione";
+        updateTaskDistributionDisplayInModal();
+      }
+    });
+  }
   
   taskDistResetBtn.addEventListener("click", () => {
     resetTaskDistributionInModal();
@@ -4017,8 +4323,10 @@ function openEditExamModal(uid, exam, onSuccess) {
         finalCategory = detectExamCategory(name);
       }
 
-      // Leggi distribuzione task se personalizzata (dalla modale)
-      const taskDistribution = getTaskDistributionFromModal();
+      // Leggi distribuzione task se personalizzata (dalla modale) - solo se premium
+      // Verifica se l'utente è premium (dovrebbe essere disponibile nello scope)
+      const isPremium = await isPremium(uid);
+      const taskDistribution = getTaskDistributionFromModal(isPremium);
       
       // Prepara i dati per l'aggiornamento
       // Mantieni date per compatibilità (primo appello)
@@ -6958,6 +7266,12 @@ function mountTask() {
     }
 
     async function markSkip() {
+      // Controllo premium: solo gli utenti premium possono vedere le conseguenze
+      if (!isPremiumUser) {
+        showUpgradeModal();
+        return;
+      }
+      
       // Calcola le conseguenze usando i dati del task e payload disponibili nello scope
       const consequences = await calculateSkipConsequences(t, payload, st);
       
