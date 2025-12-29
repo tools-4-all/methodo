@@ -27,6 +27,7 @@ const fbApp = initializeApp(firebaseConfig);
 
 export const auth = getAuth(fbApp);
 export const db = getFirestore(fbApp);
+export const app = fbApp; // Esporta l'app per Firebase Functions
 
 // Base URL robusta per GitHub Pages + path con repo
 // auth.js

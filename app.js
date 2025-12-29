@@ -8,6 +8,7 @@ console.log("app.js loaded", location.href);
 import {
   auth,
   db,
+  app,
   watchAuth,
   loginWithEmail,
   signupWithEmail,
@@ -38,10 +39,13 @@ import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
 // ----------------- Firebase Functions -----------------
 let functions, createCheckoutSession;
 try {
-  functions = getFunctions();
+  // Usa l'app Firebase inizializzata da auth.js e specifica la regione
+  functions = getFunctions(app, 'us-central1');
   createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+  console.log("Firebase Functions inizializzate correttamente");
 } catch (e) {
-  console.warn("Firebase Functions non disponibili:", e);
+  console.error("Firebase Functions non disponibili:", e);
+  console.error("Dettagli errore:", e.message, e.stack);
 }
 
 // ----------------- Utils -----------------
@@ -323,6 +327,13 @@ function showUpgradeModal(onClose = null) {
       return;
     }
     
+    // Verifica che createCheckoutSession sia disponibile
+    if (!createCheckoutSession) {
+      console.error("createCheckoutSession non disponibile");
+      showToast("Errore: servizio di pagamento non disponibile. Ricarica la pagina.", 5000);
+      return;
+    }
+    
     try {
       // Disabilita il bottone e mostra loading
       if (subscribeBtn) {
@@ -331,6 +342,8 @@ function showUpgradeModal(onClose = null) {
       }
       if (loadingEl) loadingEl.style.display = "block";
       
+      console.log("Creazione sessione Stripe Checkout...");
+      
       // Chiama Firebase Functions per creare la sessione Stripe
       const result = await createCheckoutSession({
         email: user.email,
@@ -338,19 +351,32 @@ function showUpgradeModal(onClose = null) {
         cancelUrl: `${window.location.origin}${window.location.pathname.includes('profile') ? '/profile.html' : '/app.html'}?premium=canceled`
       });
       
+      console.log("Risultato createCheckoutSession:", result);
+      
       // Reindirizza a Stripe Checkout
-      if (result.data?.url) {
+      if (result?.data?.url) {
+        console.log("Reindirizzamento a Stripe Checkout:", result.data.url);
         // Mostra avviso se in modalità test
         if (result.data?.mode === 'test') {
           showToast("Modalità TEST: usa carte di test (es: 4242 4242 4242 4242)", 5000);
         }
         window.location.href = result.data.url;
       } else {
+        console.error("URL non presente nel risultato:", result);
         throw new Error("URL di checkout non ricevuto");
       }
     } catch (error) {
       console.error("Errore durante la creazione della sessione di pagamento:", error);
-      showToast(error.message || "Errore durante l'avvio del pagamento. Riprova più tardi.", 5000);
+      console.error("Dettagli errore:", error.code, error.message, error.details);
+      
+      let errorMessage = "Errore durante l'avvio del pagamento. Riprova più tardi.";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code) {
+        errorMessage = `Errore ${error.code}: ${error.message || 'Errore sconosciuto'}`;
+      }
+      
+      showToast(errorMessage, 5000);
       
       // Riabilita il bottone
       if (subscribeBtn) {
