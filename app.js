@@ -1514,7 +1514,9 @@ function mountIndex() {
       // Salva il codice referral in localStorage per processarlo dopo la verifica email
       const normalizedCode = referralCode.toUpperCase().trim();
       localStorage.setItem('pendingReferralCode', normalizedCode);
-      console.log("[Referral] Codice referral catturato dall'URL e salvato:", normalizedCode);
+      console.log("[Referral] ✅ Codice referral catturato e salvato:", normalizedCode);
+    } else {
+      console.log("[Referral] ⚠️ Nessun codice referral nell'URL");
     }
 
     try {
@@ -5120,56 +5122,41 @@ async function renderSubscription(uid) {
  * Viene chiamato da renderSubscription dopo aver renderizzato la subscription
  */
 async function renderReferralButton(uid) {
-  console.log("[Referral] renderReferralButton chiamata per uid:", uid);
-  
   const container = qs("referral-button-container");
   if (!container) {
-    console.warn("[Referral] Container referral-button-container non trovato");
     return;
   }
 
   try {
     // Verifica se l'utente è premium
     const isPremiumUser = await isPremium(uid);
-    console.log("[Referral] Utente premium?", isPremiumUser);
     
     // Se è premium, nascondi completamente la sezione
     if (isPremiumUser) {
       container.style.display = 'none';
       container.innerHTML = '';
-      console.log("[Referral] Utente premium, nascondo il bottone");
       return;
     }
 
     // Mostra il container solo se non è premium
     container.style.display = 'block';
-    console.log("[Referral] Utente non premium, mostro il bottone");
 
     if (!getReferralCode) {
-      console.warn("[Referral] getReferralCode non disponibile");
-      container.innerHTML = `
-        <div class="error" style="padding: 12px; text-align: center;">
-          Funzionalità referral non disponibile. Riprova più tardi.
-        </div>
-      `;
+      container.style.display = 'none';
       return;
     }
 
     // Recupera il codice referral
-    console.log("[Referral] Recupero codice referral...");
     let referralUrl;
     try {
       const result = await getReferralCode();
       referralUrl = result.data.referralUrl;
-      console.log("[Referral] Codice referral ottenuto:", referralUrl);
     } catch (error) {
-      console.error("[Referral] Errore chiamata getReferralCode:", error);
       // Fallback: genera un URL referral basato sull'UID
       // Questo permette di mostrare il bottone anche se la funzione Firebase non è disponibile
       const profile = await getProfile(uid);
       const referralCode = profile?.referralCode || `REF${uid.substring(0, 8).toUpperCase()}`;
       referralUrl = `https://methodo.app/index.html?ref=${referralCode}`;
-      console.log("[Referral] Usando fallback URL:", referralUrl);
     }
 
     // Mostra solo un bottone semplice
@@ -5183,12 +5170,8 @@ async function renderReferralButton(uid) {
     const inviteBtn = qs("invite-friend-btn");
     if (inviteBtn) {
       inviteBtn.addEventListener("click", () => {
-        console.log("[Referral] Bottone cliccato, apro modale");
         showReferralModal(referralUrl);
       });
-      console.log("[Referral] Event listener aggiunto al bottone");
-    } else {
-      console.error("[Referral] Bottone invite-friend-btn non trovato!");
     }
 
   } catch (error) {
@@ -5207,7 +5190,6 @@ async function renderReferralButton(uid) {
  */
 async function renderReferral(uid) {
   // Non fare nulla, il bottone viene aggiunto da renderSubscription
-  console.log("[Referral] renderReferral chiamata (legacy, ignorata)");
 }
 
 /**
@@ -6255,62 +6237,75 @@ function mountApp() {
 
       // Processa referral se presente (solo per nuovi utenti)
       const pendingReferralCode = localStorage.getItem('pendingReferralCode');
-      console.log("[Referral] Controllo referral in sospeso:", pendingReferralCode);
+      console.log("[Referral] ⚠️ DEBUG - Controllo referral:", {
+        hasCode: !!pendingReferralCode,
+        code: pendingReferralCode,
+        hasFunction: !!processReferral,
+        uid: user.uid
+      });
       
       if (pendingReferralCode && processReferral) {
         const profile = await getProfile(user.uid);
-        console.log("[Referral] Profilo utente:", {
+        console.log("[Referral] ⚠️ DEBUG - Profilo utente:", {
           referralProcessed: profile?.referralProcessed,
           hasSubscription: !!profile?.subscription,
-          uid: user.uid
+          subscriptionStatus: profile?.subscription?.status
         });
         
         // Processa solo se non è già stato processato
         if (!profile?.referralProcessed) {
+          console.log("[Referral] ⚠️ DEBUG - Tentativo di processare referral...");
           try {
-            console.log("[Referral] Tentativo di processare referral con codice:", pendingReferralCode);
-            const result = await processReferral({ referralCode: pendingReferralCode });
-            console.log("[Referral] Referral processato con successo:", result);
-            showToast("🎉 Referral attivato! Hai ricevuto 7 giorni di Premium.");
-            localStorage.removeItem('pendingReferralCode');
-            
-            // Ricarica la pagina per aggiornare lo stato Premium
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
+            // Processa il referral in background senza bloccare il rendering
+            processReferral({ referralCode: pendingReferralCode })
+              .then((result) => {
+                console.log("[Referral] ✅ SUCCESSO - Referral processato:", result);
+                showToast("🎉 Referral attivato! Hai ricevuto 7 giorni di Premium.");
+                localStorage.removeItem('pendingReferralCode');
+                
+                // Ricarica la pagina per aggiornare lo stato Premium
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1500);
+              })
+              .catch((err) => {
+                console.error("[Referral] ❌ ERRORE - Dettagli completi:", {
+                  code: err.code,
+                  message: err.message,
+                  details: err.details,
+                  stack: err.stack
+                });
+                
+                // Mostra un messaggio di errore più dettagliato
+                let errorMsg = "Errore nell'attivazione del referral.";
+                if (err.code === 'not-found') {
+                  errorMsg = "Codice referral non trovato. Verifica che il link sia corretto.";
+                } else if (err.code === 'already-exists') {
+                  errorMsg = "Hai già utilizzato un codice referral.";
+                } else if (err.code === 'deadline-exceeded') {
+                  errorMsg = "Il codice referral può essere utilizzato solo entro 48 ore dalla registrazione.";
+                } else if (err.code === 'permission-denied') {
+                  errorMsg = "Non puoi usare il tuo stesso codice referral.";
+                } else if (err.message) {
+                  errorMsg = err.message;
+                }
+                
+                showToast(errorMsg, 5000);
+                localStorage.removeItem('pendingReferralCode');
+              });
           } catch (err) {
-            console.error("[Referral] Errore processamento referral:", err);
-            console.error("[Referral] Dettagli errore:", {
-              code: err.code,
-              message: err.message,
-              details: err.details
-            });
-            
-            // Mostra un messaggio di errore più dettagliato
-            let errorMsg = "Errore nell'attivazione del referral.";
-            if (err.code === 'not-found') {
-              errorMsg = "Codice referral non trovato. Verifica che il link sia corretto.";
-            } else if (err.code === 'already-exists') {
-              errorMsg = "Hai già utilizzato un codice referral.";
-            } else if (err.code === 'deadline-exceeded') {
-              errorMsg = "Il codice referral può essere utilizzato solo entro 24 ore dalla registrazione.";
-            } else if (err.code === 'permission-denied') {
-              errorMsg = "Non puoi usare il tuo stesso codice referral.";
-            } else if (err.message) {
-              errorMsg = err.message;
-            }
-            
-            showToast(errorMsg, 5000);
+            console.error("[Referral] ❌ ERRORE SINCRONO:", err);
             localStorage.removeItem('pendingReferralCode');
           }
         } else {
-          console.log("[Referral] Referral già processato, rimuovo codice da localStorage");
-          // Rimuovi il codice se è già stato processato
+          console.log("[Referral] ⚠️ DEBUG - Referral già processato, rimuovo codice");
           localStorage.removeItem('pendingReferralCode');
         }
       } else if (pendingReferralCode && !processReferral) {
-        console.warn("[Referral] Codice referral presente ma processReferral non disponibile");
+        console.warn("[Referral] ⚠️ DEBUG - Codice presente ma funzione non disponibile");
         localStorage.removeItem('pendingReferralCode');
+      } else {
+        console.log("[Referral] ⚠️ DEBUG - Nessun referral da processare");
       }
 
       const profile = await getProfile(user.uid);
