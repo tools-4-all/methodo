@@ -30,6 +30,7 @@ import {
   deleteDoc,
   getDocs,
   serverTimestamp,
+  deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js";
@@ -2187,79 +2188,6 @@ function mountOnboarding() {
     }
   }
   
-  /**
-   * Legge la distribuzione task dalla modale di modifica
-   */
-  function getTaskDistributionFromModal() {
-    const container = document.getElementById("ee-task-distribution-container");
-    if (!container || container.style.display === "none") {
-      return null;
-    }
-    
-    const types = ["theory", "practice", "exam", "review", "spaced"];
-    const values = {};
-    let total = 0;
-    
-    types.forEach(type => {
-      const slider = document.getElementById(`ee-task-dist-${type}`);
-      if (slider) {
-        values[type] = Number(slider.value || 0);
-        total += values[type];
-      }
-    });
-    
-    if (total === 0) return null;
-    
-    // Normalizza
-    const normalized = {};
-    types.forEach(type => {
-      normalized[type] = Math.round((values[type] / total) * 100);
-    });
-    
-    return normalized;
-  }
-  
-  /**
-   * Aggiorna il display nella modale
-   */
-  function updateTaskDistributionDisplayInModal() {
-    const types = ["theory", "practice", "exam", "review", "spaced"];
-    let total = 0;
-    
-    types.forEach(type => {
-      const slider = document.getElementById(`ee-task-dist-${type}`);
-      const valueSpan = document.getElementById(`ee-task-dist-${type}-value`);
-      if (slider && valueSpan) {
-        const value = Number(slider.value || 0);
-        valueSpan.textContent = `${value}%`;
-        total += value;
-      }
-    });
-    
-    const totalSpan = document.getElementById("ee-task-dist-total-value");
-    if (totalSpan) {
-      totalSpan.textContent = `${total}%`;
-      if (total === 100) {
-        totalSpan.style.color = "rgba(34,197,94,1)";
-      } else if (total > 100) {
-        totalSpan.style.color = "rgba(239,68,68,1)";
-      } else {
-        totalSpan.style.color = "rgba(245,158,11,1)";
-      }
-    }
-  }
-  
-  /**
-   * Resetta la distribuzione nella modale
-   */
-  function resetTaskDistributionInModal() {
-    const types = ["theory", "practice", "exam", "review", "spaced"];
-    types.forEach(type => {
-      const slider = document.getElementById(`ee-task-dist-${type}`);
-      if (slider) slider.value = 0;
-    });
-    updateTaskDistributionDisplayInModal();
-  }
 
   function examCard(exam) {
     const d = document.createElement("div");
@@ -3806,6 +3734,85 @@ function detectExamCategory(examName) {
   return "mixed";
 }
 
+/**
+ * Legge la distribuzione task dalla modale di modifica
+ */
+function getTaskDistributionFromModal(isPremiumUser = true) {
+  // Se non premium, restituisci null
+  if (!isPremiumUser) {
+    return null;
+  }
+  
+  const container = document.getElementById("ee-task-distribution-container");
+  if (!container || container.style.display === "none") {
+    return null;
+  }
+  
+  const types = ["theory", "practice", "exam", "review", "spaced"];
+  const values = {};
+  let total = 0;
+  
+  types.forEach(type => {
+    const slider = document.getElementById(`ee-task-dist-${type}`);
+    if (slider) {
+      values[type] = Number(slider.value || 0);
+      total += values[type];
+    }
+  });
+  
+  if (total === 0) return null;
+  
+  // Normalizza
+  const normalized = {};
+  types.forEach(type => {
+    normalized[type] = Math.round((values[type] / total) * 100);
+  });
+  
+  return normalized;
+}
+
+/**
+ * Aggiorna il display nella modale
+ */
+function updateTaskDistributionDisplayInModal() {
+  const types = ["theory", "practice", "exam", "review", "spaced"];
+  let total = 0;
+  
+  types.forEach(type => {
+    const slider = document.getElementById(`ee-task-dist-${type}`);
+    const valueSpan = document.getElementById(`ee-task-dist-${type}-value`);
+    if (slider && valueSpan) {
+      const value = Number(slider.value || 0);
+      valueSpan.textContent = `${value}%`;
+      total += value;
+    }
+  });
+  
+  const totalSpan = document.getElementById("ee-task-dist-total-value");
+  if (totalSpan) {
+    totalSpan.textContent = `${total}%`;
+    if (total === 100) {
+      totalSpan.style.color = "rgba(34,197,94,1)";
+    } else if (total > 100) {
+      totalSpan.style.color = "rgba(239,68,68,1)";
+    } else {
+      totalSpan.style.color = "rgba(245,158,11,1)";
+    }
+  }
+}
+
+/**
+ * Resetta la distribuzione nella modale
+ */
+function resetTaskDistributionInModal() {
+  const types = ["theory", "practice", "exam", "review", "spaced"];
+  types.forEach(type => {
+    const slider = document.getElementById(`ee-task-dist-${type}`);
+    if (slider) slider.value = 0;
+  });
+  updateTaskDistributionDisplayInModal();
+}
+
 // ----------------- Modale modifica esame -----------------
 async function openEditExamModal(uid, exam, onSuccess) {
   // Evita di aprire più modali contemporaneamente
@@ -4212,20 +4219,83 @@ async function openEditExamModal(uid, exam, onSuccess) {
       e.preventDefault();
       showUpgradeModal();
     });
+    
+    // Utente non premium: disabilita anche gli slider
+    types.forEach(type => {
+      const slider = document.getElementById(`ee-task-dist-${type.key}`);
+      if (slider) {
+        slider.disabled = true;
+        slider.style.opacity = "0.5";
+        slider.style.cursor = "not-allowed";
+      }
+    });
+    
+    if (taskDistResetBtn) {
+      taskDistResetBtn.disabled = true;
+      taskDistResetBtn.style.opacity = "0.5";
+      taskDistResetBtn.style.cursor = "not-allowed";
+    }
   } else {
-    // Inizializza distribuzione task nella modale (solo se premium)
-    const taskDist = exam.taskDistribution || null;
-    if (taskDist) {
+    // Funzione helper per aggiungere i listener agli slider
+    const attachSliderListeners = () => {
       types.forEach(type => {
         const slider = document.getElementById(`ee-task-dist-${type.key}`);
-        if (slider) slider.value = taskDist[type.key] || 0;
+        if (slider) {
+          // Salva il valore corrente prima di clonare
+          const currentValue = slider.value;
+          
+          slider.disabled = false;
+          slider.style.opacity = "1";
+          slider.style.cursor = "pointer";
+          
+          // Rimuovi eventuali listener precedenti clonando l'elemento
+          const newSlider = slider.cloneNode(true);
+          // Ripristina il valore dopo il clone
+          newSlider.value = currentValue;
+          
+          if (slider.parentNode) {
+            slider.parentNode.replaceChild(newSlider, slider);
+          }
+          
+          // Aggiungi il nuovo listener
+          newSlider.addEventListener("input", () => {
+            updateTaskDistributionDisplayInModal();
+          });
+          // Aggiungi anche listener per change (per compatibilità)
+          newSlider.addEventListener("change", () => {
+            updateTaskDistributionDisplayInModal();
+          });
+        }
       });
-      taskDistContainer.style.display = "block";
-      taskDistToggleBtn.textContent = "Nascondi personalizzazione";
-      updateTaskDistributionDisplayInModal();
-    }
+    };
     
-    // Event listeners per modale (solo se premium)
+    // Inizializza distribuzione task nella modale (solo se premium)
+    const taskDist = exam.taskDistribution || null;
+    
+    // Attacca i listener e carica i valori
+    // Usa setTimeout per assicurarsi che gli elementi siano completamente nel DOM
+    setTimeout(() => {
+      // Se c'è una distribuzione salvata, caricala
+      if (taskDist) {
+        // Carica i valori dagli slider
+        types.forEach(type => {
+          const slider = document.getElementById(`ee-task-dist-${type.key}`);
+          if (slider) {
+            slider.value = taskDist[type.key] || 0;
+          }
+        });
+        // Mostra il container e aggiorna il bottone
+        taskDistContainer.style.display = "block";
+        taskDistToggleBtn.textContent = "Nascondi personalizzazione";
+      }
+      
+      // Attacca i listener
+      attachSliderListeners();
+      // Aggiorna sempre il display per mostrare i valori corretti
+      updateTaskDistributionDisplayInModal();
+    }, 50);
+    
+    // Event listeners per modale (solo se premium) - UNIFICA I DUE HANDLER
     taskDistToggleBtn.addEventListener("click", () => {
       const isVisible = taskDistContainer.style.display !== "none";
       if (isVisible) {
@@ -4235,23 +4305,36 @@ async function openEditExamModal(uid, exam, onSuccess) {
       } else {
         taskDistContainer.style.display = "block";
         taskDistToggleBtn.textContent = "Nascondi personalizzazione";
-        updateTaskDistributionDisplayInModal();
+        // Quando si apre, riattacca i listener e aggiorna il display
+        // Se c'è una distribuzione salvata, ricarica i valori
+        const savedTaskDist = exam.taskDistribution || null;
+        if (savedTaskDist) {
+          types.forEach(type => {
+            const slider = document.getElementById(`ee-task-dist-${type.key}`);
+            if (slider) {
+              slider.value = savedTaskDist[type.key] || 0;
+            }
+          });
+        }
+        setTimeout(() => {
+          attachSliderListeners();
+          updateTaskDistributionDisplayInModal();
+        }, 10);
       }
     });
+    
+    // Event listener per reset (solo se premium)
+    // Aggiungi un flag per tracciare se l'utente ha resettato la distribuzione
+    let distributionWasReset = false;
+    taskDistResetBtn.addEventListener("click", () => {
+      resetTaskDistributionInModal();
+      distributionWasReset = true; // Marca che è stato resettato
+    });
+    
+    // Salva il flag nello scope per usarlo nel salvataggio
+    window._taskDistributionWasReset = () => distributionWasReset;
+    window._clearTaskDistributionReset = () => { distributionWasReset = false; };
   }
-  
-  taskDistResetBtn.addEventListener("click", () => {
-    resetTaskDistributionInModal();
-  });
-  
-  types.forEach(type => {
-    const slider = document.getElementById(`ee-task-dist-${type.key}`);
-    if (slider) {
-      slider.addEventListener("input", () => {
-        updateTaskDistributionDisplayInModal();
-      });
-    }
-  });
   
   // Aggiungi tutti i campi al form
   form.appendChild(nameLabel);
@@ -4324,9 +4407,24 @@ async function openEditExamModal(uid, exam, onSuccess) {
       }
 
       // Leggi distribuzione task se personalizzata (dalla modale) - solo se premium
-      // Verifica se l'utente è premium (dovrebbe essere disponibile nello scope)
-      const isPremium = await isPremium(uid);
-      const taskDistribution = getTaskDistributionFromModal(isPremium);
+      // isPremiumUser è già disponibile nello scope (definito all'inizio della funzione)
+      const taskDistribution = getTaskDistributionFromModal(isPremiumUser);
+      
+      // Se l'utente ha cliccato su "Usa distribuzione automatica", salva null
+      // altrimenti usa la distribuzione personalizzata o mantieni quella esistente
+      let finalTaskDistribution;
+      if (window._taskDistributionWasReset && window._taskDistributionWasReset()) {
+        // L'utente ha resettato, quindi usa distribuzione automatica (null)
+        finalTaskDistribution = null;
+        // Pulisci il flag
+        if (window._clearTaskDistributionReset) window._clearTaskDistributionReset();
+      } else if (taskDistribution) {
+        // C'è una distribuzione personalizzata
+        finalTaskDistribution = taskDistribution;
+      } else {
+        // Nessuna distribuzione personalizzata, mantieni quella esistente o null
+        finalTaskDistribution = exam.taskDistribution || null;
+      }
       
       // Prepara i dati per l'aggiornamento
       // Mantieni date per compatibilità (primo appello)
@@ -4339,9 +4437,18 @@ async function openEditExamModal(uid, exam, onSuccess) {
         level, 
         difficulty,
         category: finalCategory,
-        topics,
-        taskDistribution: taskDistribution || exam.taskDistribution || undefined // Mantieni esistente o usa nuovo
+        topics
       };
+      
+      // Aggiungi taskDistribution solo se non è null (Firestore non accetta undefined)
+      // Se è null, usa deleteField() per rimuovere il campo, altrimenti salva il valore
+      if (finalTaskDistribution !== null) {
+        updateData.taskDistribution = finalTaskDistribution;
+      } else if (exam.taskDistribution) {
+        // Se è null e c'era un valore precedente, rimuovilo usando deleteField
+        updateData.taskDistribution = deleteField();
+      }
+      // Se è null e non c'era un valore precedente, semplicemente non includiamo il campo
 
       await updateExam(uid, exam.id, updateData);
       closeModal();
