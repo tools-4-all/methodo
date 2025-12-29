@@ -2093,45 +2093,23 @@ function mountOnboarding() {
       return;
     }
     
-    // Filtra esami con appelli selezionati
-    const examsWithSelectedAppelli = exams.filter(exam => {
+    // Considera TUTTI gli esami (non solo quelli con appelli selezionati)
+    const examsWithAppelli = exams.filter(exam => {
       const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
-      return appelli.some(a => a.selected !== false);
+      return appelli.length > 0;
     });
     
-    if (examsWithSelectedAppelli.length === 0) {
-      alert("Seleziona almeno un appello per eseguire la simulazione");
+    if (examsWithAppelli.length === 0) {
+      alert("Aggiungi almeno un esame con appelli per eseguire la simulazione");
       return;
     }
     
-    // Crea esami "virtuali" per ogni appello selezionato
-    const virtualExams = [];
-    examsWithSelectedAppelli.forEach(exam => {
-      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
-      appelli.filter(a => a.selected !== false).forEach(appello => {
-        virtualExams.push({
-          ...exam,
-          id: `${exam.id}_${appello.date}`,
-          date: appello.date,
-          originalExamId: exam.id
-        });
-      });
-    });
-    
-    // Genera piano con esami virtuali
-    const weekStart = startOfWeekISO(new Date());
-    const plan = generateWeeklyPlan(profile, virtualExams, weekStart);
-    
-    // Calcola statistiche
-    const totalTasks = plan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0);
-    const totalHours = Math.round((plan.weeklyBudgetMin / 60) * 10) / 10;
-    const cutHours = plan.cut ? Math.round((plan.cut.reduce((sum, t) => sum + (t.minutes || 0), 0) / 60) * 10) / 10 : 0;
-    
-    // Analizza convenienza degli appelli per ogni esame
+    // Analizza TUTTI gli appelli per TUTTI gli esami, considerando l'impatto globale
     const appelliAnalysis = [];
-    const allocMap = new Map((plan.allocations || []).map((a) => [a.examId, a.targetMin]));
+    const weekStart = startOfWeekISO(new Date());
     
-    examsWithSelectedAppelli.forEach(exam => {
+    // Per ogni esame, analizza tutti gli appelli disponibili
+    examsWithAppelli.forEach(exam => {
       const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
       const selectedAppelli = appelli.filter(a => a.selected !== false);
       
@@ -2188,32 +2166,25 @@ function mountOnboarding() {
     // Mostra risultati
     let html = `
       <div class="simulationSummary">
-        <div class="simulationSummaryTitle">Risultati Simulazione</div>
+        <div class="simulationSummaryTitle">Risultati Simulazione Globale</div>
         <div class="simulationSummaryStats">
           <div class="simulationStat">
-            <div class="simulationStatValue">${examsWithSelectedAppelli.length}</div>
+            <div class="simulationStatValue">${totalExams}</div>
             <div class="simulationStatLabel">Esami</div>
           </div>
           <div class="simulationStat">
-            <div class="simulationStatValue">${totalTasks}</div>
-            <div class="simulationStatLabel">Task</div>
+            <div class="simulationStatValue">${totalAppelli}</div>
+            <div class="simulationStatLabel">Appelli</div>
           </div>
           <div class="simulationStat">
-            <div class="simulationStatValue">${totalHours}h</div>
-            <div class="simulationStatLabel">Budget</div>
+            <div class="simulationStatValue">${Math.round(appelliAnalysis.reduce((sum, a) => sum + (a.best.readiness || 0), 0) / totalExams)}%</div>
+            <div class="simulationStatLabel">Readiness media</div>
           </div>
         </div>
-        ${cutHours > 0 ? `
-          <div style="margin-top:20px; padding:14px; background:rgba(245,158,11,0.1); border-radius:10px; border-left:3px solid rgba(245,158,11,0.6);">
-            <div style="font-size:13px; font-weight:600; color:rgba(245,158,11,1); margin-bottom:4px;">⚠️ Attenzione</div>
-            <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:1.5;">${cutHours}h di task non possono essere completati con il budget attuale. Considera di aumentare le ore settimanali o ridurre il numero di appelli selezionati.</div>
-          </div>
-        ` : `
-          <div style="margin-top:20px; padding:14px; background:rgba(34,197,94,0.1); border-radius:10px; border-left:3px solid rgba(34,197,94,0.6);">
-            <div style="font-size:13px; font-weight:600; color:rgba(34,197,94,1); margin-bottom:4px;">✓ Piano fattibile</div>
-            <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:1.5;">Tutti i task possono essere completati con il budget settimanale disponibile.</div>
-          </div>
-        `}
+        <div style="margin-top:20px; padding:14px; background:rgba(99,102,241,0.1); border-radius:10px; border-left:3px solid rgba(99,102,241,0.6);">
+          <div style="font-size:13px; font-weight:600; color:rgba(99,102,241,1); margin-bottom:4px;">ℹ️ Analisi Completa</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.8); line-height:1.5;">La simulazione considera tutti gli esami e tutti gli appelli disponibili, valutando l'impatto globale di ogni scelta.</div>
+        </div>
       </div>
     `;
     
@@ -2221,30 +2192,43 @@ function mountOnboarding() {
     if (appelliAnalysis.length > 0) {
       html += `
         <div class="simulationRecommendations">
-          <div class="simulationRecommendationsTitle">Consigli Appelli</div>
+          <div class="simulationRecommendationsTitle">Consigli Appelli (Analisi Globale)</div>
           <div class="simulationRecommendationsList">
       `;
       
-      appelliAnalysis.forEach(({ exam, comparisons, best, worst }) => {
+      appelliAnalysis.forEach(({ exam, comparisons, best, worst, alternativeAppello }) => {
         const bestDate = best.appello.date;
-        const bestType = "Esame";
-        const bestDays = best.daysLeft;
         const bestReadiness = best.readiness;
-        const bestRequired = Math.round(best.required / 60);
-        const bestCapacity = Math.round(best.capacity / 60);
         
         let recommendation = "";
         let recommendationClass = "simulationRecommendationGood";
+        let recommendationNote = "";
         
-        if (best.convenienceScore > worst.convenienceScore + 15) {
-          recommendation = `Consigliato: ${bestDate}`;
+        if (best.recommended) {
+          recommendation = `✅ Consigliato: ${bestDate}`;
           recommendationClass = "simulationRecommendationGood";
-        } else if (best.convenienceScore > worst.convenienceScore + 5) {
-          recommendation = `Preferibile: ${bestDate}`;
+          recommendationNote = `Preparazione stimata: ${bestReadiness}% - Pronto per sostenere l'esame`;
+        } else if (best.canTry) {
+          recommendation = `⚠️ Puoi provare: ${bestDate}`;
           recommendationClass = "simulationRecommendationNeutral";
+          recommendationNote = `Preparazione stimata: ${bestReadiness}% - Preparazione sufficiente per tentare`;
+          
+          if (alternativeAppello) {
+            recommendationNote += `. Considera anche ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% readiness) per una preparazione migliore`;
+          }
         } else {
-          recommendation = `Appelli simili`;
-          recommendationClass = "simulationRecommendationNeutral";
+          recommendation = `❌ Preparazione insufficiente`;
+          recommendationClass = "simulationRecommendationBad";
+          recommendationNote = `Preparazione stimata: ${bestReadiness}% - Rischi di non passare`;
+          
+          if (alternativeAppello) {
+            recommendationNote += `. Suggerito: ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% readiness)`;
+          } else if (comparisons.length > 1) {
+            const bestAlternative = comparisons.find(c => c.readiness > best.readiness);
+            if (bestAlternative) {
+              recommendationNote += `. Alternativa migliore: ${bestAlternative.appello.date} (${bestAlternative.readiness}% readiness)`;
+            }
+          }
         }
         
         html += `
@@ -2253,37 +2237,59 @@ function mountOnboarding() {
               <strong>${escapeHtml(exam.name)}</strong>
               <span class="simulationRecommendationBadge">${recommendation}</span>
             </div>
-            <div class="simulationRecommendationDetails">
+            ${recommendationNote ? `
+              <div style="margin-top:8px; padding:10px; background:rgba(255,255,255,0.05); border-radius:6px; font-size:12px; color:rgba(255,255,255,0.9); line-height:1.5;">
+                ${recommendationNote}
+              </div>
+            ` : ''}
+            <div class="simulationRecommendationDetails" style="margin-top:12px;">
         `;
         
-        comparisons.forEach((comp, idx) => {
-          const isBest = idx === 0;
-          const readinessBadge = comp.readiness >= 85 ? "good" : comp.readiness >= 60 ? "warn" : "bad";
-          const readinessText = comp.readiness >= 85 ? "on track" : comp.readiness >= 60 ? "borderline" : "rischio";
+        // Ordina per readiness (dal migliore al peggiore) per mostrare le opzioni migliori prima
+        const sortedComparisons = [...comparisons].sort((a, b) => b.readiness - a.readiness);
+        
+        sortedComparisons.forEach((comp, idx) => {
+          const isBest = comp.appello.date === best.appello.date;
+          const isAlternative = alternativeAppello && comp.appello.date === alternativeAppello.appello.date;
+          const readinessBadge = comp.readiness >= 85 ? "good" : comp.readiness >= 70 ? "warn" : comp.readiness >= 50 ? "bad" : "bad";
+          const readinessText = comp.readiness >= 85 ? "Pronto" : comp.readiness >= 70 ? "Quasi pronto" : comp.readiness >= 50 ? "Puoi provare" : "Rischio";
           
           html += `
-            <div class="simulationAppelloComparison ${isBest ? "simulationAppelloBest" : ""}">
+            <div class="simulationAppelloComparison ${isBest ? "simulationAppelloBest" : isAlternative ? "simulationAppelloAlternative" : ""}" style="${isBest ? 'border: 2px solid rgba(34,197,94,0.5);' : isAlternative ? 'border: 2px solid rgba(99,102,241,0.5);' : ''}">
               <div class="simulationAppelloComparisonHeader">
                 <span class="simulationAppelloDate">${escapeHtml(comp.appello.date)}</span>
-                ${isBest ? '<span class="simulationBestBadge">⭐ Consigliato</span>' : ''}
+                <div style="display:flex; gap:8px; align-items:center;">
+                  ${isBest ? '<span class="simulationBestBadge">⭐ Consigliato</span>' : ''}
+                  ${isAlternative ? '<span class="simulationBestBadge" style="background:rgba(99,102,241,0.2); color:rgba(99,102,241,1);">💡 Alternativa</span>' : ''}
+                </div>
               </div>
               <div class="simulationAppelloComparisonStats">
                 <div class="simulationAppelloStat">
-                  <span class="simulationAppelloStatLabel">Giorni</span>
+                  <span class="simulationAppelloStatLabel">Giorni rimanenti</span>
                   <span class="simulationAppelloStatValue">${comp.daysLeft}g</span>
                 </div>
                 <div class="simulationAppelloStat">
-                  <span class="simulationAppelloStatLabel">Readiness</span>
+                  <span class="simulationAppelloStatLabel">Preparazione stimata</span>
                   <span class="simulationAppelloStatValue badge ${readinessBadge}">${comp.readiness}%</span>
                 </div>
                 <div class="simulationAppelloStat">
-                  <span class="simulationAppelloStatLabel">Necessario</span>
+                  <span class="simulationAppelloStatLabel">Stato</span>
+                  <span class="simulationAppelloStatValue" style="font-size:11px;">${readinessText}</span>
+                </div>
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Ore necessarie</span>
                   <span class="simulationAppelloStatValue">${Math.round(comp.required / 60)}h</span>
                 </div>
                 <div class="simulationAppelloStat">
-                  <span class="simulationAppelloStatLabel">Capacità</span>
+                  <span class="simulationAppelloStatLabel">Ore disponibili</span>
                   <span class="simulationAppelloStatValue">${Math.round(comp.capacity / 60)}h</span>
                 </div>
+                ${comp.avgOtherReadiness !== undefined ? `
+                <div class="simulationAppelloStat">
+                  <span class="simulationAppelloStatLabel">Impatto altri esami</span>
+                  <span class="simulationAppelloStatValue" style="font-size:11px;">${Math.round(comp.avgOtherReadiness)}% readiness</span>
+                </div>
+                ` : ''}
               </div>
             </div>
           `;
