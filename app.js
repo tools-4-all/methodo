@@ -37,12 +37,13 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
 
 // ----------------- Firebase Functions -----------------
-let functions, createCheckoutSession, cancelSubscription;
+let functions, createCheckoutSession, cancelSubscription, fixSubscriptionEndDate;
 try {
   // Usa l'app Firebase inizializzata da auth.js e specifica la regione
   functions = getFunctions(app, 'us-central1');
   createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
   cancelSubscription = httpsCallable(functions, 'cancelSubscription');
+  fixSubscriptionEndDate = httpsCallable(functions, 'fixSubscriptionEndDate');
   console.log("Firebase Functions inizializzate correttamente");
 } catch (e) {
   console.error("Firebase Functions non disponibili:", e);
@@ -203,9 +204,32 @@ async function isPremium(uid) {
   }
   
   // Controlla che endDate sia nel futuro (anche se cancellato, può usare fino alla fine del periodo pagato)
-  const endDate = subscription?.endDate?.toDate ? 
-                  subscription.endDate.toDate() : 
-                  new Date(subscription?.endDate);
+  let endDate = subscription?.endDate?.toDate ? 
+                subscription.endDate.toDate() : 
+                (subscription?.endDate ? new Date(subscription.endDate) : null);
+  
+  // Se endDate è mancante ma c'è stripeSubscriptionId, prova a recuperarlo automaticamente (solo una volta)
+  if ((!endDate || isNaN(endDate.getTime())) && subscription?.stripeSubscriptionId && fixSubscriptionEndDate) {
+    console.warn(`[isPremium] endDate mancante per utente ${uid}, tentativo recupero da Stripe...`);
+    try {
+      // Chiama la funzione per recuperare endDate da Stripe (solo se non è già in corso)
+      const fixKey = `fixing_endDate_${uid}`;
+      if (!window[fixKey]) {
+        window[fixKey] = true;
+        fixSubscriptionEndDate().then(() => {
+          console.log(`[isPremium] endDate recuperato da Stripe per utente ${uid}`);
+          delete window[fixKey];
+        }).catch(err => {
+          console.error(`[isPremium] Errore recupero endDate:`, err);
+          delete window[fixKey];
+        });
+      }
+    } catch (err) {
+      console.error(`[isPremium] Errore chiamata fixSubscriptionEndDate:`, err);
+    }
+    // Ritorna false per ora, ma la prossima chiamata dovrebbe avere endDate
+    return false;
+  }
   
   if (!endDate || isNaN(endDate.getTime())) {
     return false;

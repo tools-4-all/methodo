@@ -202,9 +202,13 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
 
     console.log(`Abbonamento impostato per cancellazione alla fine del periodo per utente ${uid}`);
 
-    // Aggiorna lo status nel database (Stripe invierà un webhook per confermare)
+    // IMPORTANTE: Preserva endDate con current_period_end per permettere l'uso fino alla scadenza
+    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+
+    // Aggiorna lo status nel database mantenendo endDate valido
     await db.collection('users').doc(uid).update({
       'subscription.status': 'cancelled',
+      'subscription.endDate': admin.firestore.Timestamp.fromDate(currentPeriodEnd), // Preserva endDate
       'subscription.cancelledAt': admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -220,6 +224,66 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError(
         'internal',
         'Errore durante la cancellazione dell\'abbonamento',
+        error.message,
+    );
+  }
+});
+
+/**
+ * Recupera endDate da Stripe se mancante nel database (fix per utenti già cancellati)
+ */
+exports.fixSubscriptionEndDate = functions.https.onCall(async (data, context) => {
+  // Verifica autenticazione
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Devi essere autenticato',
+    );
+  }
+
+  const uid = context.auth.uid;
+
+  try {
+    // Recupera il profilo utente
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError(
+          'not-found',
+          'Profilo utente non trovato',
+      );
+    }
+
+    const userData = userDoc.data();
+    const subscription = userData.subscription;
+
+    if (!subscription || !subscription.stripeSubscriptionId) {
+      throw new functions.https.HttpsError(
+          'not-found',
+          'Abbonamento Stripe non trovato',
+      );
+    }
+
+    // Recupera la subscription da Stripe
+    const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripeSubscriptionId);
+    const currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+
+    // Aggiorna endDate nel database
+    await db.collection('users').doc(uid).update({
+      'subscription.endDate': admin.firestore.Timestamp.fromDate(currentPeriodEnd),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      endDate: currentPeriodEnd.toISOString(),
+      status: stripeSubscription.status,
+      cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+    };
+  } catch (error) {
+    console.error('Errore recupero endDate:', error);
+    throw new functions.https.HttpsError(
+        'internal',
+        'Errore durante il recupero della data di scadenza',
         error.message,
     );
   }
@@ -386,18 +450,29 @@ async function handleSubscriptionUpdated(subscription) {
   const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
   const currentPeriodStart = new Date(subscription.current_period_start * 1000);
 
+  // Determina lo status: se cancel_at_period_end è true, considera come 'cancelled' ma mantiene endDate
+  let status = subscription.status;
+  if (subscription.cancel_at_period_end === true) {
+    status = 'cancelled'; // Anche se status è ancora 'active', lo trattiamo come 'cancelled'
+  } else if (subscription.status === 'active') {
+    status = 'active';
+  } else {
+    status = 'cancelled';
+  }
+
   await db.collection('users').doc(uid).update({
-    'subscription.status': subscription.status === 'active' ? 'active' : 'cancelled',
-    'subscription.endDate': admin.firestore.Timestamp.fromDate(currentPeriodEnd),
+    'subscription.status': status,
+    'subscription.endDate': admin.firestore.Timestamp.fromDate(currentPeriodEnd), // Sempre aggiorna endDate
     'subscription.startDate': admin.firestore.Timestamp.fromDate(currentPeriodStart),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Abbonamento aggiornato per utente ${uid}: ${subscription.status}`);
+  console.log(`Abbonamento aggiornato per utente ${uid}: status=${status}, cancel_at_period_end=${subscription.cancel_at_period_end}, endDate=${currentPeriodEnd.toISOString()}`);
 }
 
 /**
  * Gestisce la cancellazione della subscription
+ * IMPORTANTE: Non modifica endDate per permettere l'uso fino alla fine del periodo pagato
  */
 async function handleSubscriptionDeleted(subscription) {
   const uid = subscription.metadata && subscription.metadata.firebaseUID;
@@ -406,13 +481,37 @@ async function handleSubscriptionDeleted(subscription) {
     return;
   }
 
-  await db.collection('users').doc(uid).update({
+  // Recupera il profilo esistente per preservare endDate
+  const userDoc = await db.collection('users').doc(uid).get();
+  const userData = userDoc.exists ? userDoc.data() : null;
+  const existingEndDate = userData?.subscription?.endDate;
+
+  // Se endDate esiste ed è nel futuro, preservalo. Altrimenti usa current_period_end se disponibile
+  let endDateToKeep = existingEndDate;
+  if (subscription.current_period_end) {
+    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const existingEndDateValue = existingEndDate?.toDate ? existingEndDate.toDate() : new Date(existingEndDate);
+
+    // Usa la data più lontana tra quella esistente e current_period_end
+    if (!existingEndDate || currentPeriodEnd > existingEndDateValue) {
+      endDateToKeep = admin.firestore.Timestamp.fromDate(currentPeriodEnd);
+    }
+  }
+
+  const updateData = {
     'subscription.status': 'cancelled',
     'subscription.cancelledAt': admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
 
-  console.log(`Abbonamento cancellato per utente ${uid}`);
+  // Preserva endDate solo se esiste ed è valido
+  if (endDateToKeep) {
+    updateData['subscription.endDate'] = endDateToKeep;
+  }
+
+  await db.collection('users').doc(uid).update(updateData);
+
+  console.log(`Abbonamento cancellato per utente ${uid}. EndDate preservato: ${endDateToKeep ? 'sì' : 'no'}`);
 }
 
 /**
