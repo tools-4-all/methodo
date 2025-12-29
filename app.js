@@ -2931,6 +2931,8 @@ function openEditExamModal(uid, exam, onSuccess) {
     justifyContent: "center",
     background: "rgba(0,0,0,0.6)",
     zIndex: "9999",
+    padding: "20px",
+    overflowY: "auto",
   });
 
   // Contenitore principale con stile card
@@ -2939,6 +2941,9 @@ function openEditExamModal(uid, exam, onSuccess) {
   card.style.maxWidth = "480px";
   card.style.width = "90%";
   card.style.padding = "20px";
+  card.style.maxHeight = "90vh";
+  card.style.overflowY = "auto";
+  card.style.overflowX = "hidden";
 
   // Titolo modale
   const title = document.createElement("h3");
