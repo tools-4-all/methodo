@@ -37,13 +37,14 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
 
 // ----------------- Firebase Functions -----------------
-let functions, createCheckoutSession, cancelSubscription, fixSubscriptionEndDate;
+let functions, createCheckoutSession, cancelSubscription, fixSubscriptionEndDate, activatePromoCode;
 try {
   // Usa l'app Firebase inizializzata da auth.js e specifica la regione
   functions = getFunctions(app, 'us-central1');
   createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
   cancelSubscription = httpsCallable(functions, 'cancelSubscription');
   fixSubscriptionEndDate = httpsCallable(functions, 'fixSubscriptionEndDate');
+  activatePromoCode = httpsCallable(functions, 'activatePromoCode');
   console.log("Firebase Functions inizializzate correttamente");
 } catch (e) {
   console.error("Firebase Functions non disponibili:", e);
@@ -329,6 +330,27 @@ function showUpgradeModal(onClose = null) {
       </ul>
     </div>
     
+    <div style="margin-bottom: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 8px; font-weight: 600;">
+          Hai un codice promozionale?
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input 
+            type="text" 
+            id="promo-code-input" 
+            placeholder="Inserisci codice" 
+            style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.9); font-size: 14px; text-transform: uppercase;"
+            maxlength="20"
+          />
+          <button id="promo-code-btn" class="btn" style="padding: 12px 20px; white-space: nowrap;">
+            Attiva
+          </button>
+        </div>
+        <div id="promo-code-message" style="margin-top: 8px; font-size: 12px; min-height: 16px;"></div>
+      </div>
+    </div>
+    
     <div style="display: flex; flex-direction: column; gap: 12px;">
       <button id="upgrade-subscribe-btn" class="btn primary" style="width: 100%; padding: 14px; font-size: 16px; font-weight: 700;">
         Passa a Premium
@@ -357,6 +379,99 @@ function showUpgradeModal(onClose = null) {
   };
   
   qs("upgrade-close-btn")?.addEventListener("click", closeModal);
+  
+  // Gestore promo code
+  const promoCodeInput = qs("promo-code-input");
+  const promoCodeBtn = qs("promo-code-btn");
+  const promoCodeMessage = qs("promo-code-message");
+  
+  promoCodeBtn?.addEventListener("click", async () => {
+    const code = promoCodeInput?.value?.trim().toUpperCase();
+    const user = auth.currentUser;
+    
+    if (!user) {
+      showToast("Devi essere loggato per usare un promo code", 3000);
+      return;
+    }
+    
+    if (!code) {
+      if (promoCodeMessage) {
+        promoCodeMessage.textContent = "Inserisci un codice promozionale";
+        promoCodeMessage.style.color = "rgba(239,68,68,1)";
+      }
+      return;
+    }
+    
+    if (!activatePromoCode) {
+      console.error("activatePromoCode non disponibile");
+      showToast("Errore: servizio non disponibile. Ricarica la pagina.", 5000);
+      return;
+    }
+    
+    try {
+      // Disabilita il bottone e mostra loading
+      if (promoCodeBtn) {
+        promoCodeBtn.disabled = true;
+        promoCodeBtn.textContent = "⏳ Attivazione...";
+      }
+      if (promoCodeInput) promoCodeInput.disabled = true;
+      if (promoCodeMessage) {
+        promoCodeMessage.textContent = "Verifica in corso...";
+        promoCodeMessage.style.color = "rgba(255,255,255,0.7)";
+      }
+      
+      const result = await activatePromoCode({ code });
+      
+      if (result?.data?.success) {
+        if (promoCodeMessage) {
+          promoCodeMessage.textContent = `✅ ${result.data.message || 'Premium attivato!'}`;
+          promoCodeMessage.style.color = "rgba(34,197,94,1)";
+        }
+        showToast(result.data.message || "Premium attivato con successo!", 3000);
+        
+        // Chiudi la modale e ricarica la pagina dopo un breve delay
+        setTimeout(() => {
+          closeModal();
+          setTimeout(() => window.location.reload(), 500);
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Errore attivazione promo code:", error);
+      
+      let errorMessage = "Errore durante l'attivazione del codice";
+      if (error.code === 'not-found') {
+        errorMessage = "Codice promozionale non trovato";
+      } else if (error.code === 'already-exists') {
+        errorMessage = "Codice promozionale già utilizzato";
+      } else if (error.code === 'deadline-exceeded') {
+        errorMessage = "Codice promozionale scaduto";
+      } else if (error.code === 'permission-denied') {
+        errorMessage = "Codice promozionale disattivato";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      if (promoCodeMessage) {
+        promoCodeMessage.textContent = `❌ ${errorMessage}`;
+        promoCodeMessage.style.color = "rgba(239,68,68,1)";
+      }
+      
+      // Riabilita il bottone
+      if (promoCodeBtn) {
+        promoCodeBtn.disabled = false;
+        promoCodeBtn.textContent = "Attiva";
+      }
+      if (promoCodeInput) promoCodeInput.disabled = false;
+    }
+  });
+  
+  // Permetti attivazione con Enter
+  promoCodeInput?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      promoCodeBtn?.click();
+    }
+  });
+  
   qs("upgrade-subscribe-btn")?.addEventListener("click", async () => {
     const subscribeBtn = qs("upgrade-subscribe-btn");
     const loadingEl = qs("upgrade-loading");

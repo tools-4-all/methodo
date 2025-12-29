@@ -290,6 +290,129 @@ exports.fixSubscriptionEndDate = functions.https.onCall(async (data, context) =>
 });
 
 /**
+ * Attiva Premium usando un promo code
+ * Verifica che il codice esista, non sia già usato, e attiva Premium per l'utente
+ */
+exports.activatePromoCode = functions.https.onCall(async (data, context) => {
+  // Verifica autenticazione
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Devi essere autenticato per usare un promo code',
+    );
+  }
+
+  const uid = context.auth.uid;
+  const code = data.code?.trim().toUpperCase();
+
+  if (!code) {
+    throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Codice promozionale non valido',
+    );
+  }
+
+  try {
+    // Usa una transazione per evitare race conditions
+    const promoCodeRef = db.collection('promoCodes').doc(code);
+
+    return await db.runTransaction(async (transaction) => {
+      const promoCodeDoc = await transaction.get(promoCodeRef);
+
+      if (!promoCodeDoc.exists) {
+        throw new functions.https.HttpsError(
+            'not-found',
+            'Codice promozionale non trovato',
+        );
+      }
+
+      const promoCodeData = promoCodeDoc.data();
+
+      // Verifica che il codice sia attivo
+      if (promoCodeData.active === false) {
+        throw new functions.https.HttpsError(
+            'permission-denied',
+            'Codice promozionale disattivato',
+        );
+      }
+
+      // Verifica che non sia già stato usato
+      if (promoCodeData.usedBy) {
+        throw new functions.https.HttpsError(
+            'already-exists',
+            'Codice promozionale già utilizzato',
+        );
+      }
+
+      // Verifica scadenza (se presente)
+      if (promoCodeData.expiresAt) {
+        const expiresAt = promoCodeData.expiresAt.toDate ?
+                          promoCodeData.expiresAt.toDate() :
+                          new Date(promoCodeData.expiresAt);
+        if (expiresAt < new Date()) {
+          throw new functions.https.HttpsError(
+              'deadline-exceeded',
+              'Codice promozionale scaduto',
+          );
+        }
+      }
+
+      // Calcola endDate (default: 30 giorni da ora, o usa durationDays se specificato)
+      const durationDays = promoCodeData.durationDays || 30;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + durationDays);
+      const startDate = new Date();
+
+      // Marca il codice come usato
+      transaction.update(promoCodeRef, {
+        usedBy: uid,
+        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Attiva Premium per l'utente
+      const userRef = db.collection('users').doc(uid);
+      transaction.update(userRef, {
+        subscription: {
+          status: 'active',
+          startDate: admin.firestore.Timestamp.fromDate(startDate),
+          endDate: admin.firestore.Timestamp.fromDate(endDate),
+          type: 'promo',
+          price: 0,
+          promoCode: code,
+          verified: true, // I promo code sono sempre verificati
+          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`Promo code ${code} attivato per utente ${uid}`);
+
+      return {
+        success: true,
+        message: 'Premium attivato con successo!',
+        endDate: endDate.toISOString(),
+        days: durationDays,
+      };
+    });
+  } catch (error) {
+    console.error('Errore attivazione promo code:', error);
+
+    // Se è già un HttpsError, rilancialo
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    // Altrimenti, crea un errore generico
+    throw new functions.https.HttpsError(
+        'internal',
+        'Errore durante l\'attivazione del codice promozionale',
+        error.message,
+    );
+  }
+});
+
+/**
  * Gestisce i webhook di Stripe
  *
  * POST /handleStripeWebhook
