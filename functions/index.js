@@ -809,38 +809,66 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
         const uidPrefix = referralCode.substring(3).toUpperCase(); // Rimuovi "REF"
         
         console.log(`[Referral] Tentativo di trovare utente con UID che inizia con: ${uidPrefix}`);
+        console.log(`[Referral] Cercherò tra tutti gli utenti per trovare quello con UID che genera questo codice...`);
         
-        // Cerca tutti gli utenti il cui UID inizia con questo prefisso
-        // Nota: Firestore non supporta query "starts with", quindi dobbiamo iterare
-        // Limitiamo la ricerca ai primi 100 utenti senza referralCode per efficienza
-        const usersWithoutCode = await db.collection('users')
-            .limit(500) // Aumentiamo il limite per avere più possibilità
-            .get();
-        
+        // Strategia migliorata: cerca tutti gli utenti e verifica se il loro referral code generato corrisponde
+        // Usiamo un batch per essere più efficienti
         let foundUser = null;
-        for (const userDoc of usersWithoutCode.docs) {
-          const userUid = userDoc.id.toUpperCase();
-          const userData = userDoc.data();
-          
-          // Salta se ha già un referralCode diverso
-          if (userData.referralCode && userData.referralCode !== referralCode) {
-            continue;
+        let lastDoc = null;
+        const batchSize = 500;
+        let totalChecked = 0;
+        
+        // Cerca in batch fino a trovare l'utente o finire tutti gli utenti
+        while (!foundUser) {
+          let query = db.collection('users').limit(batchSize);
+          if (lastDoc) {
+            query = query.startAfter(lastDoc);
           }
           
-          // Verifica se l'UID inizia con il prefisso
-          if (userUid.startsWith(uidPrefix)) {
-            // Genera il referral code per questo UID e verifica se corrisponde
-            const generatedCode = `REF${userDoc.id.substring(0, 8).toUpperCase()}`;
+          const batch = await query.get();
+          
+          if (batch.empty) {
+            console.log(`[Referral] Nessun altro utente da controllare. Totale controllati: ${totalChecked}`);
+            break;
+          }
+          
+          console.log(`[Referral] Controllando batch di ${batch.size} utenti... (totale: ${totalChecked + batch.size})`);
+          
+          for (const userDoc of batch.docs) {
+            totalChecked++;
+            const userUid = userDoc.id;
+            const userData = userDoc.data();
+            
+            // Genera il referral code per questo UID
+            const generatedCode = `REF${userUid.substring(0, 8).toUpperCase()}`;
+            
+            // Se il codice generato corrisponde, abbiamo trovato l'utente
             if (generatedCode === referralCode) {
               foundUser = userDoc;
+              console.log(`[Referral] ✅ Utente trovato! UID: ${userUid}, Codice: ${referralCode}`);
+              
               // Salva il referral code FUORI dalla transazione
-              await db.collection('users').doc(userDoc.id).set({
+              await db.collection('users').doc(userUid).set({
                 referralCode: referralCode,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, {merge: true});
-              console.log(`[Referral] ✅ Codice generato automaticamente per ${userDoc.id}: ${referralCode}`);
+              
+              console.log(`[Referral] ✅ Codice generato e salvato automaticamente per ${userUid}: ${referralCode}`);
               break;
             }
+          }
+          
+          // Prepara per il prossimo batch
+          if (!batch.empty && !foundUser) {
+            lastDoc = batch.docs[batch.docs.length - 1];
+          } else {
+            break;
+          }
+          
+          // Limite di sicurezza: non cercare più di 5000 utenti
+          if (totalChecked >= 5000) {
+            console.warn(`[Referral] ⚠️ Raggiunto limite di ricerca (5000 utenti)`);
+            break;
           }
         }
         
@@ -851,17 +879,23 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
               .limit(1)
               .get();
           console.log(`[Referral] Query dopo generazione: ${referrerQuery.size} risultati`);
+        } else {
+          console.error(`[Referral] ❌ Utente non trovato dopo aver controllato ${totalChecked} utenti`);
+          console.error(`[Referral] Codice cercato: ${referralCode}, UID prefix: ${uidPrefix}`);
         }
       }
       
       // Se ancora non trovato dopo tutti i tentativi
       if (referrerQuery.empty) {
         console.error(`[Referral] ❌ Codice referral non trovato dopo tutti i tentativi: ${referralCode}`);
-        console.error(`[Referral] Verifica che l'utente che ha generato il link abbia visitato la pagina profilo per generare il codice.`);
+        console.error(`[Referral] Verifica che:`);
+        console.error(`[Referral] 1. Il codice referral sia corretto`);
+        console.error(`[Referral] 2. L'utente che ha generato il link esista nel database`);
+        console.error(`[Referral] 3. L'utente che ha generato il link abbia visitato la pagina profilo per generare il codice`);
 
         throw new functions.https.HttpsError(
             'not-found',
-            'Codice referral non trovato. L\'utente che ha generato il link deve visitare la pagina profilo per attivare il codice.',
+            'Codice referral non trovato. Verifica che il link sia corretto e che l\'utente che ha generato il link esista.',
         );
       }
     }

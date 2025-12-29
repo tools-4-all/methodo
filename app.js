@@ -1054,8 +1054,38 @@ async function reconstructTaskPayloadFromFirestore(user, tid) {
 
 // ----------------- Redirect logic -----------------
 async function routeAfterLogin(user) {
+  // Cattura il referral code dall'URL se presente (utile quando l'utente arriva dal link di verifica email)
+  const urlParams = new URLSearchParams(window.location.search);
+  const referralCodeFromUrl = urlParams.get('ref');
+  if (referralCodeFromUrl) {
+    const normalizedCode = referralCodeFromUrl.toUpperCase().trim();
+    localStorage.setItem('pendingReferralCode', normalizedCode);
+    console.log("[Referral] ✅ Codice referral catturato dall'URL dopo verifica email:", normalizedCode);
+  }
+  
   await ensureUserDoc(user);
-  const profile = await getProfile(user.uid);
+  let profile = await getProfile(user.uid);
+  
+  // Processa referral se presente (solo per nuovi utenti)
+  const pendingReferralCode = localStorage.getItem('pendingReferralCode');
+  if (pendingReferralCode && processReferral && !profile?.referralProcessed) {
+    console.log("[Referral] ⚠️ Processamento referral dopo login...");
+    try {
+      const result = await processReferral({ referralCode: pendingReferralCode });
+      console.log("[Referral] ✅ SUCCESSO - Referral processato dopo login:", result);
+      showToast("🎉 Referral attivato! Hai ricevuto 7 giorni di Premium.");
+      localStorage.removeItem('pendingReferralCode');
+      // Ricarica il profilo per avere i dati aggiornati
+      profile = await getProfile(user.uid);
+    } catch (err) {
+      console.error("[Referral] ❌ ERRORE durante processamento dopo login:", err);
+      // Non bloccare il login, ma mostra un messaggio
+      if (err.code !== 'already-exists') {
+        showToast("Errore nell'attivazione del referral. Riprova più tardi.", 5000);
+      }
+      localStorage.removeItem('pendingReferralCode');
+    }
+  }
   
   // Controlla se mancano informazioni personali di base
   const needsPersonalInfo = !profile?.name || !profile?.faculty || !profile?.age;
@@ -1537,8 +1567,9 @@ function mountIndex() {
     try {
       const cred = await signupWithEmail(email, pass);
 
-      // Invia email di verifica
-      await sendVerificationOrThrow(cred.user);
+      // Invia email di verifica (include il referral code se presente)
+      const pendingReferralCode = localStorage.getItem('pendingReferralCode');
+      await sendVerificationOrThrow(cred.user, pendingReferralCode || referralCode);
 
       // popup immediato
       showToast("Ti ho inviato una mail di verifica. Controlla inbox e spam.");
@@ -6245,29 +6276,50 @@ function mountApp() {
 
       // Processa referral se presente (solo per nuovi utenti)
       const pendingReferralCode = localStorage.getItem('pendingReferralCode');
-      console.log("[Referral] ⚠️ DEBUG - Controllo referral:", {
+      console.log("[Referral] ⚠️ DEBUG mountApp - Controllo referral:", {
         hasCode: !!pendingReferralCode,
         code: pendingReferralCode,
         hasFunction: !!processReferral,
-        uid: user.uid
+        functionType: typeof processReferral,
+        uid: user.uid,
+        timestamp: new Date().toISOString()
       });
       
-      if (pendingReferralCode && processReferral) {
+      if (pendingReferralCode) {
+        if (!processReferral) {
+          console.error("[Referral] ❌ ERRORE CRITICO - processReferral non è definito!");
+          console.error("[Referral] Verifica che Firebase Functions sia inizializzato correttamente");
+          console.error("[Referral] Functions disponibili:", {
+            functions: !!functions,
+            createCheckoutSession: !!createCheckoutSession,
+            getReferralCode: !!getReferralCode
+          });
+          localStorage.removeItem('pendingReferralCode');
+          return;
+        }
+        
         const profile = await getProfile(user.uid);
-        console.log("[Referral] ⚠️ DEBUG - Profilo utente:", {
+        console.log("[Referral] ⚠️ DEBUG mountApp - Profilo utente:", {
           referralProcessed: profile?.referralProcessed,
           hasSubscription: !!profile?.subscription,
-          subscriptionStatus: profile?.subscription?.status
+          subscriptionStatus: profile?.subscription?.status,
+          referralCodeUsed: profile?.referralCodeUsed
         });
         
         // Processa solo se non è già stato processato
         if (!profile?.referralProcessed) {
-          console.log("[Referral] ⚠️ DEBUG - Tentativo di processare referral...");
+          console.log("[Referral] ⚠️ DEBUG mountApp - Tentativo di processare referral...");
+          console.log("[Referral] Chiamata processReferral con codice:", pendingReferralCode);
+          
           try {
             // Processa il referral in background senza bloccare il rendering
-            processReferral({ referralCode: pendingReferralCode })
+            const referralPromise = processReferral({ referralCode: pendingReferralCode });
+            console.log("[Referral] Promise creata, in attesa di risposta...");
+            
+            referralPromise
               .then((result) => {
-                console.log("[Referral] ✅ SUCCESSO - Referral processato:", result);
+                console.log("[Referral] ✅ SUCCESSO mountApp - Referral processato:", result);
+                console.log("[Referral] Dettagli risultato:", JSON.stringify(result, null, 2));
                 showToast("🎉 Referral attivato! Hai ricevuto 7 giorni di Premium.");
                 localStorage.removeItem('pendingReferralCode');
                 
@@ -6277,17 +6329,19 @@ function mountApp() {
                 }, 1500);
               })
               .catch((err) => {
-                console.error("[Referral] ❌ ERRORE - Dettagli completi:", {
+                console.error("[Referral] ❌ ERRORE mountApp - Dettagli completi:", {
                   code: err.code,
                   message: err.message,
                   details: err.details,
-                  stack: err.stack
+                  stack: err.stack,
+                  name: err.name,
+                  toString: err.toString()
                 });
                 
                 // Mostra un messaggio di errore più dettagliato
                 let errorMsg = "Errore nell'attivazione del referral.";
                 if (err.code === 'not-found') {
-                  errorMsg = "Codice referral non trovato. Verifica che il link sia corretto.";
+                  errorMsg = "Codice referral non trovato. Verifica che il link sia corretto e che l'utente che ha generato il link esista.";
                 } else if (err.code === 'already-exists') {
                   errorMsg = "Hai già utilizzato un codice referral.";
                 } else if (err.code === 'deadline-exceeded') {
@@ -6298,22 +6352,25 @@ function mountApp() {
                   errorMsg = err.message;
                 }
                 
+                console.error("[Referral] Messaggio errore mostrato all'utente:", errorMsg);
                 showToast(errorMsg, 5000);
                 localStorage.removeItem('pendingReferralCode');
               });
           } catch (err) {
-            console.error("[Referral] ❌ ERRORE SINCRONO:", err);
+            console.error("[Referral] ❌ ERRORE SINCRONO mountApp:", err);
+            console.error("[Referral] Stack trace:", err.stack);
             localStorage.removeItem('pendingReferralCode');
           }
         } else {
-          console.log("[Referral] ⚠️ DEBUG - Referral già processato, rimuovo codice");
+          console.log("[Referral] ⚠️ DEBUG mountApp - Referral già processato, rimuovo codice");
+          console.log("[Referral] Dettagli referral processato:", {
+            referralCodeUsed: profile?.referralCodeUsed,
+            referralProcessedAt: profile?.referralProcessedAt
+          });
           localStorage.removeItem('pendingReferralCode');
         }
-      } else if (pendingReferralCode && !processReferral) {
-        console.warn("[Referral] ⚠️ DEBUG - Codice presente ma funzione non disponibile");
-        localStorage.removeItem('pendingReferralCode');
       } else {
-        console.log("[Referral] ⚠️ DEBUG - Nessun referral da processare");
+        console.log("[Referral] ⚠️ DEBUG mountApp - Nessun referral da processare");
       }
 
       const profile = await getProfile(user.uid);

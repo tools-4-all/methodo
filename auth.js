@@ -53,9 +53,19 @@ export function getBaseUrl(file = "index.html") {
 
 // --- Email verification helpers ---
 // Usa actionCodeSettings invece di solo url per evitare l'uso di Dynamic Links
-export async function sendVerificationOrThrow(user) {
+export async function sendVerificationOrThrow(user, referralCode = null) {
+  let verificationUrl = getBaseUrl("index.html");
+  
+  // Se c'è un referral code, aggiungilo all'URL di verifica
+  if (referralCode) {
+    const url = new URL(verificationUrl);
+    url.searchParams.set('ref', referralCode);
+    verificationUrl = url.toString();
+    console.log(`[Referral] URL verifica email con referral code: ${verificationUrl}`);
+  }
+  
   const actionCodeSettings = {
-    url: getBaseUrl("index.html"),
+    url: verificationUrl,
     handleCodeInApp: false, // Per web, non serve handleCodeInApp
   };
   await sendEmailVerification(user, actionCodeSettings);
