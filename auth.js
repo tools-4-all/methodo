@@ -56,21 +56,39 @@ export async function sendVerificationOrThrow(user) {
 }
 
 // Se non verificato: reinvia mail (best effort), logout e blocca
-export async function ensureVerifiedOrBlock(user, setError) {
+// skipResend: se true, non reinvia l'email (utile subito dopo la registrazione)
+export async function ensureVerifiedOrBlock(user, setError, skipResend = false) {
   await reload(user);
   if (user.emailVerified) return true;
 
-  try {
-    await sendVerificationOrThrow(user);
-  } catch (e) {
-    console.error("sendEmailVerification failed", e);
+  // Controlla se l'account è stato creato di recente (meno di 1 minuto fa)
+  // Se sì, probabilmente l'email è già stata inviata durante la registrazione
+  const accountCreated = user.metadata?.creationTime ? new Date(user.metadata.creationTime) : null;
+  const now = new Date();
+  const minutesSinceCreation = accountCreated ? (now - accountCreated) / (1000 * 60) : null;
+  const isRecentAccount = minutesSinceCreation !== null && minutesSinceCreation < 1;
+
+  // Evita di reinviare l'email se è stata appena inviata (durante la registrazione)
+  // Ma solo se l'account è molto recente (meno di 1 minuto)
+  if (!skipResend && !isRecentAccount) {
+    try {
+      await sendVerificationOrThrow(user);
+    } catch (e) {
+      console.error("sendEmailVerification failed", e);
+    }
   }
 
   await signOut(auth);
   if (typeof setError === "function") {
-    setError(
-      "Email non verificata. Ti ho (ri)inviato la mail di verifica. Controlla anche spam."
-    );
+    if (skipResend || isRecentAccount) {
+      setError(
+        "Email non verificata. Controlla la tua casella (anche spam) per il link di verifica."
+      );
+    } else {
+      setError(
+        "Email non verificata. Ti ho (ri)inviato la mail di verifica. Controlla anche spam."
+      );
+    }
   }
   return false;
 }

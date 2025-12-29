@@ -131,6 +131,38 @@ async function getProfile(uid) {
 
 // ----------------- Premium helpers -----------------
 /**
+ * Controlla se l'utente può aggiungere un esame (limite free: 3 esami)
+ */
+async function canAddExam(uid) {
+  const isPremiumUser = await isPremium(uid);
+  
+  // Utenti premium possono aggiungere esami illimitati
+  if (isPremiumUser) {
+    return {
+      allowed: true,
+      message: ""
+    };
+  }
+  
+  // Utenti free: limite di 3 esami
+  const exams = await listExams(uid);
+  const currentCount = exams?.length || 0;
+  const limit = 3;
+  
+  if (currentCount >= limit) {
+    return {
+      allowed: false,
+      message: `Hai raggiunto il limite di ${limit} esami nella versione gratuita. Passa a Premium per esami illimitati.`
+    };
+  }
+  
+  return {
+    allowed: true,
+    message: ""
+  };
+}
+
+/**
  * Controlla se l'utente ha un abbonamento premium attivo
  */
 async function isPremium(uid) {
@@ -920,7 +952,7 @@ function showPersonalInfoModal(user, onComplete) {
   ageInput.id = "pi-age";
   ageInput.min = "16";
   ageInput.max = "100";
-  ageInput.placeholder = "18";
+  ageInput.placeholder = "";
   ageInput.required = true;
   ageLabel.appendChild(ageInput);
 
@@ -1290,7 +1322,7 @@ function mountIndex() {
     try {
       const cred = await signupWithEmail(email, pass);
 
-      // invia mail verifica
+      // Invia email di verifica
       await sendVerificationOrThrow(cred.user);
 
       // popup immediato
@@ -1305,7 +1337,23 @@ function mountIndex() {
       activateTab("login");
     } catch (err) {
       console.error(err);
-      setText(signupErr, err?.message ?? "Errore creazione account");
+      
+      // Traduci errori comuni in italiano
+      let errorMessage = err?.message ?? "Errore creazione account";
+      
+      if (err?.code === "auth/email-already-in-use" || errorMessage.includes("email-already-in-use")) {
+        errorMessage = "Questa email è già registrata. Usa 'Login' per accedere o 'Password dimenticata?' se non ricordi la password.";
+      } else if (err?.code === "auth/invalid-email" || errorMessage.includes("invalid-email")) {
+        errorMessage = "Email non valida. Inserisci un indirizzo email corretto.";
+      } else if (err?.code === "auth/weak-password" || errorMessage.includes("weak-password")) {
+        errorMessage = "Password troppo debole. Usa almeno 6 caratteri.";
+      } else if (err?.code === "auth/operation-not-allowed" || errorMessage.includes("operation-not-allowed")) {
+        errorMessage = "Operazione non consentita. Contatta il supporto.";
+      } else if (err?.code === "auth/network-request-failed" || errorMessage.includes("network")) {
+        errorMessage = "Errore di connessione. Verifica la tua connessione internet e riprova.";
+      }
+      
+      setText(signupErr, errorMessage);
     }
   }
 
