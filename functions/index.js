@@ -773,6 +773,8 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
   }
 
   try {
+    console.log(`[Referral] Processamento referral: codice=${referralCode}, nuovoUtente=${newUserUid}`);
+
     return await db.runTransaction(async (transaction) => {
       // Trova l'utente che ha generato il referral
       const referrerQuery = await db.collection('users')
@@ -780,7 +782,10 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
           .limit(1)
           .get();
 
+      console.log(`[Referral] Query referral trovati: ${referrerQuery.size}`);
+
       if (referrerQuery.empty) {
+        console.error(`[Referral] Codice referral non trovato: ${referralCode}`);
         throw new functions.https.HttpsError(
             'not-found',
             'Codice referral non trovato',
@@ -791,8 +796,11 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
       const referrerUid = referrerDoc.id;
       const referrerData = referrerDoc.data();
 
+      console.log(`[Referral] Referrer trovato: ${referrerUid}, referralsCount: ${referrerData.referralsCount || 0}`);
+
       // SICUREZZA: Verifica che non sia auto-referral
       if (referrerUid === newUserUid) {
+        console.error(`[Referral] Tentativo di auto-referral: ${newUserUid}`);
         throw new functions.https.HttpsError(
             'permission-denied',
             'Non puoi usare il tuo stesso codice referral',
@@ -817,14 +825,26 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
 
         // Verifica che l'account sia stato creato di recente (max 24 ore fa)
         // Questo previene che utenti esistenti usino referral
-        const accountCreated = context.auth.token.auth_time * 1000; // Firebase Auth timestamp
+        // Usa metadata.creationTime se disponibile, altrimenti auth_time
+        let accountCreated;
+        if (newUserData.createdAt) {
+          accountCreated = newUserData.createdAt.toDate ?
+                          newUserData.createdAt.toDate().getTime() :
+                          new Date(newUserData.createdAt).getTime();
+        } else {
+          accountCreated = context.auth.token.auth_time * 1000; // Firebase Auth timestamp
+        }
+
         const now = Date.now();
         const hoursSinceCreation = (now - accountCreated) / (1000 * 60 * 60);
 
-        if (hoursSinceCreation > 24) {
+        console.log(`[Referral] Account creato ${hoursSinceCreation.toFixed(2)} ore fa`);
+
+        // Aumentiamo il limite a 48 ore per dare più tempo
+        if (hoursSinceCreation > 48) {
           throw new functions.https.HttpsError(
               'deadline-exceeded',
-              'Il codice referral può essere utilizzato solo entro 24 ore dalla registrazione',
+              'Il codice referral può essere utilizzato solo entro 48 ore dalla registrazione',
           );
         }
       }
