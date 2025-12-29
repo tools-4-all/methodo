@@ -38,7 +38,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
 
 // ----------------- Firebase Functions -----------------
-let functions, createCheckoutSession, cancelSubscription, fixSubscriptionEndDate, activatePromoCode;
+let functions, createCheckoutSession, cancelSubscription, fixSubscriptionEndDate, activatePromoCode, getReferralCode, processReferral;
 try {
   // Usa l'app Firebase inizializzata da auth.js e specifica la regione
   functions = getFunctions(app, 'us-central1');
@@ -46,6 +46,8 @@ try {
   cancelSubscription = httpsCallable(functions, 'cancelSubscription');
   fixSubscriptionEndDate = httpsCallable(functions, 'fixSubscriptionEndDate');
   activatePromoCode = httpsCallable(functions, 'activatePromoCode');
+  getReferralCode = httpsCallable(functions, 'getReferralCode');
+  processReferral = httpsCallable(functions, 'processReferral');
   console.log("Firebase Functions inizializzate correttamente");
 } catch (e) {
   console.error("Firebase Functions non disponibili:", e);
@@ -1505,6 +1507,14 @@ function mountIndex() {
       return;
     }
 
+    // Cattura il codice referral dall'URL se presente
+    const urlParams = new URLSearchParams(window.location.search);
+    const referralCode = urlParams.get('ref');
+    if (referralCode) {
+      // Salva il codice referral in localStorage per processarlo dopo la verifica email
+      localStorage.setItem('pendingReferralCode', referralCode.toUpperCase());
+    }
+
     try {
       const cred = await signupWithEmail(email, pass);
 
@@ -1523,6 +1533,11 @@ function mountIndex() {
       activateTab("login");
     } catch (err) {
       console.error(err);
+      
+      // Rimuovi il referral code se la registrazione fallisce
+      if (referralCode) {
+        localStorage.removeItem('pendingReferralCode');
+      }
       
       // Traduci errori comuni in italiano
       let errorMessage = err?.message ?? "Errore creazione account";
@@ -4776,6 +4791,7 @@ function mountProfile() {
 
     // Mostra e gestisci abbonamento
     await renderSubscription(user.uid);
+    await renderReferral(user.uid);
 
     // Gestore modifica informazioni personali
     const editBtn = qs("edit-personal-info");
@@ -5081,13 +5097,276 @@ async function renderSubscription(uid) {
             Passa a Premium - €5/mese
           </button>
         </div>
+        
+        <div id="referral-button-container" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.1);">
+          <!-- Il bottone referral verrà aggiunto qui -->
+        </div>
       </div>
     `;
     
     qs("upgrade-subscription-btn")?.addEventListener("click", () => {
       showUpgradeModal();
     });
+    
+    // Aggiungi il bottone referral dopo aver renderizzato la subscription
+    await renderReferralButton(uid);
   }
+}
+
+/**
+ * Renderizza il bottone referral (solo per utenti non premium)
+ * Viene chiamato da renderSubscription dopo aver renderizzato la subscription
+ */
+async function renderReferralButton(uid) {
+  console.log("[Referral] renderReferralButton chiamata per uid:", uid);
+  
+  const container = qs("referral-button-container");
+  if (!container) {
+    console.warn("[Referral] Container referral-button-container non trovato");
+    return;
+  }
+
+  try {
+    // Verifica se l'utente è premium
+    const isPremiumUser = await isPremium(uid);
+    console.log("[Referral] Utente premium?", isPremiumUser);
+    
+    // Se è premium, nascondi completamente la sezione
+    if (isPremiumUser) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+      console.log("[Referral] Utente premium, nascondo il bottone");
+      return;
+    }
+
+    // Mostra il container solo se non è premium
+    container.style.display = 'block';
+    console.log("[Referral] Utente non premium, mostro il bottone");
+
+    if (!getReferralCode) {
+      console.warn("[Referral] getReferralCode non disponibile");
+      container.innerHTML = `
+        <div class="error" style="padding: 12px; text-align: center;">
+          Funzionalità referral non disponibile. Riprova più tardi.
+        </div>
+      `;
+      return;
+    }
+
+    // Recupera il codice referral
+    console.log("[Referral] Recupero codice referral...");
+    let referralUrl;
+    try {
+      const result = await getReferralCode();
+      referralUrl = result.data.referralUrl;
+      console.log("[Referral] Codice referral ottenuto:", referralUrl);
+    } catch (error) {
+      console.error("[Referral] Errore chiamata getReferralCode:", error);
+      // Fallback: genera un URL referral basato sull'UID
+      // Questo permette di mostrare il bottone anche se la funzione Firebase non è disponibile
+      const profile = await getProfile(uid);
+      const referralCode = profile?.referralCode || `REF${uid.substring(0, 8).toUpperCase()}`;
+      referralUrl = `https://methodo.app/index.html?ref=${referralCode}`;
+      console.log("[Referral] Usando fallback URL:", referralUrl);
+    }
+
+    // Mostra solo un bottone semplice
+    container.innerHTML = `
+      <button class="btn" id="invite-friend-btn" type="button" style="width: 100%;">
+        Invita un amico e ricevi 7 giorni Premium gratis
+      </button>
+    `;
+
+    // Crea una modale per mostrare il link quando si clicca
+    const inviteBtn = qs("invite-friend-btn");
+    if (inviteBtn) {
+      inviteBtn.addEventListener("click", () => {
+        console.log("[Referral] Bottone cliccato, apro modale");
+        showReferralModal(referralUrl);
+      });
+      console.log("[Referral] Event listener aggiunto al bottone");
+    } else {
+      console.error("[Referral] Bottone invite-friend-btn non trovato!");
+    }
+
+  } catch (error) {
+    console.error("Errore rendering referral:", error);
+    // Non nascondere completamente, mostra un messaggio di errore
+    container.innerHTML = `
+      <div class="error" style="padding: 12px; text-align: center; color: rgba(251,113,133,1);">
+        Errore nel caricamento del link di invito. Riprova più tardi.
+      </div>
+    `;
+  }
+}
+
+/**
+ * Funzione legacy per compatibilità (non usata più)
+ */
+async function renderReferral(uid) {
+  // Non fare nulla, il bottone viene aggiunto da renderSubscription
+  console.log("[Referral] renderReferral chiamata (legacy, ignorata)");
+}
+
+/**
+ * Mostra una modale con il link di referral e opzioni di condivisione
+ */
+function showReferralModal(referralUrl) {
+  // Rimuovi modale esistente se presente
+  const existingModal = document.getElementById("referral-modal");
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  // Crea la modale
+  const modal = document.createElement("div");
+  modal.id = "referral-modal";
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.75);
+    z-index: 10000;
+    padding: 20px;
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: 0 24px 80px rgba(0,0,0,.6);
+      width: 100%;
+      max-width: 480px;
+      padding: 28px;
+      position: relative;
+      max-height: 90vh;
+      overflow-y: auto;
+    ">
+      <button id="referral-modal-close" style="
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.05);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+      ">✕</button>
+
+      <div style="margin-bottom: 20px;">
+        <h2 style="font-size: 24px; margin-bottom: 8px;">Invita un amico</h2>
+        <p style="color: rgba(255,255,255,.7); font-size: 14px; line-height: 1.6;">
+          Condividi il tuo link di invito. Quando un amico si registra, entrambi ricevete <strong>7 giorni di Premium gratis</strong>!
+        </p>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-size: 13px; color: rgba(255,255,255,.7);">Il tuo link di invito:</label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input 
+            type="text" 
+            id="referral-link-input-modal" 
+            readonly 
+            value="${referralUrl}" 
+            style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.3); color: rgba(255,255,255,.9); font-size: 14px; font-family: monospace;"
+          />
+          <button 
+            class="btn" 
+            id="copy-referral-link-modal" 
+            type="button"
+            style="white-space: nowrap;"
+          >
+            📋 Copia
+          </button>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+        <button class="btn" id="share-whatsapp-modal" type="button" style="flex: 1; min-width: 120px;">
+          📱 WhatsApp
+        </button>
+        <button class="btn" id="share-email-modal" type="button" style="flex: 1; min-width: 120px;">
+          ✉️ Email
+        </button>
+      </div>
+
+      <div style="padding: 16px; background: rgba(249,115,22,.1); border: 1px solid rgba(249,115,22,.2); border-radius: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: var(--orange); margin-bottom: 8px;">📋 Come funziona:</div>
+        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: rgba(255,255,255,.7); line-height: 1.6;">
+          <li>Condividi il link con un amico</li>
+          <li>L'amico si registra usando il tuo link</li>
+          <li>Entrambi ricevete 7 giorni Premium gratis</li>
+        </ul>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Gestori eventi
+  const closeBtn = document.getElementById("referral-modal-close");
+  const copyBtn = document.getElementById("copy-referral-link-modal");
+  const shareWhatsApp = document.getElementById("share-whatsapp-modal");
+  const shareEmail = document.getElementById("share-email-modal");
+  const referralInput = document.getElementById("referral-link-input-modal");
+
+  const closeModal = () => {
+    modal.remove();
+  };
+
+  closeBtn?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("referral-modal")) {
+      closeModal();
+    }
+  });
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      showToast("Link copiato negli appunti! 🎉");
+      if (copyBtn) copyBtn.textContent = "✓ Copiato";
+      setTimeout(() => {
+        if (copyBtn) copyBtn.textContent = "📋 Copia";
+      }, 2000);
+    } catch (err) {
+      console.error("Errore copia:", err);
+      if (referralInput) {
+        referralInput.select();
+        referralInput.setSelectionRange(0, 99999);
+        showToast("Seleziona e copia manualmente il link");
+      }
+    }
+  };
+
+  copyBtn?.addEventListener("click", copyToClipboard);
+
+  shareWhatsApp?.addEventListener("click", () => {
+    const message = encodeURIComponent(`Ciao! Ho trovato questo app fantastico per pianificare lo studio universitario. Se ti registri con questo link, entrambi riceviamo 7 giorni Premium gratis! 🎓\n\n${referralUrl}`);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  });
+
+  shareEmail?.addEventListener("click", () => {
+    const subject = encodeURIComponent("Invito a Methodo - Study Planner");
+    const body = encodeURIComponent(`Ciao!\n\nHo trovato questo app fantastico per pianificare lo studio universitario: Methodo.\n\nSe ti registri con questo link, entrambi riceviamo 7 giorni Premium gratis! 🎓\n\n${referralUrl}\n\nA presto!`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
 }
 
 async function refreshPassedExamsList(uid) {
@@ -5971,6 +6250,29 @@ function mountApp() {
       document.getElementById("user-line").textContent = user.email ?? "—";
 
       await ensureUserDoc(user);
+
+      // Processa referral se presente (solo per nuovi utenti)
+      const pendingReferralCode = localStorage.getItem('pendingReferralCode');
+      if (pendingReferralCode && processReferral) {
+        const profile = await getProfile(user.uid);
+        // Processa solo se non è già stato processato
+        if (!profile?.referralProcessed) {
+          try {
+            const result = await processReferral({ referralCode: pendingReferralCode });
+            console.log("Referral processato:", result);
+            showToast("🎉 Referral attivato! Hai ricevuto 7 giorni di Premium.");
+            localStorage.removeItem('pendingReferralCode');
+          } catch (err) {
+            console.error("Errore processamento referral:", err);
+            // Non mostriamo errore all'utente se il referral non è valido
+            // (potrebbe essere scaduto o già usato)
+            localStorage.removeItem('pendingReferralCode');
+          }
+        } else {
+          // Rimuovi il codice se è già stato processato
+          localStorage.removeItem('pendingReferralCode');
+        }
+      }
 
       const profile = await getProfile(user.uid);
       if (!profile?.goalMode || !profile?.dayMinutes) {
