@@ -36,19 +36,19 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
     // PROTEZIONE: Verifica che non sia già premium (evita doppi pagamenti)
     const userDoc = await db.collection('users').doc(uid).get();
     const userData = userDoc.data();
-    
+
     if (userData?.subscription?.status === 'active') {
-      const endDate = userData.subscription?.endDate?.toDate ? 
-                      userData.subscription.endDate.toDate() : 
+      const endDate = userData.subscription?.endDate?.toDate ?
+                      userData.subscription.endDate.toDate() :
                       new Date(userData.subscription?.endDate);
       if (endDate > new Date()) {
         throw new functions.https.HttpsError(
-          'already-exists',
-          'Hai già un abbonamento Premium attivo'
+            'already-exists',
+            'Hai già un abbonamento Premium attivo',
         );
       }
     }
-    
+
     // Crea o recupera il customer Stripe
     let customerId;
 
@@ -113,9 +113,14 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 
+    // Aggiungi informazioni sulla modalità Stripe per debug
+    const isLiveMode = stripeConfig.secret_key && stripeConfig.secret_key.startsWith('sk_live_');
+    console.log(`Checkout session creata in modalità: ${isLiveMode ? 'LIVE' : 'TEST'}`);
+
     return {
       sessionId: session.id,
       url: session.url,
+      mode: isLiveMode ? 'live' : 'test', // Informa il frontend sulla modalità
     };
   } catch (error) {
     console.error('Errore creazione checkout session:', error);
@@ -135,13 +140,19 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
 exports.handleStripeWebhook = functions.https.onRequest(async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = functions.config().stripe.webhook_secret;
+  const isLiveMode = stripeConfig.secret_key && stripeConfig.secret_key.startsWith('sk_live_');
+
+  // Log per debug: indica la modalità Stripe
+  console.log(`Webhook ricevuto - Modalità Stripe: ${isLiveMode ? 'LIVE' : 'TEST'}`);
 
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    console.log(`Webhook verificato - Evento: ${event.type} - Modalità: ${isLiveMode ? 'LIVE' : 'TEST'}`);
   } catch (err) {
     console.error('Errore verifica webhook:', err.message);
+    console.error(`Modalità Stripe configurata: ${isLiveMode ? 'LIVE' : 'TEST'}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -200,7 +211,7 @@ async function handleCheckoutCompleted(session) {
 
   // Recupera i dettagli della subscription
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  
+
   // Verifica che la subscription sia attiva
   if (subscription.status !== 'active' && subscription.status !== 'trialing') {
     console.warn(`Subscription non attiva per utente ${uid}. Status: ${subscription.status}`);
@@ -211,7 +222,7 @@ async function handleCheckoutCompleted(session) {
   // In modalità test, Stripe usa prefissi specifici per le carte di test
   // Controlliamo se siamo in modalità live e se il pagamento è reale
   const isLiveMode = stripeConfig.secret_key && stripeConfig.secret_key.startsWith('sk_live_');
-  
+
   if (isLiveMode) {
     // In produzione, verifica che il pagamento sia reale
     // Recupera il payment intent per verificare i dettagli
@@ -219,11 +230,11 @@ async function handleCheckoutCompleted(session) {
       const paymentIntentId = session.payment_intent;
       if (paymentIntentId) {
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        
+
         // Verifica che il metodo di pagamento non sia una carta di test
         if (paymentIntent.payment_method) {
           const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method);
-          
+
           // Le carte di test hanno pattern specifici (es. 4242 4242 4242 4242)
           // In produzione, Stripe non dovrebbe accettare carte di test
           // Ma aggiungiamo un controllo extra per sicurezza

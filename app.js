@@ -340,6 +340,10 @@ function showUpgradeModal(onClose = null) {
       
       // Reindirizza a Stripe Checkout
       if (result.data?.url) {
+        // Mostra avviso se in modalità test
+        if (result.data?.mode === 'test') {
+          showToast("Modalità TEST: usa carte di test (es: 4242 4242 4242 4242)", 5000);
+        }
         window.location.href = result.data.url;
       } else {
         throw new Error("URL di checkout non ricevuto");
