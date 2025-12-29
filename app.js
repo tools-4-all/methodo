@@ -37,11 +37,12 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { generateWeeklyPlan, startOfWeekISO } from "./planner.js";
 
 // ----------------- Firebase Functions -----------------
-let functions, createCheckoutSession;
+let functions, createCheckoutSession, cancelSubscription;
 try {
   // Usa l'app Firebase inizializzata da auth.js e specifica la regione
   functions = getFunctions(app, 'us-central1');
   createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+  cancelSubscription = httpsCallable(functions, 'cancelSubscription');
   console.log("Firebase Functions inizializzate correttamente");
 } catch (e) {
   console.error("Firebase Functions non disponibili:", e);
@@ -168,16 +169,27 @@ async function canAddExam(uid) {
 
 /**
  * Controlla se l'utente ha un abbonamento premium attivo
+ * Include anche abbonamenti cancellati purché il periodo pagato non sia scaduto
  */
 async function isPremium(uid) {
   const profile = await getProfile(uid);
   if (!profile) return false;
   
-  // Controlla abbonamento premium
-  if (profile.subscription?.status === 'active') {
-    // PROTEZIONE: Verifica che l'abbonamento sia verificato da Stripe
-    // In produzione, richiedi che sia verificato (non manipolato manualmente)
-    const isVerified = profile.subscription?.verified === true;
+  const subscription = profile.subscription;
+  if (!subscription) return false;
+  
+  // Accetta sia 'active' che 'cancelled'/'canceled' (se il periodo pagato non è scaduto)
+  const isActive = subscription.status === 'active';
+  const isCancelled = subscription.status === 'cancelled' || subscription.status === 'canceled';
+  
+  if (!isActive && !isCancelled) {
+    return false;
+  }
+  
+  // PROTEZIONE: Verifica che l'abbonamento sia verificato da Stripe (solo per active)
+  // In produzione, richiedi che sia verificato (non manipolato manualmente)
+  if (isActive) {
+    const isVerified = subscription?.verified === true;
     const isTestMode = window.location.hostname === 'localhost' || 
                        window.location.hostname === '127.0.0.1' ||
                        window.location.hostname.includes('github.io') ||
@@ -188,14 +200,18 @@ async function isPremium(uid) {
       console.warn(`Abbonamento non verificato per utente ${uid} - potrebbe essere una manipolazione`);
       return false;
     }
-    
-    const endDate = profile.subscription?.endDate?.toDate ? 
-                    profile.subscription.endDate.toDate() : 
-                    new Date(profile.subscription?.endDate);
-    return endDate > new Date();
   }
   
-  return false;
+  // Controlla che endDate sia nel futuro (anche se cancellato, può usare fino alla fine del periodo pagato)
+  const endDate = subscription?.endDate?.toDate ? 
+                  subscription.endDate.toDate() : 
+                  new Date(subscription?.endDate);
+  
+  if (!endDate || isNaN(endDate.getTime())) {
+    return false;
+  }
+  
+  return endDate > new Date();
 }
 
 /**
@@ -3488,7 +3504,9 @@ async function renderSubscription(uid) {
   const subscription = profile?.subscription || null;
   
   if (isPremiumUser && subscription) {
-    // Utente premium attivo
+    // Utente premium attivo (anche se cancellato, può usare fino alla scadenza)
+    const isCancelled = subscription.status === 'cancelled' || subscription.status === 'canceled';
+    
     let endDate, startDate;
     
     // Gestisci endDate (può essere Timestamp, stringa ISO, o null)
@@ -3534,12 +3552,22 @@ async function renderSubscription(uid) {
         <div class="subscriptionHeader">
           <div>
             <div class="subscriptionStatus">
-              <span class="badge good">Premium Attivo</span>
+              ${isCancelled 
+                ? '<span class="badge warn">Premium in Scadenza</span>' 
+                : '<span class="badge good">Premium Attivo</span>'}
             </div>
             <div class="subscriptionTitle">Abbonamento Premium</div>
             <div class="subscriptionPrice">€${subscription.price || 5}/mese</div>
           </div>
         </div>
+        
+        ${isCancelled ? `
+        <div style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:12px; margin-bottom:16px;">
+          <p style="margin:0; font-size:13px; color:rgba(251,191,36,1);">
+            ⚠️ L'abbonamento è stato annullato. Rimarrà attivo fino al ${formattedEndDate}.
+          </p>
+        </div>
+        ` : ''}
         
         <div class="subscriptionDetails">
           <div class="subscriptionDetailRow">
@@ -3561,28 +3589,53 @@ async function renderSubscription(uid) {
         </div>
         
         <div class="subscriptionActions">
+          ${!isCancelled ? `
           <button class="btn" id="cancel-subscription-btn" type="button">Annulla abbonamento</button>
           <button class="btn primary" id="renew-subscription-btn" type="button">Rinnova</button>
+          ` : `
+          <button class="btn primary" id="reactivate-subscription-btn" type="button" style="width: 100%;">Riattiva abbonamento</button>
+          `}
         </div>
       </div>
     `;
     
     // Gestore annullamento
     qs("cancel-subscription-btn")?.addEventListener("click", async () => {
-      if (confirm("Sei sicuro di voler annullare l'abbonamento? Perderai l'accesso a Premium alla scadenza.")) {
+      if (confirm("Sei sicuro di voler annullare l'abbonamento? Rimarrà attivo fino alla scadenza (" + formattedEndDate + "), poi perderai l'accesso a Premium.")) {
         try {
-          await setProfile(uid, {
-            subscription: {
-              ...subscription,
-              status: 'cancelled',
-              cancelledAt: new Date().toISOString()
-            }
-          });
-          showToast("Abbonamento annullato. Rimarrà attivo fino alla scadenza.");
+          const btn = qs("cancel-subscription-btn");
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "⏳ Annullamento...";
+          }
+          
+          // Chiama la Cloud Function per cancellare l'abbonamento su Stripe
+          if (cancelSubscription) {
+            const result = await cancelSubscription();
+            showToast(result.data?.message || "Abbonamento annullato. Rimarrà attivo fino alla scadenza.");
+          } else {
+            // Fallback: aggiorna solo il database (non cancella su Stripe)
+            await setProfile(uid, {
+              subscription: {
+                ...subscription,
+                status: 'cancelled',
+                cancelledAt: new Date().toISOString()
+              }
+            });
+            showToast("Abbonamento annullato. Rimarrà attivo fino alla scadenza.");
+          }
+          
           setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
           console.error(err);
-          alert("Errore durante l'annullamento: " + (err?.message || err));
+          const errorMsg = err?.message || err?.code || "Errore sconosciuto";
+          alert("Errore durante l'annullamento: " + errorMsg);
+          
+          const btn = qs("cancel-subscription-btn");
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Annulla abbonamento";
+          }
         }
       }
     });
@@ -3606,6 +3659,31 @@ async function renderSubscription(uid) {
       } catch (err) {
         console.error(err);
         alert("Errore durante il rinnovo: " + (err?.message || err));
+      }
+    });
+    
+    // Gestore riattivazione (se cancellato)
+    qs("reactivate-subscription-btn")?.addEventListener("click", async () => {
+      if (confirm("Vuoi riattivare l'abbonamento? Verrà rinnovato automaticamente ogni mese.")) {
+        try {
+          // Estendi la data di scadenza di un mese dalla data attuale
+          const newEndDate = new Date();
+          newEndDate.setMonth(newEndDate.getMonth() + 1);
+          
+          await setProfile(uid, {
+            subscription: {
+              ...subscription,
+              status: 'active',
+              endDate: newEndDate.toISOString(),
+              reactivatedAt: new Date().toISOString()
+            }
+          });
+          showToast("Abbonamento riattivato con successo!");
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+          console.error(err);
+          alert("Errore durante la riattivazione: " + (err?.message || err));
+        }
       }
     });
     

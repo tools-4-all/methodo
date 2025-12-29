@@ -162,6 +162,70 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
 });
 
 /**
+ * Cancella l'abbonamento Stripe (mantiene attivo fino alla fine del periodo)
+ */
+exports.cancelSubscription = functions.https.onCall(async (data, context) => {
+  // Verifica autenticazione
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Devi essere autenticato per cancellare l\'abbonamento',
+    );
+  }
+
+  const uid = context.auth.uid;
+
+  try {
+    // Recupera il profilo utente
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError(
+          'not-found',
+          'Profilo utente non trovato',
+      );
+    }
+
+    const userData = userDoc.data();
+    const stripeSubscriptionId = userData.subscription?.stripeSubscriptionId;
+
+    if (!stripeSubscriptionId) {
+      throw new functions.https.HttpsError(
+          'not-found',
+          'Abbonamento Stripe non trovato',
+      );
+    }
+
+    // Cancella l'abbonamento su Stripe (mantiene attivo fino alla fine del periodo)
+    const subscription = await stripe.subscriptions.update(stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    console.log(`Abbonamento impostato per cancellazione alla fine del periodo per utente ${uid}`);
+
+    // Aggiorna lo status nel database (Stripe invierà un webhook per confermare)
+    await db.collection('users').doc(uid).update({
+      'subscription.status': 'cancelled',
+      'subscription.cancelledAt': admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      message: 'Abbonamento cancellato. Rimarrà attivo fino alla fine del periodo.',
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+    };
+  } catch (error) {
+    console.error('Errore cancellazione abbonamento:', error);
+    throw new functions.https.HttpsError(
+        'internal',
+        'Errore durante la cancellazione dell\'abbonamento',
+        error.message,
+    );
+  }
+});
+
+/**
  * Gestisce i webhook di Stripe
  *
  * POST /handleStripeWebhook

@@ -73,20 +73,33 @@ async function getProfile(uid){
 // ----------------- Premium helpers -----------------
 /**
  * Controlla se l'utente ha un abbonamento premium attivo
+ * Include anche abbonamenti cancellati purché il periodo pagato non sia scaduto
  */
 async function isPremium(uid) {
   const profile = await getProfile(uid);
   if (!profile) return false;
   
-  // Controlla abbonamento premium
-  if (profile.subscription?.status === 'active') {
-    const endDate = profile.subscription?.endDate?.toDate ? 
-                    profile.subscription.endDate.toDate() : 
-                    new Date(profile.subscription?.endDate);
-    return endDate > new Date();
+  const subscription = profile.subscription;
+  if (!subscription) return false;
+  
+  // Accetta sia 'active' che 'cancelled'/'canceled' (se il periodo pagato non è scaduto)
+  const isActive = subscription.status === 'active';
+  const isCancelled = subscription.status === 'cancelled' || subscription.status === 'canceled';
+  
+  if (!isActive && !isCancelled) {
+    return false;
   }
   
-  return false;
+  // Controlla che endDate sia nel futuro (anche se cancellato, può usare fino alla fine del periodo pagato)
+  const endDate = subscription?.endDate?.toDate ? 
+                  subscription.endDate.toDate() : 
+                  new Date(subscription?.endDate);
+  
+  if (!endDate || isNaN(endDate.getTime())) {
+    return false;
+  }
+  
+  return endDate > new Date();
 }
 
 /**
