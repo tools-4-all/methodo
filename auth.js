@@ -52,8 +52,13 @@ export function getBaseUrl(file = "index.html") {
 
 
 // --- Email verification helpers ---
+// Usa actionCodeSettings invece di solo url per evitare l'uso di Dynamic Links
 export async function sendVerificationOrThrow(user) {
-  await sendEmailVerification(user, { url: getBaseUrl("index.html") });
+  const actionCodeSettings = {
+    url: getBaseUrl("index.html"),
+    handleCodeInApp: false, // Per web, non serve handleCodeInApp
+  };
+  await sendEmailVerification(user, actionCodeSettings);
 }
 
 // Se non verificato: reinvia mail (best effort), logout e blocca
@@ -104,7 +109,12 @@ export async function signupWithEmail(email, pass) {
 }
 
 export async function resetPassword(email) {
-  await sendPasswordResetEmail(auth, email, { url: getBaseUrl("index.html") });
+  // Usa actionCodeSettings invece di solo url per evitare l'uso di Dynamic Links
+  const actionCodeSettings = {
+    url: getBaseUrl("index.html"),
+    handleCodeInApp: false, // Per web, non serve handleCodeInApp
+  };
+  await sendPasswordResetEmail(auth, email, actionCodeSettings);
 }
 
 export async function logout() {
