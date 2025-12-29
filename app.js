@@ -125,11 +125,26 @@ async function ensureUserDoc(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
+    // Genera automaticamente il referral code quando si crea il documento
+    const referralCode = `REF${user.uid.substring(0, 8).toUpperCase()}`;
     await setDoc(ref, {
       email: user.email ?? "",
+      referralCode: referralCode,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    console.log(`[Referral] Codice referral generato automaticamente alla registrazione: ${referralCode}`);
+  } else {
+    // Se il documento esiste ma non ha referralCode, generalo
+    const data = snap.data();
+    if (!data.referralCode) {
+      const referralCode = `REF${user.uid.substring(0, 8).toUpperCase()}`;
+      await setDoc(ref, {
+        referralCode: referralCode,
+        updatedAt: serverTimestamp(),
+      }, {merge: true});
+      console.log(`[Referral] Codice referral generato per utente esistente: ${referralCode}`);
+    }
   }
 }
 
@@ -4793,9 +4808,8 @@ function mountProfile() {
     // Setup bottone condividi statistiche
     setupShareStatsButton(user.uid);
 
-    // Mostra e gestisci abbonamento
+    // Mostra e gestisci abbonamento (renderReferralButton viene chiamato dentro renderSubscription)
     await renderSubscription(user.uid);
-    await renderReferral(user.uid);
 
     // Gestore modifica informazioni personali
     const editBtn = qs("edit-personal-info");
@@ -5185,12 +5199,6 @@ async function renderReferralButton(uid) {
   }
 }
 
-/**
- * Funzione legacy per compatibilità (non usata più)
- */
-async function renderReferral(uid) {
-  // Non fare nulla, il bottone viene aggiunto da renderSubscription
-}
 
 /**
  * Mostra una modale con il link di referral e opzioni di condivisione

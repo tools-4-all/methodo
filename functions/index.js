@@ -712,6 +712,7 @@ exports.getReferralCode = functions.https.onCall(async (data, context) => {
     let referralCode;
     if (userDoc.exists && userDoc.data().referralCode) {
       referralCode = userDoc.data().referralCode;
+      console.log(`[Referral] Codice referral esistente per ${uid}: ${referralCode}`);
     } else {
       // Genera un codice unico basato sull'UID (primi 8 caratteri dell'UID)
       // Aggiungi un prefisso per renderlo più riconoscibile
@@ -729,6 +730,20 @@ exports.getReferralCode = functions.https.onCall(async (data, context) => {
       }
 
       // Salva il codice nel profilo utente
+      await userRef.set({
+        referralCode: referralCode,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+
+      console.log(`[Referral] Codice referral generato e salvato per ${uid}: ${referralCode}`);
+    }
+
+    // Verifica che il codice sia stato salvato correttamente
+    const verifyDoc = await userRef.get();
+    const savedCode = verifyDoc.data()?.referralCode;
+    if (savedCode !== referralCode) {
+      console.error(`[Referral] ERRORE: Codice non salvato correttamente! Atteso: ${referralCode}, Trovato: ${savedCode}`);
+      // Prova a salvare di nuovo
       await userRef.set({
         referralCode: referralCode,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -775,22 +790,83 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
   try {
     console.log(`[Referral] Processamento referral: codice=${referralCode}, nuovoUtente=${newUserUid}`);
 
-    return await db.runTransaction(async (transaction) => {
-      // Trova l'utente che ha generato il referral
-      const referrerQuery = await db.collection('users')
-          .where('referralCode', '==', referralCode)
-          .limit(1)
-          .get();
+    // Trova l'utente che ha generato il referral (FUORI dalla transazione per permettere query)
+    let referrerQuery = await db.collection('users')
+        .where('referralCode', '==', referralCode)
+        .limit(1)
+        .get();
 
-      console.log(`[Referral] Query referral trovati: ${referrerQuery.size}`);
+    console.log(`[Referral] Query referral trovati: ${referrerQuery.size}`);
+    console.log(`[Referral] Codice cercato: ${referralCode}`);
 
+    // Se il codice non viene trovato, prova a generarlo automaticamente
+    // Il formato del codice è REF{UID8}, quindi possiamo estrarre l'UID prefix
+    if (referrerQuery.empty) {
+      console.log(`[Referral] Codice non trovato, provo a generarlo automaticamente...`);
+      
+      // Estrai l'UID prefix dal codice (formato: REF{UID8})
+      if (referralCode.startsWith('REF') && referralCode.length >= 11) {
+        const uidPrefix = referralCode.substring(3).toUpperCase(); // Rimuovi "REF"
+        
+        console.log(`[Referral] Tentativo di trovare utente con UID che inizia con: ${uidPrefix}`);
+        
+        // Cerca tutti gli utenti il cui UID inizia con questo prefisso
+        // Nota: Firestore non supporta query "starts with", quindi dobbiamo iterare
+        // Limitiamo la ricerca ai primi 100 utenti senza referralCode per efficienza
+        const usersWithoutCode = await db.collection('users')
+            .limit(500) // Aumentiamo il limite per avere più possibilità
+            .get();
+        
+        let foundUser = null;
+        for (const userDoc of usersWithoutCode.docs) {
+          const userUid = userDoc.id.toUpperCase();
+          const userData = userDoc.data();
+          
+          // Salta se ha già un referralCode diverso
+          if (userData.referralCode && userData.referralCode !== referralCode) {
+            continue;
+          }
+          
+          // Verifica se l'UID inizia con il prefisso
+          if (userUid.startsWith(uidPrefix)) {
+            // Genera il referral code per questo UID e verifica se corrisponde
+            const generatedCode = `REF${userDoc.id.substring(0, 8).toUpperCase()}`;
+            if (generatedCode === referralCode) {
+              foundUser = userDoc;
+              // Salva il referral code FUORI dalla transazione
+              await db.collection('users').doc(userDoc.id).set({
+                referralCode: referralCode,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, {merge: true});
+              console.log(`[Referral] ✅ Codice generato automaticamente per ${userDoc.id}: ${referralCode}`);
+              break;
+            }
+          }
+        }
+        
+        if (foundUser) {
+          // Ricarica la query dopo aver salvato il codice
+          referrerQuery = await db.collection('users')
+              .where('referralCode', '==', referralCode)
+              .limit(1)
+              .get();
+          console.log(`[Referral] Query dopo generazione: ${referrerQuery.size} risultati`);
+        }
+      }
+      
+      // Se ancora non trovato dopo tutti i tentativi
       if (referrerQuery.empty) {
-        console.error(`[Referral] Codice referral non trovato: ${referralCode}`);
+        console.error(`[Referral] ❌ Codice referral non trovato dopo tutti i tentativi: ${referralCode}`);
+        console.error(`[Referral] Verifica che l'utente che ha generato il link abbia visitato la pagina profilo per generare il codice.`);
+
         throw new functions.https.HttpsError(
             'not-found',
-            'Codice referral non trovato',
+            'Codice referral non trovato. L\'utente che ha generato il link deve visitare la pagina profilo per attivare il codice.',
         );
       }
+    }
+
+    return await db.runTransaction(async (transaction) => {
 
       const referrerDoc = referrerQuery.docs[0];
       const referrerUid = referrerDoc.id;
