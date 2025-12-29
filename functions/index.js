@@ -1071,12 +1071,12 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
           }
         }
 
-        transaction.update(referrerRef, {
-          referralsCount: admin.firestore.FieldValue.increment(1),
-          referrals: admin.firestore.FieldValue.arrayUnion({
-            referredUser: newUserUid,
-            referredAt: admin.firestore.FieldValue.serverTimestamp(),
-          }),
+      transaction.update(referrerRef, {
+        referralsCount: admin.firestore.FieldValue.increment(1),
+        referrals: admin.firestore.FieldValue.arrayUnion({
+          referredUser: newUserUid,
+          referredAt: admin.firestore.Timestamp.now(),
+        }),
           subscription: {
             status: 'active',
             startDate: admin.firestore.Timestamp.fromDate(premiumStartDate),
