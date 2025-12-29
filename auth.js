@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendEmailVerification,
+  sendPasswordResetEmail,
   reload,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -81,6 +82,10 @@ export async function loginWithEmail(email, pass) {
 
 export async function signupWithEmail(email, pass) {
   return await createUserWithEmailAndPassword(auth, email, pass);
+}
+
+export async function resetPassword(email) {
+  await sendPasswordResetEmail(auth, email, { url: getBaseUrl("index.html") });
 }
 
 export async function logout() {

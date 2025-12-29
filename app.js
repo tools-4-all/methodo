@@ -11,6 +11,7 @@ import {
   watchAuth,
   loginWithEmail,
   signupWithEmail,
+  resetPassword,
   logout,
   ensureVerifiedOrBlock,
   sendVerificationOrThrow,
@@ -1069,7 +1070,179 @@ function mountIndex() {
       await routeAfterLogin(cred.user);
     } catch (err) {
       console.error(err);
-      setText(loginErr, err?.message ?? "Errore login");
+      
+      // Gestione specifica per errore "too-many-requests"
+      if (err?.code === "auth/too-many-requests" || err?.message?.includes("too-many-requests")) {
+        if (loginErr) {
+          loginErr.innerHTML = `
+            <div style="line-height:1.6;">
+              <strong style="color:rgba(245,158,11,1);">⚠️ Troppi tentativi di accesso</strong>
+              <br><br>
+              Firebase ha temporaneamente bloccato l'accesso per sicurezza dopo troppi tentativi falliti.
+              <br><br>
+              <strong>Cosa puoi fare:</strong>
+              <br>• Aspetta qualche minuto e riprova
+              <br>• Usa <a href="#" id="forgot-password-from-error" style="color:rgba(99,102,241,1); text-decoration:underline;">"Password dimenticata?"</a> per reimpostare la password
+              <br>• Se il problema persiste, contattaci
+            </div>
+          `;
+          
+          // Aggiungi handler per il link password dimenticata
+          const forgotLink = loginErr.querySelector("#forgot-password-from-error");
+          if (forgotLink) {
+            forgotLink.addEventListener("click", (e) => {
+              e.preventDefault();
+              // Chiudi modale login e apri reset password
+              const loginModal = document.getElementById("login-modal");
+              if (loginModal) {
+                loginModal.classList.remove("active");
+              }
+              setTimeout(() => {
+                const resetModal = document.getElementById("reset-password-modal");
+                if (resetModal) {
+                  resetModal.classList.add("active");
+                  const resetEmail = document.getElementById("reset-email");
+                  if (resetEmail && loginEmail?.value) {
+                    resetEmail.value = loginEmail.value;
+                  }
+                }
+              }, 200);
+            });
+          }
+        }
+        
+        // Disabilita temporaneamente il form per 30 secondi
+        if (loginBtn) {
+          loginBtn.disabled = true;
+          loginBtn.style.opacity = "0.5";
+          loginBtn.style.cursor = "not-allowed";
+          
+          // Disabilita anche i campi input
+          if (loginEmail) {
+            loginEmail.disabled = true;
+            loginEmail.style.opacity = "0.5";
+          }
+          if (loginPass) {
+            loginPass.disabled = true;
+            loginPass.style.opacity = "0.5";
+          }
+          
+          let countdown = 30;
+          const originalText = loginBtn.textContent;
+          loginBtn.textContent = `Attendi ${countdown}s`;
+          
+          const interval = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+              loginBtn.textContent = `Attendi ${countdown}s`;
+            } else {
+              clearInterval(interval);
+              loginBtn.disabled = false;
+              loginBtn.style.opacity = "1";
+              loginBtn.style.cursor = "pointer";
+              loginBtn.textContent = originalText;
+              
+              // Riabilita i campi input
+              if (loginEmail) {
+                loginEmail.disabled = false;
+                loginEmail.style.opacity = "1";
+              }
+              if (loginPass) {
+                loginPass.disabled = false;
+                loginPass.style.opacity = "1";
+              }
+            }
+          }, 1000);
+        }
+      } else {
+        // Altri errori
+        let errorMessage = err?.message ?? "Errore login";
+        let useHtml = false;
+        
+        // Traduci errori comuni in italiano
+        if (err?.code === "auth/invalid-credential" || errorMessage.includes("invalid-credential")) {
+          // Firebase usa invalid-credential per email o password sbagliata
+          if (loginErr) {
+            loginErr.innerHTML = `
+              Email o password non corretti. 
+              <a href="#" id="forgot-password-from-error-2" style="color:rgba(99,102,241,1); text-decoration:underline; margin-left:4px;">Password dimenticata?</a>
+            `;
+            useHtml = true;
+            
+            // Aggiungi handler per il link
+            const forgotLink = loginErr.querySelector("#forgot-password-from-error-2");
+            if (forgotLink) {
+              forgotLink.addEventListener("click", (e) => {
+                e.preventDefault();
+                const loginModal = document.getElementById("login-modal");
+                if (loginModal) {
+                  loginModal.classList.remove("active");
+                }
+                setTimeout(() => {
+                  const resetModal = document.getElementById("reset-password-modal");
+                  if (resetModal) {
+                    resetModal.classList.add("active");
+                    document.body.style.overflow = "hidden";
+                    const resetEmail = document.getElementById("reset-email");
+                    if (resetEmail && loginEmail?.value) {
+                      resetEmail.value = loginEmail.value;
+                    }
+                  }
+                }, 200);
+              });
+            }
+          } else {
+            errorMessage = "Email o password non corretti. Verifica le credenziali o usa 'Password dimenticata?' se non ricordi la password.";
+          }
+        } else if (err?.code === "auth/user-not-found" || errorMessage.includes("user-not-found")) {
+          errorMessage = "Email non trovata. Verifica l'indirizzo o crea un account.";
+        } else if (err?.code === "auth/wrong-password" || errorMessage.includes("wrong-password")) {
+          if (loginErr) {
+            loginErr.innerHTML = `
+              Password errata. 
+              <a href="#" id="forgot-password-from-error-3" style="color:rgba(99,102,241,1); text-decoration:underline; margin-left:4px;">Password dimenticata?</a>
+            `;
+            useHtml = true;
+            
+            // Aggiungi handler per il link
+            const forgotLink = loginErr.querySelector("#forgot-password-from-error-3");
+            if (forgotLink) {
+              forgotLink.addEventListener("click", (e) => {
+                e.preventDefault();
+                const loginModal = document.getElementById("login-modal");
+                if (loginModal) {
+                  loginModal.classList.remove("active");
+                }
+                setTimeout(() => {
+                  const resetModal = document.getElementById("reset-password-modal");
+                  if (resetModal) {
+                    resetModal.classList.add("active");
+                    document.body.style.overflow = "hidden";
+                    const resetEmail = document.getElementById("reset-email");
+                    if (resetEmail && loginEmail?.value) {
+                      resetEmail.value = loginEmail.value;
+                    }
+                  }
+                }, 200);
+              });
+            }
+          } else {
+            errorMessage = "Password errata. Usa 'Password dimenticata?' se non la ricordi.";
+          }
+        } else if (err?.code === "auth/invalid-email" || errorMessage.includes("invalid-email")) {
+          errorMessage = "Email non valida. Inserisci un indirizzo email corretto.";
+        } else if (err?.code === "auth/user-disabled" || errorMessage.includes("user-disabled")) {
+          errorMessage = "Account disabilitato. Contatta il supporto.";
+        } else if (err?.code === "auth/network-request-failed" || errorMessage.includes("network")) {
+          errorMessage = "Errore di connessione. Verifica la tua connessione internet e riprova.";
+        } else if (err?.code === "auth/operation-not-allowed" || errorMessage.includes("operation-not-allowed")) {
+          errorMessage = "Operazione non consentita. Contatta il supporto.";
+        }
+        
+        if (!useHtml) {
+          setText(loginErr, errorMessage);
+        }
+      }
     }
   }
 
@@ -1128,6 +1301,42 @@ function mountIndex() {
     e.preventDefault();
     await doSignup();
   });
+
+  // Gestione reset password (per form nel main nascosto)
+  const forgotPasswordLink = qs("forgot-password-link-2");
+  if (forgotPasswordLink && !forgotPasswordLink.dataset.bound) {
+    forgotPasswordLink.dataset.bound = "1";
+    forgotPasswordLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const email = (loginEmail?.value || "").trim();
+      
+      if (!email) {
+        setText(loginErr, "Inserisci prima la tua email nel campo sopra.");
+        return;
+      }
+
+      try {
+        await resetPassword(email);
+        setText(loginErr, "");
+        if (typeof showToast === "function") {
+          showToast("Email di reset inviata! Controlla la tua casella (anche spam).", 5000);
+        } else {
+          setText(loginErr, "✓ Email di reset inviata! Controlla la tua casella (anche spam).");
+        }
+      } catch (err) {
+        console.error("Errore reset password:", err);
+        let errorMsg = "Errore nell'invio dell'email di reset.";
+        if (err?.code === "auth/user-not-found") {
+          errorMsg = "Email non trovata. Verifica l'indirizzo.";
+        } else if (err?.code === "auth/invalid-email") {
+          errorMsg = "Email non valida.";
+        } else if (err?.message) {
+          errorMsg = err.message;
+        }
+        setText(loginErr, errorMsg);
+      }
+    });
+  }
 
   // auto-route se già loggato
   watchAuth(async (user) => {
