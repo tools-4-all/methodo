@@ -361,23 +361,100 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     const exam = validExams.find((ex) => ex.id === a.examId);
     const examCategory = exam?.category || "mixed";
     
-    // Genera template specifico per questo esame
-    const templates = buildTaskTemplates(goalMode, examCategory);
+    // Controlla se l'esame ha una distribuzione personalizzata
+    const customDistribution = exam?.taskDistribution;
     
     const examTaskMin = computeExamTaskMinutes(baseTaskMin, exam);
     const nTasks = Math.max(1, Math.floor(a.targetMin / examTaskMin));
     const queue = [];
-    for (let i = 0; i < nTasks; i++) {
-      const t = pickTaskType(i, templates);
-      queue.push({
-        id: cryptoId(),
-        examId: a.examId,
-        examName: a.name,
-        type: t.type,
-        label: t.label,
-        minutes: examTaskMin,
-        done: false,
-      });
+    
+    if (customDistribution) {
+      // Usa distribuzione personalizzata
+      const totalPercent = (customDistribution.theory || 0) + 
+                          (customDistribution.practice || 0) + 
+                          (customDistribution.exam || 0) + 
+                          (customDistribution.review || 0) + 
+                          (customDistribution.spaced || 0);
+      
+      if (totalPercent > 0) {
+        // Calcola quanti task per ogni tipo in base alle percentuali
+        const taskCounts = {
+          theory: Math.round((nTasks * (customDistribution.theory || 0)) / totalPercent),
+          practice: Math.round((nTasks * (customDistribution.practice || 0)) / totalPercent),
+          exam: Math.round((nTasks * (customDistribution.exam || 0)) / totalPercent),
+          review: Math.round((nTasks * (customDistribution.review || 0)) / totalPercent),
+          spaced: Math.round((nTasks * (customDistribution.spaced || 0)) / totalPercent)
+        };
+        
+        // Genera task per ogni tipo
+        const taskLabels = {
+          theory: "Teoria (lettura attiva)",
+          practice: "Esercizi mirati",
+          exam: "Prove d'esame + correzione",
+          review: "Ripasso attivo",
+          spaced: "Spaced repetition / flashcard"
+        };
+        
+        // Filtra in base alla categoria (come nel comportamento di default)
+        let allowedTypes = ["theory", "practice", "exam", "review", "spaced"];
+        if (examCategory === "scientific") {
+          allowedTypes = allowedTypes.filter(t => t !== "spaced");
+        } else if (examCategory === "humanistic") {
+          allowedTypes = allowedTypes.filter(t => t !== "practice");
+        }
+        
+        // Genera task per ogni tipo consentito
+        for (const type of allowedTypes) {
+          const count = taskCounts[type] || 0;
+          for (let i = 0; i < count; i++) {
+            queue.push({
+              id: cryptoId(),
+              examId: a.examId,
+              examName: a.name,
+              type: type,
+              label: taskLabels[type] || type,
+              minutes: examTaskMin,
+              done: false,
+            });
+          }
+        }
+        
+        // Se mancano task (per arrotondamenti), aggiungi i più importanti
+        while (queue.length < nTasks) {
+          const priorityTypes = allowedTypes.filter(t => (taskCounts[t] || 0) > 0);
+          if (priorityTypes.length > 0) {
+            const type = priorityTypes[0];
+            queue.push({
+              id: cryptoId(),
+              examId: a.examId,
+              examName: a.name,
+              type: type,
+              label: taskLabels[type] || type,
+              minutes: examTaskMin,
+              done: false,
+            });
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    
+    // Se non c'è distribuzione personalizzata o non è valida, usa il comportamento di default
+    if (queue.length === 0) {
+      const templates = buildTaskTemplates(goalMode, examCategory);
+      for (let i = 0; i < nTasks; i++) {
+        const t = pickTaskType(i, templates);
+        queue.push({
+          id: cryptoId(),
+          examId: a.examId,
+          examName: a.name,
+          type: t.type,
+          label: t.label,
+          minutes: examTaskMin,
+          done: false,
+        });
+      }
     }
     // se restano minuti non multipli, aggiungi un task corto
     // Per esami scientifici, evita "spaced" (flashcard)

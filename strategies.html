@@ -309,6 +309,80 @@
               </ul>
             </div>
 
+            <!-- Distribuzione Task (Opzionale) -->
+            <div class="formSection" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+              <div class="sectionTitle">
+                <h3 style="font-size: 16px; margin: 0 0 8px 0;">Distribuzione Task <span class="labelHint">(opzionale)</span></h3>
+                <p class="meta" style="margin: 0 0 16px 0;">Personalizza la percentuale di ogni tipo di attività di studio</p>
+              </div>
+              
+              <div id="task-distribution-container" style="display: none;">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div class="task-distribution-row">
+                    <label style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span style="font-size: 13px; color: rgba(255,255,255,0.9);">Teoria</span>
+                      <span id="task-dist-theory-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+                    </label>
+                    <input type="range" id="task-dist-theory" min="0" max="100" value="0" step="5" style="width: 100%; margin-top: 4px;" />
+                  </div>
+                  
+                  <div class="task-distribution-row">
+                    <label style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span style="font-size: 13px; color: rgba(255,255,255,0.9);">Esercizi</span>
+                      <span id="task-dist-practice-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+                    </label>
+                    <input type="range" id="task-dist-practice" min="0" max="100" value="0" step="5" style="width: 100%; margin-top: 4px;" />
+                  </div>
+                  
+                  <div class="task-distribution-row">
+                    <label style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span style="font-size: 13px; color: rgba(255,255,255,0.9);">Prove d'esame</span>
+                      <span id="task-dist-exam-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+                    </label>
+                    <input type="range" id="task-dist-exam" min="0" max="100" value="0" step="5" style="width: 100%; margin-top: 4px;" />
+                  </div>
+                  
+                  <div class="task-distribution-row">
+                    <label style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span style="font-size: 13px; color: rgba(255,255,255,0.9);">Ripasso</span>
+                      <span id="task-dist-review-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+                    </label>
+                    <input type="range" id="task-dist-review" min="0" max="100" value="0" step="5" style="width: 100%; margin-top: 4px;" />
+                  </div>
+                  
+                  <div class="task-distribution-row">
+                    <label style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span style="font-size: 13px; color: rgba(255,255,255,0.9);">Flashcard/Spaced</span>
+                      <span id="task-dist-spaced-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+                    </label>
+                    <input type="range" id="task-dist-spaced" min="0" max="100" value="0" step="5" style="width: 100%; margin-top: 4px;" />
+                  </div>
+                </div>
+                
+                <div id="task-distribution-total" style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 12px; text-align: center;">
+                  <span style="color: rgba(255,255,255,0.7);">Totale: </span>
+                  <span id="task-dist-total-value" style="font-weight: 600; color: rgba(255,255,255,0.9);">0%</span>
+                </div>
+                
+                <div style="margin-top: 12px;">
+                  <button type="button" class="btn tiny" id="reset-task-distribution" style="width: 100%;">Usa distribuzione automatica</button>
+                </div>
+              </div>
+              
+              <div style="text-align: center;">
+                <button type="button" class="btn tiny" id="toggle-task-distribution" style="width: 100%;">Personalizza distribuzione task</button>
+              </div>
+              
+              <div class="infoBox" style="margin-top: 12px;">
+                <strong>Come funziona:</strong>
+                <ul class="infoList" style="font-size: 12px;">
+                  <li>Se non specifichi nulla, l'algoritmo usa una distribuzione automatica basata sul tipo di esame e il tuo livello di impegno</li>
+                  <li>Puoi personalizzare le percentuali per adattare lo studio alle tue preferenze</li>
+                  <li>Le percentuali vengono normalizzate automaticamente se non sommano a 100%</li>
+                </ul>
+              </div>
+            </div>
+
             <div class="toolbar" style="justify-content:flex-end">
               <button class="btn" id="add-exam" type="button">Aggiungi esame</button>
             </div>

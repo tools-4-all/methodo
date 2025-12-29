@@ -1962,6 +1962,204 @@ function mountOnboarding() {
     return out;
   }
 
+  // ----------------- Task Distribution Management -----------------
+  /**
+   * Inizializza l'interfaccia per la distribuzione personalizzata dei task
+   */
+  function initTaskDistribution() {
+    const container = qs("task-distribution-container");
+    const toggleBtn = qs("toggle-task-distribution");
+    const resetBtn = qs("reset-task-distribution");
+    
+    if (!container || !toggleBtn) return;
+    
+    // Toggle mostra/nascondi
+    toggleBtn.addEventListener("click", () => {
+      const isVisible = container.style.display !== "none";
+      if (isVisible) {
+        container.style.display = "none";
+        toggleBtn.textContent = "Personalizza distribuzione task";
+        resetTaskDistribution();
+      } else {
+        container.style.display = "block";
+        toggleBtn.textContent = "Nascondi personalizzazione";
+      }
+    });
+    
+    // Reset distribuzione
+    resetBtn?.addEventListener("click", () => {
+      resetTaskDistribution();
+    });
+    
+    // Aggiorna valori quando cambiano gli slider
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    types.forEach(type => {
+      const slider = qs(`task-dist-${type}`);
+      const valueSpan = qs(`task-dist-${type}-value`);
+      
+      if (slider && valueSpan) {
+        slider.addEventListener("input", () => {
+          updateTaskDistributionDisplay();
+        });
+      }
+    });
+    
+    // Inizializza display
+    updateTaskDistributionDisplay();
+  }
+  
+  /**
+   * Legge la distribuzione task dal form
+   * @returns {object|null} Oggetto con percentuali o null se non personalizzata
+   */
+  function getTaskDistribution() {
+    const container = qs("task-distribution-container");
+    if (!container || container.style.display === "none") {
+      return null;
+    }
+    
+    const theory = Number(qs("task-dist-theory")?.value || 0);
+    const practice = Number(qs("task-dist-practice")?.value || 0);
+    const exam = Number(qs("task-dist-exam")?.value || 0);
+    const review = Number(qs("task-dist-review")?.value || 0);
+    const spaced = Number(qs("task-dist-spaced")?.value || 0);
+    
+    const total = theory + practice + exam + review + spaced;
+    
+    // Se totale è 0, non è personalizzata
+    if (total === 0) return null;
+    
+    // Normalizza le percentuali
+    if (total > 0) {
+      return {
+        theory: Math.round((theory / total) * 100),
+        practice: Math.round((practice / total) * 100),
+        exam: Math.round((exam / total) * 100),
+        review: Math.round((review / total) * 100),
+        spaced: Math.round((spaced / total) * 100)
+      };
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Resetta la distribuzione task ai valori di default
+   */
+  function resetTaskDistribution() {
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    types.forEach(type => {
+      const slider = qs(`task-dist-${type}`);
+      if (slider) slider.value = 0;
+    });
+    updateTaskDistributionDisplay();
+  }
+  
+  /**
+   * Aggiorna il display dei valori delle percentuali
+   */
+  function updateTaskDistributionDisplay() {
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    let total = 0;
+    
+    types.forEach(type => {
+      const slider = qs(`task-dist-${type}`);
+      const valueSpan = qs(`task-dist-${type}-value`);
+      if (slider && valueSpan) {
+        const value = Number(slider.value || 0);
+        valueSpan.textContent = `${value}%`;
+        total += value;
+      }
+    });
+    
+    const totalSpan = qs("task-dist-total-value");
+    if (totalSpan) {
+      totalSpan.textContent = `${total}%`;
+      // Cambia colore se totale non è 100%
+      if (total === 100) {
+        totalSpan.style.color = "rgba(34,197,94,1)";
+      } else if (total > 100) {
+        totalSpan.style.color = "rgba(239,68,68,1)";
+      } else {
+        totalSpan.style.color = "rgba(245,158,11,1)";
+      }
+    }
+  }
+  
+  /**
+   * Legge la distribuzione task dalla modale di modifica
+   */
+  function getTaskDistributionFromModal() {
+    const container = document.getElementById("ee-task-distribution-container");
+    if (!container || container.style.display === "none") {
+      return null;
+    }
+    
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    const values = {};
+    let total = 0;
+    
+    types.forEach(type => {
+      const slider = document.getElementById(`ee-task-dist-${type}`);
+      if (slider) {
+        values[type] = Number(slider.value || 0);
+        total += values[type];
+      }
+    });
+    
+    if (total === 0) return null;
+    
+    // Normalizza
+    const normalized = {};
+    types.forEach(type => {
+      normalized[type] = Math.round((values[type] / total) * 100);
+    });
+    
+    return normalized;
+  }
+  
+  /**
+   * Aggiorna il display nella modale
+   */
+  function updateTaskDistributionDisplayInModal() {
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    let total = 0;
+    
+    types.forEach(type => {
+      const slider = document.getElementById(`ee-task-dist-${type}`);
+      const valueSpan = document.getElementById(`ee-task-dist-${type}-value`);
+      if (slider && valueSpan) {
+        const value = Number(slider.value || 0);
+        valueSpan.textContent = `${value}%`;
+        total += value;
+      }
+    });
+    
+    const totalSpan = document.getElementById("ee-task-dist-total-value");
+    if (totalSpan) {
+      totalSpan.textContent = `${total}%`;
+      if (total === 100) {
+        totalSpan.style.color = "rgba(34,197,94,1)";
+      } else if (total > 100) {
+        totalSpan.style.color = "rgba(239,68,68,1)";
+      } else {
+        totalSpan.style.color = "rgba(245,158,11,1)";
+      }
+    }
+  }
+  
+  /**
+   * Resetta la distribuzione nella modale
+   */
+  function resetTaskDistributionInModal() {
+    const types = ["theory", "practice", "exam", "review", "spaced"];
+    types.forEach(type => {
+      const slider = document.getElementById(`ee-task-dist-${type}`);
+      if (slider) slider.value = 0;
+    });
+    updateTaskDistributionDisplayInModal();
+  }
+
   function examCard(exam) {
     const d = document.createElement("div");
     d.className = "exam-card plain";
@@ -2842,6 +3040,9 @@ function mountOnboarding() {
 
     setText(qs("user-line"), user.email ?? "—");
     await ensureUserDoc(user);
+    
+    // Inizializza distribuzione task
+    initTaskDistribution();
 
     const profile = await getProfile(user.uid);
     
@@ -3135,6 +3336,9 @@ function mountOnboarding() {
           finalCategory = detectExamCategory(name);
         }
 
+        // Leggi distribuzione task se personalizzata
+        const taskDistribution = getTaskDistribution();
+        
         await addExam(user.uid, { 
           name, 
           cfu, 
@@ -3144,7 +3348,8 @@ function mountOnboarding() {
           level, 
           difficulty,
           category: finalCategory,
-          topics: topics
+          topics: topics,
+          taskDistribution: taskDistribution || undefined // Salva solo se personalizzata
         });
         
         // Reset form
@@ -3159,6 +3364,7 @@ function mountOnboarding() {
         qs("exam-diff").value = "2";
         qs("exam-category").value = "auto";
         resetTopicsList("exam");
+        resetTaskDistribution(); // Reset distribuzione task
         
         await refreshExamList(user.uid);
       } catch (err) {
@@ -3641,7 +3847,106 @@ function openEditExamModal(uid, exam, onSuccess) {
   topicsContainer.appendChild(topicsInputRow);
   topicsContainer.appendChild(topicsList);
   topicsLabel.appendChild(topicsContainer);
-
+  
+  // Campo distribuzione task (opzionale)
+  const taskDistSection = document.createElement("div");
+  taskDistSection.style.cssText = "margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);";
+  
+  const taskDistTitle = document.createElement("div");
+  taskDistTitle.style.cssText = "margin-bottom: 16px;";
+  taskDistTitle.innerHTML = `
+    <h3 style="font-size: 16px; margin: 0 0 8px 0;">Distribuzione Task <span style="font-size: 11px; color: rgba(255,255,255,0.5);">(opzionale)</span></h3>
+    <p class="meta" style="margin: 0;">Personalizza la percentuale di ogni tipo di attività</p>
+  `;
+  
+  const taskDistContainer = document.createElement("div");
+  taskDistContainer.id = "ee-task-distribution-container";
+  taskDistContainer.style.display = "none";
+  
+  const types = [
+    { key: "theory", label: "Teoria" },
+    { key: "practice", label: "Esercizi" },
+    { key: "exam", label: "Prove d'esame" },
+    { key: "review", label: "Ripasso" },
+    { key: "spaced", label: "Flashcard/Spaced" }
+  ];
+  
+  types.forEach(type => {
+    const row = document.createElement("div");
+    row.style.cssText = "margin-bottom: 12px;";
+    row.innerHTML = `
+      <label style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
+        <span style="font-size: 13px; color: rgba(255,255,255,0.9);">${type.label}</span>
+        <span id="ee-task-dist-${type.key}-value" style="font-size: 13px; font-weight: 600; color: rgba(99,102,241,1); min-width: 40px; text-align: right;">0%</span>
+      </label>
+      <input type="range" id="ee-task-dist-${type.key}" min="0" max="100" value="0" step="5" style="width: 100%;" />
+    `;
+    taskDistContainer.appendChild(row);
+  });
+  
+  const taskDistTotal = document.createElement("div");
+  taskDistTotal.style.cssText = "margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 12px; text-align: center;";
+  taskDistTotal.innerHTML = `
+    <span style="color: rgba(255,255,255,0.7);">Totale: </span>
+    <span id="ee-task-dist-total-value" style="font-weight: 600; color: rgba(255,255,255,0.9);">0%</span>
+  `;
+  taskDistContainer.appendChild(taskDistTotal);
+  
+  const taskDistResetBtn = document.createElement("button");
+  taskDistResetBtn.type = "button";
+  taskDistResetBtn.className = "btn tiny";
+  taskDistResetBtn.textContent = "Usa distribuzione automatica";
+  taskDistResetBtn.style.cssText = "width: 100%; margin-top: 12px;";
+  taskDistContainer.appendChild(taskDistResetBtn);
+  
+  const taskDistToggleBtn = document.createElement("button");
+  taskDistToggleBtn.type = "button";
+  taskDistToggleBtn.className = "btn tiny";
+  taskDistToggleBtn.textContent = "Personalizza distribuzione task";
+  taskDistToggleBtn.style.cssText = "width: 100%; margin-top: 12px;";
+  
+  taskDistSection.appendChild(taskDistTitle);
+  taskDistSection.appendChild(taskDistContainer);
+  taskDistSection.appendChild(taskDistToggleBtn);
+  
+  // Inizializza distribuzione task nella modale
+  const taskDist = exam.taskDistribution || null;
+  if (taskDist) {
+    types.forEach(type => {
+      const slider = document.getElementById(`ee-task-dist-${type.key}`);
+      if (slider) slider.value = taskDist[type.key] || 0;
+    });
+    taskDistContainer.style.display = "block";
+    taskDistToggleBtn.textContent = "Nascondi personalizzazione";
+    updateTaskDistributionDisplayInModal();
+  }
+  
+  // Event listeners per modale
+  taskDistToggleBtn.addEventListener("click", () => {
+    const isVisible = taskDistContainer.style.display !== "none";
+    if (isVisible) {
+      taskDistContainer.style.display = "none";
+      taskDistToggleBtn.textContent = "Personalizza distribuzione task";
+      resetTaskDistributionInModal();
+    } else {
+      taskDistContainer.style.display = "block";
+      taskDistToggleBtn.textContent = "Nascondi personalizzazione";
+    }
+  });
+  
+  taskDistResetBtn.addEventListener("click", () => {
+    resetTaskDistributionInModal();
+  });
+  
+  types.forEach(type => {
+    const slider = document.getElementById(`ee-task-dist-${type.key}`);
+    if (slider) {
+      slider.addEventListener("input", () => {
+        updateTaskDistributionDisplayInModal();
+      });
+    }
+  });
+  
   // Aggiungi tutti i campi al form
   form.appendChild(nameLabel);
   form.appendChild(appelliLabel);
@@ -3650,6 +3955,7 @@ function openEditExamModal(uid, exam, onSuccess) {
   form.appendChild(diffLabel);
   form.appendChild(catLabel);
   form.appendChild(topicsLabel);
+  form.appendChild(taskDistSection);
   card.appendChild(form);
 
   // Azioni (bottoni)
@@ -3711,6 +4017,9 @@ function openEditExamModal(uid, exam, onSuccess) {
         finalCategory = detectExamCategory(name);
       }
 
+      // Leggi distribuzione task se personalizzata (dalla modale)
+      const taskDistribution = getTaskDistributionFromModal();
+      
       // Prepara i dati per l'aggiornamento
       // Mantieni date per compatibilità (primo appello)
       const firstAppello = appelli.length > 0 ? appelli[0] : null;
@@ -3722,7 +4031,8 @@ function openEditExamModal(uid, exam, onSuccess) {
         level, 
         difficulty,
         category: finalCategory,
-        topics
+        topics,
+        taskDistribution: taskDistribution || exam.taskDistribution || undefined // Mantieni esistente o usa nuovo
       };
 
       await updateExam(uid, exam.id, updateData);
