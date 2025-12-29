@@ -565,6 +565,13 @@
             <div class="meta">Evoluzione della preparazione per esame</div>
           </div>
 
+          <!-- Bottone condividi (solo premium) -->
+          <div class="toolbar" style="justify-content:center; margin-bottom:16px;">
+            <button class="btn primary" id="share-simulation-btn" type="button" style="display:none;">
+              Condividi simulazione
+            </button>
+          </div>
+
           <div class="chartWrap">
             <canvas id="chart" width="980" height="520"></canvas>
           </div>
@@ -578,6 +585,8 @@
     </main>
   </div>
 
+  <!-- html2canvas per generare immagini -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script type="module" src="./simulations.js?v=12"></script>
 </body>
 </html>

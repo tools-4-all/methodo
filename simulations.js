@@ -797,6 +797,329 @@ function populateSelect(selectEl, exams){
   }
 }
 
+// ----------------- SHARE SIMULATION -----------------
+/**
+ * Setup del bottone per condividere le simulazioni (solo premium)
+ */
+function setupShareSimulationButton(uid, profile, exams) {
+  const shareBtn = qs("share-simulation-btn");
+  if (!shareBtn) return;
+
+  // Inizialmente nascosto - verrà mostrato dopo l'esecuzione di una simulazione
+  shareBtn.style.display = "none";
+
+  // Evita di aggiungere listener multipli
+  if (shareBtn.dataset.bound) return;
+  shareBtn.dataset.bound = "1";
+
+  shareBtn.addEventListener("click", async () => {
+    try {
+      shareBtn.disabled = true;
+      shareBtn.textContent = "⏳ Generazione...";
+      
+      await shareSimulation(profile, exams);
+      
+      shareBtn.disabled = false;
+      shareBtn.textContent = "Condividi simulazione";
+    } catch (err) {
+      console.error("Errore condivisione simulazione:", err);
+      alert("Errore durante la condivisione: " + (err?.message || err));
+      shareBtn.disabled = false;
+      shareBtn.textContent = "Condividi simulazione";
+    }
+  });
+}
+
+/**
+ * Funzione principale per condividere la simulazione
+ */
+async function shareSimulation(profile, exams) {
+  // Verifica se html2canvas è disponibile
+  if (typeof html2canvas === "undefined") {
+    shareSimulationAsText(profile, exams);
+    return;
+  }
+
+  const chartCanvas = qs("chart");
+  const chartWrap = chartCanvas?.closest(".chartWrap");
+  const legend = qs("legend");
+  const examSummary = qs("exam-summary");
+  
+  if (!chartCanvas || !chartWrap) {
+    throw new Error("Grafico simulazione non trovato");
+  }
+
+  // Verifica se c'è un grafico disegnato (non vuoto)
+  const ctx = chartCanvas.getContext("2d");
+  const imageData = ctx.getImageData(0, 0, chartCanvas.width, chartCanvas.height);
+  const hasContent = imageData.data.some(pixel => pixel !== 0);
+  
+  if (!hasContent) {
+    throw new Error("Esegui prima una simulazione per poterla condividere");
+  }
+
+  // Crea un contenitore temporaneo per l'immagine
+  const shareContainer = document.createElement("div");
+  shareContainer.style.position = "absolute";
+  shareContainer.style.left = "-9999px";
+  shareContainer.style.width = "800px";
+  shareContainer.style.padding = "32px";
+  shareContainer.style.background = "linear-gradient(180deg, #070a12, #0b0f1a)";
+  shareContainer.style.color = "rgba(255,255,255,.93)";
+  shareContainer.style.fontFamily = "system-ui, -apple-system, sans-serif";
+  shareContainer.style.borderRadius = "12px";
+
+  // Header
+  const header = document.createElement("div");
+  header.style.marginBottom = "24px";
+  header.style.textAlign = "center";
+  header.innerHTML = `
+    <h2 style="margin:0 0 8px 0; font-size:24px; font-weight:900;">Simulazione Preparazione</h2>
+    <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">Study Planner</p>
+  `;
+  shareContainer.appendChild(header);
+
+  // Info simulazione
+  const infoDiv = document.createElement("div");
+  infoDiv.style.marginBottom = "24px";
+  infoDiv.style.padding = "16px";
+  infoDiv.style.background = "rgba(255,255,255,.05)";
+  infoDiv.style.borderRadius = "10px";
+  infoDiv.style.fontSize = "13px";
+  infoDiv.innerHTML = `
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; text-align:center;">
+      <div>
+        <div style="color:rgba(255,255,255,.6); margin-bottom:4px;">Esami</div>
+        <div style="font-weight:700; font-size:18px;">${exams.length}</div>
+      </div>
+      <div>
+        <div style="color:rgba(255,255,255,.6); margin-bottom:4px;">Budget</div>
+        <div style="font-weight:700; font-size:18px;">${weeklyBudgetHours(profile)}h</div>
+      </div>
+      <div>
+        <div style="color:rgba(255,255,255,.6); margin-bottom:4px;">Orizzonte</div>
+        <div style="font-weight:700; font-size:18px;">${qs("horizon-days")?.value || 60}g</div>
+      </div>
+    </div>
+  `;
+  shareContainer.appendChild(infoDiv);
+
+  // Clona il canvas del grafico
+  const chartClone = document.createElement("canvas");
+  chartClone.width = chartCanvas.width;
+  chartClone.height = chartCanvas.height;
+  const cloneCtx = chartClone.getContext("2d");
+  cloneCtx.drawImage(chartCanvas, 0, 0);
+  
+  const chartWrapper = document.createElement("div");
+  chartWrapper.style.marginBottom = "24px";
+  chartWrapper.style.textAlign = "center";
+  chartWrapper.appendChild(chartClone);
+  shareContainer.appendChild(chartWrapper);
+
+  // Aggiungi info esami se disponibile
+  if (examSummary && examSummary.style.display !== "none" && examSummary.children.length > 0) {
+    const examsInfo = document.createElement("div");
+    examsInfo.style.marginTop = "16px";
+    examsInfo.style.padding = "16px";
+    examsInfo.style.background = "rgba(255,255,255,.03)";
+    examsInfo.style.borderRadius = "10px";
+    examsInfo.style.fontSize = "12px";
+    examsInfo.innerHTML = examSummary.innerHTML;
+    shareContainer.appendChild(examsInfo);
+  }
+
+  // Footer
+  const footer = document.createElement("div");
+  footer.style.marginTop = "24px";
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "12px";
+  footer.style.color = "rgba(255,255,255,.5)";
+  footer.textContent = "Generato con Study Planner Premium";
+  shareContainer.appendChild(footer);
+
+  document.body.appendChild(shareContainer);
+
+  try {
+    // Genera immagine
+    const shareCanvas = await html2canvas(shareContainer, {
+      backgroundColor: null,
+      scale: 2,
+      logging: false,
+      useCORS: true,
+    });
+
+    // Rimuovi contenitore temporaneo
+    document.body.removeChild(shareContainer);
+
+    // Converti canvas in blob
+    shareCanvas.toBlob(async (blob) => {
+      if (!blob) {
+        throw new Error("Errore nella generazione dell'immagine");
+      }
+
+      const file = new File([blob], "simulazione-study-planner.png", { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+
+      // Prova Web Share API
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: "La mia simulazione - Study Planner",
+            text: "Guarda la mia simulazione di preparazione! 📊",
+            files: [file],
+          });
+          URL.revokeObjectURL(url);
+          return;
+        } catch (shareErr) {
+          if (shareErr.name !== "AbortError") {
+            console.error("Errore Web Share:", shareErr);
+          }
+        }
+      }
+
+      // Fallback: download + link WhatsApp
+      downloadImage(url, "simulazione-study-planner.png");
+      showShareOptions(url);
+    }, "image/png");
+  } catch (err) {
+    document.body.removeChild(shareContainer);
+    throw err;
+  }
+}
+
+/**
+ * Condivisione come testo (fallback)
+ */
+function shareSimulationAsText(profile, exams) {
+  const horizon = qs("horizon-days")?.value || 60;
+  const text = `📊 Simulazione Preparazione - Study Planner
+
+Esami: ${exams.length}
+Budget settimanale: ${weeklyBudgetHours(profile)}h
+Orizzonte: ${horizon} giorni
+
+Generato con Study Planner Premium`;
+
+  if (navigator.share) {
+    navigator.share({
+      title: "La mia simulazione",
+      text: text,
+    }).catch(() => {
+      copyToClipboard(text);
+      showWhatsAppLink(text);
+    });
+  } else {
+    copyToClipboard(text);
+    showWhatsAppLink(text);
+  }
+}
+
+/**
+ * Download dell'immagine
+ */
+function downloadImage(url, filename) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+/**
+ * Mostra opzioni di condivisione
+ */
+function showShareOptions(imageUrl) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+
+  const card = document.createElement("div");
+  card.style.cssText = `
+    background: #0b0f1a;
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid rgba(255,255,255,.12);
+  `;
+
+  card.innerHTML = `
+    <h3 style="margin:0 0 16px 0; font-size:18px;">Immagine scaricata! 📥</h3>
+    <p style="margin:0 0 20px 0; color:rgba(255,255,255,.7); font-size:14px;">
+      L'immagine è stata scaricata. Puoi condividerla su Instagram, WhatsApp o altre app.
+    </p>
+    <div style="display:flex; gap:12px;">
+      <button id="share-whatsapp" class="btn primary" style="flex:1;">📱 WhatsApp</button>
+      <button id="share-close" class="btn" style="flex:1;">Chiudi</button>
+    </div>
+  `;
+
+  modal.appendChild(card);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    document.body.removeChild(modal);
+    URL.revokeObjectURL(imageUrl);
+  };
+
+  card.querySelector("#share-close").addEventListener("click", closeModal);
+  
+  card.querySelector("#share-whatsapp")?.addEventListener("click", () => {
+    const text = encodeURIComponent("Guarda la mia simulazione di preparazione! 📊\n\nGenerato con Study Planner Premium");
+    const whatsappUrl = `https://wa.me/?text=${text}`;
+    window.open(whatsappUrl, "_blank");
+    closeModal();
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+}
+
+/**
+ * Copia testo negli appunti
+ */
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Testo copiato negli appunti!");
+    });
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+    alert("Testo copiato negli appunti!");
+  }
+}
+
+/**
+ * Mostra link WhatsApp
+ */
+function showWhatsAppLink(text) {
+  const encodedText = encodeURIComponent(text);
+  const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+  
+  if (confirm("Vuoi aprire WhatsApp per condividere?")) {
+    window.open(whatsappUrl, "_blank");
+  }
+}
+
 // ---------------- Main ----------------
 window.addEventListener("DOMContentLoaded", ()=>{
   setupMenu();
@@ -858,6 +1181,11 @@ window.addEventListener("DOMContentLoaded", ()=>{
 
     setText("sim-meta", `Esami: ${exams.length} · Budget settimanale: ${weeklyBudgetHours(profile)}h`);
     
+    // Setup bottone condividi simulazione (solo premium)
+    if (premium) {
+      setupShareSimulationButton(user.uid, profile, exams);
+    }
+    
     // Mostra statistiche
     const statsGrid = qs("sim-stats");
     if (statsGrid) {
@@ -884,6 +1212,14 @@ window.addEventListener("DOMContentLoaded", ()=>{
       return;
     }
 
+    // Funzione per mostrare bottone condividi dopo simulazione
+    const showShareButton = () => {
+      const shareBtn = qs("share-simulation-btn");
+      if (shareBtn && premium) {
+        shareBtn.style.display = "block";
+      }
+    };
+
     // ---- Run functions ----
     const runBaseline = ()=>{
       // Controllo premium
@@ -896,6 +1232,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
       const out = simulate(profile, exams, params, 123, null);
       drawChartOverlay(canvas, out.dates, out.exams, out.series, null, null, "Simulazione (Baseline)");
       setText("sim-status", `Baseline OK · orizzonte ${params.horizonDays}g · noise ${params.noise} · decay ${params.decay}`);
+      showShareButton();
     };
 
     const runMCBaseline = ()=>{
@@ -914,6 +1251,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
       const baseExams = runs[0].exams;
       drawChartOverlay(canvas, agg.dates, baseExams, agg.series, null, null, "Monte Carlo (mediana) — Baseline");
       setText("sim-status", `MC Baseline OK · 20 scenari · mediana`);
+      showShareButton();
     };
 
     const runWhatIf = ()=>{
@@ -945,6 +1283,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
         "sim-status",
         `What-if OK · Δh=${ov.deltaHours} · goal=${ov.goalMode||"—"} · task=${ov.taskMinutes||"—"} · drop=${dropName} · boost=${boostName}×${ov.boostFactor}`
       );
+      showShareButton();
     };
 
     const runWhatIfMC = ()=>{
@@ -981,6 +1320,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
       );
 
       setText("sim-status", "What-if MC OK · 20 scenari · mediana");
+      showShareButton();
     };
 
     // ---- Hook buttons if present ----
