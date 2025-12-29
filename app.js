@@ -1953,9 +1953,12 @@ function mountOnboarding() {
 
   function readDayInputs() {
     const out = {};
-    dayContainer.querySelectorAll("input[data-day]").forEach((inp) => {
-      out[inp.dataset.day] = Number(inp.value || 0);
-    });
+    const container = qs("day-minutes") || dayContainer;
+    if (container) {
+      container.querySelectorAll("input[data-day]").forEach((inp) => {
+        out[inp.dataset.day] = Number(inp.value || 0);
+      });
+    }
     return out;
   }
 
@@ -2375,6 +2378,351 @@ function mountOnboarding() {
   }
   
   // Mostra i risultati della simulazione in un popup
+  /**
+   * Mostra un popup di riepilogo della strategia di studio prima di andare alla dashboard
+   */
+  async function showStrategySummaryModal(data, onConfirm) {
+    const { goalMode, weeklyHours, taskMinutes, dayMinutes, currentHours, targetHours, exams, profile } = data;
+    
+    // Calcola informazioni utili
+    const totalWeeklyMinutes = Object.values(dayMinutes || {}).reduce((sum, v) => sum + (v || 0), 0);
+    const totalWeeklyHours = Math.round((totalWeeklyMinutes / 60) * 10) / 10;
+    const effectiveWeeklyHours = weeklyHours || totalWeeklyHours;
+    
+    // Mappa goalMode a label
+    const goalModeLabels = {
+      pass: "Leggero",
+      good: "Moderato",
+      top: "Intensivo"
+    };
+    
+    // Raccogli appelli considerati
+    const examsWithAppelli = [];
+    for (const exam of exams || []) {
+      const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true, primary: true }] : []);
+      const selectedAppelli = appelli.filter(a => a.selected !== false);
+      if (selectedAppelli.length > 0) {
+        const primaryAppello = selectedAppelli.find(a => a.primary === true) || selectedAppelli[0];
+        examsWithAppelli.push({
+          name: exam.name,
+          cfu: exam.cfu,
+          selectedAppelli,
+          primaryAppello
+        });
+      }
+    }
+    
+    // Genera un piano di esempio per vedere le allocazioni
+    let planInfo = null;
+    try {
+      const weekStart = startOfWeekISO(new Date());
+      const tempProfile = {
+        ...profile,
+        goalMode: goalMode || profile?.goalMode || "good",
+        weeklyHours: effectiveWeeklyHours,
+        taskMinutes: taskMinutes || profile?.taskMinutes || 35,
+        dayMinutes: dayMinutes || profile?.dayMinutes || {},
+        currentHours: currentHours || profile?.currentHours,
+        targetHours: targetHours || profile?.targetHours
+      };
+      const tempExams = exams.map(e => ({
+        ...e,
+        category: e.category || detectExamCategory(e.name || "") || "mixed"
+      }));
+      const plan = generateWeeklyPlan(tempProfile, tempExams, weekStart);
+      planInfo = {
+        totalTasks: plan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0),
+        totalHours: Math.round((plan.weeklyBudgetMin / 60) * 10) / 10,
+        cutTasks: plan.cut?.length || 0,
+        allocations: plan.allocations || []
+      };
+    } catch (err) {
+      console.warn("Errore generazione piano per riepilogo:", err);
+    }
+    
+    // Crea HTML del riepilogo
+    let html = `
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Sezione Appelli Considerati -->
+        <div>
+          <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.95);">
+            📅 Appelli Considerati
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+    `;
+    
+    if (examsWithAppelli.length === 0) {
+      html += `<p style="margin: 0; color: rgba(255,255,255,0.6); font-size: 14px;">Nessun appello selezionato</p>`;
+    } else {
+      for (const exam of examsWithAppelli) {
+        html += `
+          <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid rgba(99,102,241,0.6);">
+            <div style="font-weight: 600; color: rgba(255,255,255,0.95); margin-bottom: 8px;">
+              ${escapeHtml(exam.name)} <span style="color: rgba(255,255,255,0.6); font-weight: 400;">(${exam.cfu} CFU)</span>
+            </div>
+            <div style="font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.6;">
+        `;
+        
+        for (const appello of exam.selectedAppelli) {
+          const isPrimary = appello.date === exam.primaryAppello?.date;
+          html += `
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+              <span style="color: ${isPrimary ? 'rgba(34,197,94,1)' : 'rgba(255,255,255,0.7)'};">
+                ${isPrimary ? '✓' : '○'}
+              </span>
+              <span style="${isPrimary ? 'font-weight: 600; color: rgba(34,197,94,1);' : 'color: rgba(255,255,255,0.7);'}">
+                ${appello.date}${isPrimary ? ' <span style="font-size: 11px; color: rgba(34,197,94,0.8);">(principale)</span>' : ''}
+              </span>
+            </div>
+          `;
+        }
+        
+        html += `
+            </div>
+          </div>
+        `;
+      }
+    }
+    
+    html += `
+          </div>
+        </div>
+        
+        <!-- Sezione Impostazioni Studio -->
+        <div>
+          <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.95);">
+            ⚙️ Impostazioni Studio
+          </h3>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Impegno</div>
+              <div style="font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.95);">${goalModeLabels[goalMode] || goalMode}</div>
+            </div>
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Ore settimanali</div>
+              <div style="font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.95);">${effectiveWeeklyHours}h</div>
+            </div>
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Durata task</div>
+              <div style="font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.95);">${taskMinutes} min</div>
+            </div>
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Disponibilità totale</div>
+              <div style="font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.95);">${totalWeeklyHours}h</div>
+            </div>
+    `;
+    
+    if (currentHours && targetHours) {
+      html += `
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; grid-column: 1 / -1;">
+              <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Allenatore di Studio</div>
+              <div style="font-size: 14px; color: rgba(255,255,255,0.95);">
+                Attuale: <strong>${currentHours}h</strong> → Obiettivo: <strong>${targetHours}h</strong>
+              </div>
+            </div>
+      `;
+    }
+    
+    html += `
+          </div>
+          
+          <!-- Disponibilità giornaliera -->
+          <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">Disponibilità giornaliera</div>
+            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; font-size: 12px;">
+    `;
+    
+    const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+    const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    dayKeys.forEach((key, idx) => {
+      const minutes = dayMinutes[key] || 0;
+      const hours = Math.round((minutes / 60) * 10) / 10;
+      html += `
+        <div style="text-align: center; padding: 6px; background: ${minutes > 0 ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)'}; border-radius: 6px;">
+          <div style="color: rgba(255,255,255,0.6); margin-bottom: 2px;">${dayLabels[idx]}</div>
+          <div style="font-weight: 600; color: rgba(255,255,255,0.95);">${hours}h</div>
+        </div>
+      `;
+    });
+    
+    html += `
+            </div>
+          </div>
+        </div>
+        
+        <!-- Sezione Informazioni Utili -->
+        <div>
+          <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.95);">
+            ℹ️ Informazioni Utili
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+    `;
+    
+    html += `
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.6;">
+                <strong style="color: rgba(255,255,255,0.95);">Esami da preparare:</strong> ${exams.length}
+              </div>
+            </div>
+    `;
+    
+    if (planInfo) {
+      html += `
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.6;">
+                <strong style="color: rgba(255,255,255,0.95);">Budget settimanale stimato:</strong> ${planInfo.totalHours}h
+              </div>
+            </div>
+            <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+              <div style="font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.6;">
+                <strong style="color: rgba(255,255,255,0.95);">Task generati:</strong> ${planInfo.totalTasks}
+              </div>
+            </div>
+      `;
+      
+      if (planInfo.cutTasks > 0) {
+        html += `
+            <div style="padding: 12px; background: rgba(245,158,11,0.1); border-radius: 8px; border-left: 3px solid rgba(245,158,11,0.6);">
+              <div style="font-size: 13px; color: rgba(245,158,11,1); line-height: 1.6;">
+                <strong>⚠️ Attenzione:</strong> ${planInfo.cutTasks} task non possono essere completati con il budget attuale. Considera di aumentare le ore settimanali.
+              </div>
+            </div>
+        `;
+      } else {
+        html += `
+            <div style="padding: 12px; background: rgba(34,197,94,0.1); border-radius: 8px; border-left: 3px solid rgba(34,197,94,0.6);">
+              <div style="font-size: 13px; color: rgba(34,197,94,1); line-height: 1.6;">
+                ✓ Piano fattibile: tutti i task possono essere completati con il budget settimanale disponibile.
+              </div>
+            </div>
+        `;
+      }
+    }
+    
+    html += `
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Crea modale
+    const overlay = document.createElement("div");
+    overlay.id = "strategy-summary-modal";
+    Object.assign(overlay.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0,0,0,0.8)",
+      zIndex: "10000",
+      padding: "20px",
+      animation: "fadeIn 0.2s ease-out",
+    });
+    
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.maxWidth = "800px";
+    card.style.width = "95%";
+    card.style.maxHeight = "90vh";
+    card.style.overflowY = "auto";
+    card.style.padding = "32px";
+    card.style.position = "relative";
+    card.style.animation = "slideUp 0.3s ease-out";
+    
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.marginBottom = "24px";
+    header.style.paddingBottom = "20px";
+    header.style.borderBottom = "1px solid rgba(255, 255, 255, 0.1)";
+    
+    const title = document.createElement("h2");
+    title.textContent = "Riepilogo Strategia di Studio";
+    title.style.margin = "0";
+    title.style.fontSize = "24px";
+    title.style.fontWeight = "900";
+    title.style.color = "rgba(255, 255, 255, 0.95)";
+    
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "✕";
+    closeBtn.className = "btn ghost";
+    closeBtn.style.width = "40px";
+    closeBtn.style.height = "40px";
+    closeBtn.style.padding = "0";
+    closeBtn.style.fontSize = "20px";
+    closeBtn.style.borderRadius = "50%";
+    closeBtn.style.display = "flex";
+    closeBtn.style.alignItems = "center";
+    closeBtn.style.justifyContent = "center";
+    closeBtn.style.cursor = "pointer";
+    
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+    
+    const content = document.createElement("div");
+    content.innerHTML = html;
+    card.appendChild(content);
+    
+    const footer = document.createElement("div");
+    footer.style.display = "flex";
+    footer.style.gap = "12px";
+    footer.style.justifyContent = "flex-end";
+    footer.style.marginTop = "24px";
+    footer.style.paddingTop = "20px";
+    footer.style.borderTop = "1px solid rgba(255, 255, 255, 0.1)";
+    
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Annulla";
+    cancelBtn.className = "btn";
+    cancelBtn.addEventListener("click", () => {
+      closeModal();
+    });
+    
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Vai alla Dashboard";
+    confirmBtn.className = "btn primary";
+    confirmBtn.addEventListener("click", () => {
+      closeModal();
+      if (onConfirm) onConfirm();
+    });
+    
+    footer.appendChild(cancelBtn);
+    footer.appendChild(confirmBtn);
+    card.appendChild(footer);
+    
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+    
+    function closeModal() {
+      overlay.style.animation = "fadeOut 0.2s ease-out";
+      card.style.animation = "slideDown 0.2s ease-out";
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        document.body.style.overflow = "";
+      }, 200);
+    }
+    
+    closeBtn.addEventListener("click", closeModal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.getElementById("strategy-summary-modal")) {
+        closeModal();
+      }
+    });
+  }
+
   function showSimulationResultsModal(htmlContent) {
     // Evita di aprire più modali contemporaneamente
     if (document.getElementById("simulation-results-modal")) return;
@@ -2825,32 +3173,29 @@ function mountOnboarding() {
     
     const handleGoToDashboard = async () => {
       try {
-        // Forza un delay più lungo per assicurarsi che eventuali salvataggi siano completati
-        // (Firestore potrebbe richiedere tempo per propagare le modifiche)
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Leggi i valori attuali dal form (potrebbero non essere salvati)
+        const currentGoalMode = qs("goal-mode")?.value;
+        const currentWeeklyHours = Number(qs("weekly-hours")?.value || 0);
+        const currentTaskMinutes = Number(qs("task-minutes")?.value || 35);
+        const currentDayMinutes = readDayInputs();
+        const currentCurrentHours = Number(qs("current-hours")?.value || 0);
+        const currentTargetHours = Number(qs("target-hours")?.value || 0);
         
-        // Ricarica i dati freschi da Firestore (con retry per assicurarsi che siano aggiornati)
+        // Ricarica i dati freschi da Firestore
+        await new Promise(resolve => setTimeout(resolve, 300));
         let profile2 = await getProfile(user.uid);
         let exams2 = await listExams(user.uid);
         
-        // Se non ci sono esami, aspetta un po' e riprova (potrebbe essere un problema di timing)
         if (exams2.length === 0) {
           await new Promise(resolve => setTimeout(resolve, 300));
           exams2 = await listExams(user.uid);
         }
 
-        console.log("[Dashboard] Verifica:", {
-          hasGoalMode: !!profile2?.goalMode,
-          hasDayMinutes: !!profile2?.dayMinutes,
-          examsCount: exams2.length,
-          profile: profile2,
-          exams: exams2
-        });
-
-        if (!profile2?.goalMode || !profile2?.dayMinutes) {
+        // Verifica validità
+        if (!currentGoalMode || !currentDayMinutes || Object.values(currentDayMinutes).every(v => !v)) {
           const errorEl = qs("profile-error") || qs("exam-error");
           if (errorEl) {
-            setText(errorEl, "Salva prima le impostazioni del profilo (obiettivo, ore settimanali, disponibilità).");
+            setText(errorEl, "Salva prima le impostazioni del profilo (impegno, ore settimanali, disponibilità).");
           } else {
             alert("Salva prima le impostazioni del profilo prima di andare alla dashboard.");
           }
@@ -2866,58 +3211,45 @@ function mountOnboarding() {
           return;
         }
 
-        // Verifica se ci sono modifiche che richiedono rigenerazione del piano
-        const weekStart = startOfWeekISO(new Date());
-        const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
-        
-        console.log("[handleGoToDashboard] Verifica modifiche:", {
-          profile: {
-            goalMode: profile2?.goalMode,
-            weeklyHours: profile2?.weeklyHours,
-            taskMinutes: profile2?.taskMinutes,
-            currentHours: profile2?.currentHours,
-            targetHours: profile2?.targetHours,
-          },
-          examsCount: exams2.length,
-          exams: exams2.map(e => ({
-            id: e.id,
-            name: e.name,
-            date: e.date,
-            cfu: e.cfu,
-            level: e.level,
-            difficulty: e.difficulty,
-            category: e.category
-          }))
-        });
-        
-        const savedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
-        const needsRegeneration = hasPlanChanges(profile2, exams2, savedPlan);
-        
-        if (needsRegeneration) {
-          console.log("[handleGoToDashboard] Rilevate modifiche, rigenero il piano...");
-          // Assicura che tutti gli esami abbiano una category valida
-          const normalizedExams = exams2.map(e => ({
-            ...e,
-            category: e.category || detectExamCategory(e.name || "") || "mixed"
-          }));
-          
-          // Rigenera il piano con i nuovi dati
-          const newPlan = generateWeeklyPlan(profile2, normalizedExams, weekStart);
-          // Aggiungi snapshot per future comparazioni
-          addSnapshotToPlan(newPlan, profile2, normalizedExams);
-          // Salva il piano rigenerato
-          await saveWeeklyPlan(user.uid, weekStartISO, newPlan);
-          console.log("[handleGoToDashboard] Piano rigenerato e salvato:", {
-            weekStart: newPlan.weekStart,
-            allocations: newPlan.allocations.length,
-            totalTasks: newPlan.days.reduce((sum, d) => sum + (d.tasks?.length || 0), 0)
-          });
-        } else {
-          console.log("[handleGoToDashboard] Nessuna modifica rilevata, uso piano esistente.");
-        }
+        // Mostra popup di riepilogo
+        await showStrategySummaryModal({
+          goalMode: currentGoalMode,
+          weeklyHours: currentWeeklyHours,
+          taskMinutes: currentTaskMinutes,
+          dayMinutes: currentDayMinutes,
+          currentHours: currentCurrentHours,
+          targetHours: currentTargetHours,
+          exams: exams2,
+          profile: profile2
+        }, async () => {
+          // Callback quando l'utente conferma
+          try {
+            // Verifica se ci sono modifiche che richiedono rigenerazione del piano
+            const weekStart = startOfWeekISO(new Date());
+            const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
+            
+            const savedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
+            const needsRegeneration = hasPlanChanges(profile2, exams2, savedPlan);
+            
+            if (needsRegeneration) {
+              console.log("[handleGoToDashboard] Rilevate modifiche, rigenero il piano...");
+              const normalizedExams = exams2.map(e => ({
+                ...e,
+                category: e.category || detectExamCategory(e.name || "") || "mixed"
+              }));
+              
+              const newPlan = generateWeeklyPlan(profile2, normalizedExams, weekStart);
+              addSnapshotToPlan(newPlan, profile2, normalizedExams);
+              await saveWeeklyPlan(user.uid, weekStartISO, newPlan);
+            }
 
-        // Tutto ok, vai alla dashboard
-        window.location.assign("./app.html");
+            // Vai alla dashboard
+            window.location.assign("./app.html");
+          } catch (err) {
+            console.error("Errore verifica dashboard:", err);
+            alert("Errore durante la verifica. Riprova.");
+          }
+        });
       } catch (err) {
         console.error("Errore verifica dashboard:", err);
         alert("Errore durante la verifica. Riprova.");
