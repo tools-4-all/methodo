@@ -3089,6 +3089,9 @@ function mountProfile() {
     // Calcola e mostra statistiche
     await updateStats(user.uid);
 
+    // Setup bottone condividi statistiche
+    setupShareStatsButton(user.uid);
+
     // Mostra e gestisci abbonamento
     await renderSubscription(user.uid);
 
@@ -3440,6 +3443,26 @@ async function updateStats(uid) {
 
   // Genera consigli personalizzati
   generatePersonalizedTips(exams, avg, weightedAvg);
+
+  // Mostra/nascondi bottone condividi
+  updateShareButtonVisibility();
+}
+
+/**
+ * Aggiorna la visibilità del bottone condividi statistiche
+ */
+function updateShareButtonVisibility() {
+  const shareBtn = qs("share-stats-btn");
+  if (!shareBtn) return;
+
+  const gradeAverage = qs("grade-average");
+  const hasStats = gradeAverage && gradeAverage.textContent !== "—" && gradeAverage.textContent.trim() !== "";
+
+  if (hasStats) {
+    shareBtn.style.display = "block";
+  } else {
+    shareBtn.style.display = "none";
+  }
 }
 
 function drawGradesChart(exams) {
@@ -3729,6 +3752,315 @@ function generatePersonalizedTips(exams, avg, weightedAvg) {
     `;
     tipsContainer.appendChild(tipCard);
   });
+}
+
+// ----------------- SHARE STATS -----------------
+/**
+ * Setup del bottone per condividere le statistiche
+ */
+function setupShareStatsButton(uid) {
+  const shareBtn = qs("share-stats-btn");
+  if (!shareBtn) return;
+
+  // Evita di aggiungere listener multipli
+  if (shareBtn.dataset.bound) return;
+  shareBtn.dataset.bound = "1";
+
+  // Aggiorna visibilità iniziale
+  updateShareButtonVisibility();
+
+  shareBtn.addEventListener("click", async () => {
+    try {
+      shareBtn.disabled = true;
+      shareBtn.textContent = "⏳ Generazione...";
+      
+      await shareStats();
+      
+      shareBtn.disabled = false;
+      shareBtn.textContent = "Condividi statistiche";
+    } catch (err) {
+      console.error("Errore condivisione:", err);
+      alert("Errore durante la condivisione: " + (err?.message || err));
+      shareBtn.disabled = false;
+      shareBtn.textContent = "Condividi statistiche";
+    }
+  });
+}
+
+/**
+ * Funzione principale per condividere le statistiche
+ */
+async function shareStats() {
+  // Verifica se html2canvas è disponibile
+  if (typeof html2canvas === "undefined") {
+    // Fallback: condivisione testo
+    shareStatsAsText();
+    return;
+  }
+
+  // Crea un contenitore per l'immagine da condividere
+  const statsSection = document.querySelector("#stats-summary").closest("section");
+  if (!statsSection) {
+    throw new Error("Sezione statistiche non trovata");
+  }
+
+  // Prepara il contenuto da catturare (statistiche + grafico)
+  const statsSummary = qs("stats-summary");
+  const gradesChart = qs("grades-chart");
+  
+  if (!statsSummary) {
+    throw new Error("Statistiche non trovate");
+  }
+
+  // Crea un contenitore temporaneo per l'immagine
+  const shareContainer = document.createElement("div");
+  shareContainer.style.position = "absolute";
+  shareContainer.style.left = "-9999px";
+  shareContainer.style.width = "600px";
+  shareContainer.style.padding = "32px";
+  shareContainer.style.background = "linear-gradient(180deg, #070a12, #0b0f1a)";
+  shareContainer.style.color = "rgba(255,255,255,.93)";
+  shareContainer.style.fontFamily = "system-ui, -apple-system, sans-serif";
+  shareContainer.style.borderRadius = "12px";
+
+  // Aggiungi header
+  const header = document.createElement("div");
+  header.style.marginBottom = "24px";
+  header.style.textAlign = "center";
+  header.innerHTML = `
+    <h2 style="margin:0 0 8px 0; font-size:24px; font-weight:900;">Le Mie Statistiche</h2>
+    <p style="margin:0; font-size:14px; color:rgba(255,255,255,.6);">Study Planner</p>
+  `;
+  shareContainer.appendChild(header);
+
+  // Clona le statistiche
+  const statsClone = statsSummary.cloneNode(true);
+  statsClone.style.display = "grid";
+  statsClone.style.gridTemplateColumns = "repeat(2, 1fr)";
+  statsClone.style.gap = "16px";
+  statsClone.style.marginBottom = "24px";
+  shareContainer.appendChild(statsClone);
+
+  // Aggiungi grafico se disponibile
+  const gradesCanvas = gradesChart?.querySelector("#grades-canvas");
+  if (gradesCanvas) {
+    const chartWrapper = document.createElement("div");
+    chartWrapper.style.marginTop = "24px";
+    chartWrapper.style.textAlign = "center";
+    
+    // Crea un nuovo canvas e copia il contenuto
+    const newCanvas = document.createElement("canvas");
+    newCanvas.width = gradesCanvas.width;
+    newCanvas.height = gradesCanvas.height;
+    const ctx = newCanvas.getContext("2d");
+    ctx.drawImage(gradesCanvas, 0, 0);
+    
+    chartWrapper.appendChild(newCanvas);
+    shareContainer.appendChild(chartWrapper);
+  }
+
+  // Aggiungi footer
+  const footer = document.createElement("div");
+  footer.style.marginTop = "24px";
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "12px";
+  footer.style.color = "rgba(255,255,255,.5)";
+  footer.textContent = "Generato con Study Planner";
+  shareContainer.appendChild(footer);
+
+  document.body.appendChild(shareContainer);
+
+  try {
+    // Genera immagine
+    const shareCanvas = await html2canvas(shareContainer, {
+      backgroundColor: null,
+      scale: 2,
+      logging: false,
+      useCORS: true,
+    });
+
+    // Rimuovi contenitore temporaneo
+    document.body.removeChild(shareContainer);
+
+    // Converti canvas in blob
+    shareCanvas.toBlob(async (blob) => {
+      if (!blob) {
+        throw new Error("Errore nella generazione dell'immagine");
+      }
+
+      const file = new File([blob], "statistiche-study-planner.png", { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+
+      // Prova Web Share API
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: "Le mie statistiche - Study Planner",
+            text: "Guarda le mie statistiche accademiche! 📊",
+            files: [file],
+          });
+          URL.revokeObjectURL(url);
+          return;
+        } catch (shareErr) {
+          if (shareErr.name !== "AbortError") {
+            console.error("Errore Web Share:", shareErr);
+          }
+        }
+      }
+
+      // Fallback: download + link WhatsApp
+      downloadImage(url, "statistiche-study-planner.png");
+      
+      // Mostra opzioni di condivisione
+      showShareOptions(url);
+    }, "image/png");
+  } catch (err) {
+    document.body.removeChild(shareContainer);
+    throw err;
+  }
+}
+
+/**
+ * Condivisione come testo (fallback se html2canvas non disponibile)
+ */
+function shareStatsAsText() {
+  const gradeAverage = qs("grade-average")?.textContent || "—";
+  const gradeCount = qs("grade-count")?.textContent || "0 esami";
+  const weightedAverage = qs("weighted-average")?.textContent || "—";
+  const totalCfu = qs("total-cfu")?.textContent || "0";
+  const maxGrade = qs("max-grade")?.textContent || "—";
+  const maxGradeExam = qs("max-grade-exam")?.textContent || "—";
+
+  const text = `📊 Le Mie Statistiche - Study Planner
+
+Media voti: ${gradeAverage}
+${gradeCount}
+Media ponderata: ${weightedAverage}
+CFU totali: ${totalCfu}
+Voto più alto: ${maxGrade} (${maxGradeExam})
+
+Generato con Study Planner`;
+
+  // Prova Web Share API per testo
+  if (navigator.share) {
+    navigator.share({
+      title: "Le mie statistiche",
+      text: text,
+    }).catch(() => {
+      // Fallback: copia negli appunti o WhatsApp
+      copyToClipboard(text);
+      showWhatsAppLink(text);
+    });
+  } else {
+    copyToClipboard(text);
+    showWhatsAppLink(text);
+  }
+}
+
+/**
+ * Download dell'immagine
+ */
+function downloadImage(url, filename) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+/**
+ * Mostra opzioni di condivisione
+ */
+function showShareOptions(imageUrl) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+
+  const card = document.createElement("div");
+  card.style.cssText = `
+    background: #0b0f1a;
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid rgba(255,255,255,.12);
+  `;
+
+  card.innerHTML = `
+    <h3 style="margin:0 0 16px 0; font-size:18px;">Immagine scaricata! 📥</h3>
+    <p style="margin:0 0 20px 0; color:rgba(255,255,255,.7); font-size:14px;">
+      L'immagine è stata scaricata. Puoi condividerla su Instagram, WhatsApp o altre app.
+    </p>
+    <div style="display:flex; gap:12px;">
+      <button id="share-whatsapp" class="btn primary" style="flex:1;">📱 WhatsApp</button>
+      <button id="share-close" class="btn" style="flex:1;">Chiudi</button>
+    </div>
+  `;
+
+  modal.appendChild(card);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    document.body.removeChild(modal);
+    URL.revokeObjectURL(imageUrl);
+  };
+
+  card.querySelector("#share-close").addEventListener("click", closeModal);
+  
+  card.querySelector("#share-whatsapp")?.addEventListener("click", () => {
+    const text = encodeURIComponent("Guarda le mie statistiche! 📊\n\nGenerato con Study Planner");
+    const whatsappUrl = `https://wa.me/?text=${text}`;
+    window.open(whatsappUrl, "_blank");
+    closeModal();
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+}
+
+/**
+ * Copia testo negli appunti
+ */
+function copyToClipboard(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Testo copiato negli appunti!");
+    });
+  } else {
+    // Fallback per browser vecchi
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+    alert("Testo copiato negli appunti!");
+  }
+}
+
+/**
+ * Mostra link WhatsApp
+ */
+function showWhatsAppLink(text) {
+  const encodedText = encodeURIComponent(text);
+  const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+  
+  if (confirm("Vuoi aprire WhatsApp per condividere?")) {
+    window.open(whatsappUrl, "_blank");
+  }
 }
 
 // ----------------- MENU -----------------
