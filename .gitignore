@@ -74,6 +74,7 @@ documentazione.pdf
 documentation.pdf
 docs/export/
 docs/*.pdf
+*.md
 
 # =========================
 # Misc

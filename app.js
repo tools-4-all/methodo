@@ -139,6 +139,20 @@ async function isPremium(uid) {
   
   // Controlla abbonamento premium
   if (profile.subscription?.status === 'active') {
+    // PROTEZIONE: Verifica che l'abbonamento sia verificato da Stripe
+    // In produzione, richiedi che sia verificato (non manipolato manualmente)
+    const isVerified = profile.subscription?.verified === true;
+    const isTestMode = window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1' ||
+                       window.location.hostname.includes('github.io') ||
+                       window.location.hostname.includes('127.0.0.1');
+    
+    // In produzione, richiedi verifica Stripe (blocca carte di test)
+    if (!isTestMode && !isVerified) {
+      console.warn(`Abbonamento non verificato per utente ${uid} - potrebbe essere una manipolazione`);
+      return false;
+    }
+    
     const endDate = profile.subscription?.endDate?.toDate ? 
                     profile.subscription.endDate.toDate() : 
                     new Date(profile.subscription?.endDate);
@@ -337,6 +351,17 @@ async function setProfile(uid, data) {
  *   await testPremium(false) // Disattiva premium
  */
 async function testPremium(activate = true) {
+  // PROTEZIONE: Disabilita testPremium in produzione
+  const isTestMode = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1' ||
+                     window.location.hostname.includes('github.io');
+  
+  if (!isTestMode) {
+    console.error("testPremium è disabilitato in produzione per sicurezza");
+    alert("Funzione di test disabilitata in produzione. Usa Stripe Checkout per attivare Premium.");
+    return;
+  }
+  
   const user = auth.currentUser;
   if (!user) {
     console.error("Nessun utente loggato");
@@ -344,7 +369,7 @@ async function testPremium(activate = true) {
   }
   
   if (activate) {
-    // Attiva premium per 30 giorni
+    // Attiva premium per 30 giorni (solo in test mode)
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 30);
     
@@ -354,11 +379,13 @@ async function testPremium(activate = true) {
         startDate: serverTimestamp(),
         endDate: endDate.toISOString(),
         type: 'monthly',
-        price: 5
+        price: 5,
+        verified: false, // Marca come non verificato (solo per test)
+        testMode: true // Flag per indicare che è un test
       }
     });
     
-    console.log("✅ Premium attivato! Ricarica la pagina per vedere i cambiamenti.");
+    console.log("✅ Premium attivato per test (30 giorni) - SOLO IN TEST MODE");
     showToast("Premium attivato per test! Ricarica la pagina.", 5000);
   } else {
     // Disattiva premium

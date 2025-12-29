@@ -33,10 +33,24 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
   const priceAmount = parseInt(functions.config().subscription.price || '500'); // Default: €5.00
 
   try {
-    // Crea o recupera il customer Stripe
-    let customerId;
+    // PROTEZIONE: Verifica che non sia già premium (evita doppi pagamenti)
     const userDoc = await db.collection('users').doc(uid).get();
     const userData = userDoc.data();
+    
+    if (userData?.subscription?.status === 'active') {
+      const endDate = userData.subscription?.endDate?.toDate ? 
+                      userData.subscription.endDate.toDate() : 
+                      new Date(userData.subscription?.endDate);
+      if (endDate > new Date()) {
+        throw new functions.https.HttpsError(
+          'already-exists',
+          'Hai già un abbonamento Premium attivo'
+        );
+      }
+    }
+    
+    // Crea o recupera il customer Stripe
+    let customerId;
 
     if (userData && userData.stripeCustomerId) {
       customerId = userData.stripeCustomerId;
@@ -170,11 +184,67 @@ async function handleCheckoutCompleted(session) {
     return;
   }
 
+  // IMPORTANTE: Verifica che il pagamento sia stato completato con successo
+  if (session.payment_status !== 'paid') {
+    console.warn(`Checkout completato ma pagamento non completato per utente ${uid}. Payment status: ${session.payment_status}`);
+    return;
+  }
+
   const subscriptionId = session.subscription;
   const customerId = session.customer;
 
+  if (!subscriptionId) {
+    console.error('Subscription ID non trovato nella sessione');
+    return;
+  }
+
   // Recupera i dettagli della subscription
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  
+  // Verifica che la subscription sia attiva
+  if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+    console.warn(`Subscription non attiva per utente ${uid}. Status: ${subscription.status}`);
+    return;
+  }
+
+  // PROTEZIONE: Verifica che non sia una carta di test (solo in produzione)
+  // In modalità test, Stripe usa prefissi specifici per le carte di test
+  // Controlliamo se siamo in modalità live e se il pagamento è reale
+  const isLiveMode = stripeConfig.secret_key && stripeConfig.secret_key.startsWith('sk_live_');
+  
+  if (isLiveMode) {
+    // In produzione, verifica che il pagamento sia reale
+    // Recupera il payment intent per verificare i dettagli
+    try {
+      const paymentIntentId = session.payment_intent;
+      if (paymentIntentId) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        // Verifica che il metodo di pagamento non sia una carta di test
+        if (paymentIntent.payment_method) {
+          const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method);
+          
+          // Le carte di test hanno pattern specifici (es. 4242 4242 4242 4242)
+          // In produzione, Stripe non dovrebbe accettare carte di test
+          // Ma aggiungiamo un controllo extra per sicurezza
+          if (paymentMethod.card) {
+            const last4 = paymentMethod.card.last4;
+            // Pattern comuni di carte di test (solo per sicurezza extra)
+            const testCardPatterns = ['4242', '4000', '5555'];
+            if (testCardPatterns.includes(last4) && isLiveMode) {
+              console.warn(`Tentativo di usare carta di test in produzione per utente ${uid}`);
+              // Non attiviamo il premium se è una carta di test in produzione
+              return;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Errore nella verifica del payment intent:', error);
+      // In caso di errore, procediamo comunque (potrebbe essere un pagamento one-time)
+    }
+  }
+
   const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
   const currentPeriodStart = new Date(subscription.current_period_start * 1000);
 
@@ -189,11 +259,14 @@ async function handleCheckoutCompleted(session) {
       type: 'monthly',
       price: subscription.items.data[0].price.unit_amount / 100, // Converti da centesimi
       lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // Aggiungi flag per indicare che è un pagamento verificato
+      verified: true,
     },
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Abbonamento attivato per utente ${uid}`);
+  console.log(`Abbonamento attivato per utente ${uid} (verificato)`);
 }
 
 /**
@@ -245,9 +318,21 @@ async function handlePaymentSucceeded(invoice) {
   const subscriptionId = invoice.subscription;
   if (!subscriptionId) return;
 
+  // Verifica che l'invoice sia pagato
+  if (invoice.paid !== true) {
+    console.warn(`Invoice non pagato: ${invoice.id}`);
+    return;
+  }
+
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const uid = subscription.metadata && subscription.metadata.firebaseUID;
   if (!uid) return;
+
+  // Verifica che la subscription sia ancora attiva
+  if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+    console.warn(`Subscription non attiva per utente ${uid}. Status: ${subscription.status}`);
+    return;
+  }
 
   const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
 
@@ -255,10 +340,11 @@ async function handlePaymentSucceeded(invoice) {
     'subscription.status': 'active',
     'subscription.endDate': admin.firestore.Timestamp.fromDate(currentPeriodEnd),
     'subscription.lastPaymentDate': admin.firestore.FieldValue.serverTimestamp(),
+    'subscription.verified': true, // Marca come verificato
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Pagamento riuscito per utente ${uid}`);
+  console.log(`Pagamento riuscito e verificato per utente ${uid}`);
 }
 
 /**
