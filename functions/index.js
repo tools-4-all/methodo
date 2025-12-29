@@ -791,87 +791,105 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
     console.log(`[Referral] Processamento referral: codice=${referralCode}, nuovoUtente=${newUserUid}`);
 
     // Trova l'utente che ha generato il referral (FUORI dalla transazione per permettere query)
-    let referrerQuery = await db.collection('users')
-        .where('referralCode', '==', referralCode)
-        .limit(1)
-        .get();
+    let referrerQuery;
+    try {
+      referrerQuery = await db.collection('users')
+          .where('referralCode', '==', referralCode)
+          .limit(1)
+          .get();
+      console.log(`[Referral] Query referral trovati: ${referrerQuery.size}`);
+      console.log(`[Referral] Codice cercato: ${referralCode}`);
+    } catch (queryError) {
+      console.error(`[Referral] ❌ ERRORE nella query Firestore:`, queryError);
+      console.error(`[Referral] Dettagli errore:`, {
+        code: queryError.code,
+        message: queryError.message,
+        stack: queryError.stack,
+      });
 
-    console.log(`[Referral] Query referral trovati: ${referrerQuery.size}`);
-    console.log(`[Referral] Codice cercato: ${referralCode}`);
+      // Se è un errore di indice mancante, fornisci un messaggio più utile
+      if (queryError.code === 8 || queryError.message?.includes('index')) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Indice Firestore mancante per referralCode. Contatta il supporto.',
+        );
+      }
+
+      throw queryError;
+    }
 
     // Se il codice non viene trovato, prova a generarlo automaticamente
     // Il formato del codice è REF{UID8}, quindi possiamo estrarre l'UID prefix
     if (referrerQuery.empty) {
       console.log(`[Referral] Codice non trovato, provo a generarlo automaticamente...`);
-      
+
       // Estrai l'UID prefix dal codice (formato: REF{UID8})
       if (referralCode.startsWith('REF') && referralCode.length >= 11) {
         const uidPrefix = referralCode.substring(3).toUpperCase(); // Rimuovi "REF"
-        
+
         console.log(`[Referral] Tentativo di trovare utente con UID che inizia con: ${uidPrefix}`);
         console.log(`[Referral] Cercherò tra tutti gli utenti per trovare quello con UID che genera questo codice...`);
-        
+
         // Strategia migliorata: cerca tutti gli utenti e verifica se il loro referral code generato corrisponde
         // Usiamo un batch per essere più efficienti
         let foundUser = null;
         let lastDoc = null;
         const batchSize = 500;
         let totalChecked = 0;
-        
+
         // Cerca in batch fino a trovare l'utente o finire tutti gli utenti
         while (!foundUser) {
           let query = db.collection('users').limit(batchSize);
           if (lastDoc) {
             query = query.startAfter(lastDoc);
           }
-          
+
           const batch = await query.get();
-          
+
           if (batch.empty) {
             console.log(`[Referral] Nessun altro utente da controllare. Totale controllati: ${totalChecked}`);
             break;
           }
-          
+
           console.log(`[Referral] Controllando batch di ${batch.size} utenti... (totale: ${totalChecked + batch.size})`);
-          
+
           for (const userDoc of batch.docs) {
             totalChecked++;
             const userUid = userDoc.id;
-            const userData = userDoc.data();
-            
+
             // Genera il referral code per questo UID
             const generatedCode = `REF${userUid.substring(0, 8).toUpperCase()}`;
-            
+
             // Se il codice generato corrisponde, abbiamo trovato l'utente
             if (generatedCode === referralCode) {
               foundUser = userDoc;
               console.log(`[Referral] ✅ Utente trovato! UID: ${userUid}, Codice: ${referralCode}`);
-              
+
               // Salva il referral code FUORI dalla transazione
               await db.collection('users').doc(userUid).set({
                 referralCode: referralCode,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, {merge: true});
-              
+
               console.log(`[Referral] ✅ Codice generato e salvato automaticamente per ${userUid}: ${referralCode}`);
               break;
             }
           }
-          
+
           // Prepara per il prossimo batch
           if (!batch.empty && !foundUser) {
             lastDoc = batch.docs[batch.docs.length - 1];
           } else {
             break;
           }
-          
+
           // Limite di sicurezza: non cercare più di 5000 utenti
           if (totalChecked >= 5000) {
             console.warn(`[Referral] ⚠️ Raggiunto limite di ricerca (5000 utenti)`);
             break;
           }
         }
-        
+
         if (foundUser) {
           // Ricarica la query dopo aver salvato il codice
           referrerQuery = await db.collection('users')
@@ -884,7 +902,7 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
           console.error(`[Referral] Codice cercato: ${referralCode}, UID prefix: ${uidPrefix}`);
         }
       }
-      
+
       // Se ancora non trovato dopo tutti i tentativi
       if (referrerQuery.empty) {
         console.error(`[Referral] ❌ Codice referral non trovato dopo tutti i tentativi: ${referralCode}`);
@@ -900,185 +918,235 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
       }
     }
 
+    // Verifica che abbiamo trovato un referrer prima di iniziare la transazione
+    if (referrerQuery.empty || referrerQuery.docs.length === 0) {
+      console.error(`[Referral] ❌ ERRORE: referrerQuery è vuoto prima della transazione`);
+      throw new functions.https.HttpsError(
+          'not-found',
+          'Codice referral non trovato. Verifica che il link sia corretto.',
+      );
+    }
+
     return await db.runTransaction(async (transaction) => {
+      try {
+        const referrerDoc = referrerQuery.docs[0];
+        const referrerUid = referrerDoc.id;
+        const referrerData = referrerDoc.data();
 
-      const referrerDoc = referrerQuery.docs[0];
-      const referrerUid = referrerDoc.id;
-      const referrerData = referrerDoc.data();
+        console.log(`[Referral] Referrer trovato: ${referrerUid}, referralsCount: ${referrerData.referralsCount || 0}`);
 
-      console.log(`[Referral] Referrer trovato: ${referrerUid}, referralsCount: ${referrerData.referralsCount || 0}`);
-
-      // SICUREZZA: Verifica che non sia auto-referral
-      if (referrerUid === newUserUid) {
-        console.error(`[Referral] Tentativo di auto-referral: ${newUserUid}`);
-        throw new functions.https.HttpsError(
-            'permission-denied',
-            'Non puoi usare il tuo stesso codice referral',
-        );
-      }
-
-      // SICUREZZA: Verifica che il nuovo utente sia effettivamente nuovo
-      // Controlla se ha già un referral processato
-      const newUserRef = db.collection('users').doc(newUserUid);
-      const newUserDoc = await transaction.get(newUserRef);
-
-      if (newUserDoc.exists) {
-        const newUserData = newUserDoc.data();
-
-        // Se ha già un referral processato, rifiuta
-        if (newUserData.referralProcessed === true) {
+        // SICUREZZA: Verifica che non sia auto-referral
+        if (referrerUid === newUserUid) {
+          console.error(`[Referral] Tentativo di auto-referral: ${newUserUid}`);
           throw new functions.https.HttpsError(
-              'already-exists',
-              'Hai già utilizzato un codice referral',
+              'permission-denied',
+              'Non puoi usare il tuo stesso codice referral',
           );
         }
 
-        // Verifica che l'account sia stato creato di recente (max 24 ore fa)
-        // Questo previene che utenti esistenti usino referral
-        // Usa metadata.creationTime se disponibile, altrimenti auth_time
-        let accountCreated;
-        if (newUserData.createdAt) {
-          accountCreated = newUserData.createdAt.toDate ?
+        // SICUREZZA: Verifica che il nuovo utente sia effettivamente nuovo
+        // Controlla se ha già un referral processato
+        const newUserRef = db.collection('users').doc(newUserUid);
+        const newUserDoc = await transaction.get(newUserRef);
+
+        if (newUserDoc.exists) {
+          const newUserData = newUserDoc.data();
+
+          // Se ha già un referral processato, rifiuta
+          if (newUserData.referralProcessed === true) {
+            throw new functions.https.HttpsError(
+                'already-exists',
+                'Hai già utilizzato un codice referral',
+            );
+          }
+
+          // Verifica che l'account sia stato creato di recente (max 24 ore fa)
+          // Questo previene che utenti esistenti usino referral
+          // Usa metadata.creationTime se disponibile, altrimenti auth_time
+          let accountCreated;
+          if (newUserData.createdAt) {
+            accountCreated = newUserData.createdAt.toDate ?
                           newUserData.createdAt.toDate().getTime() :
                           new Date(newUserData.createdAt).getTime();
-        } else {
-          accountCreated = context.auth.token.auth_time * 1000; // Firebase Auth timestamp
+          } else {
+            accountCreated = context.auth.token.auth_time * 1000; // Firebase Auth timestamp
+          }
+
+          const now = Date.now();
+          const hoursSinceCreation = (now - accountCreated) / (1000 * 60 * 60);
+
+          console.log(`[Referral] Account creato ${hoursSinceCreation.toFixed(2)} ore fa`);
+
+          // Aumentiamo il limite a 48 ore per dare più tempo
+          if (hoursSinceCreation > 48) {
+            throw new functions.https.HttpsError(
+                'deadline-exceeded',
+                'Il codice referral può essere utilizzato solo entro 48 ore dalla registrazione',
+            );
+          }
         }
 
-        const now = Date.now();
-        const hoursSinceCreation = (now - accountCreated) / (1000 * 60 * 60);
-
-        console.log(`[Referral] Account creato ${hoursSinceCreation.toFixed(2)} ore fa`);
-
-        // Aumentiamo il limite a 48 ore per dare più tempo
-        if (hoursSinceCreation > 48) {
+        // SICUREZZA: Verifica che il referrer non abbia già troppi referral
+        // Limita a 10 referral per utente per prevenire abusi
+        const referralsCount = referrerData.referralsCount || 0;
+        if (referralsCount >= 10) {
           throw new functions.https.HttpsError(
-              'deadline-exceeded',
-              'Il codice referral può essere utilizzato solo entro 48 ore dalla registrazione',
+              'resource-exhausted',
+              'Questo utente ha raggiunto il limite di referral',
           );
         }
-      }
 
-      // SICUREZZA: Verifica che il referrer non abbia già troppi referral
-      // Limita a 10 referral per utente per prevenire abusi
-      const referralsCount = referrerData.referralsCount || 0;
-      if (referralsCount >= 10) {
-        throw new functions.https.HttpsError(
-            'resource-exhausted',
-            'Questo utente ha raggiunto il limite di referral',
-        );
-      }
+        // Calcola le date per Premium (7 giorni)
+        const premiumStartDate = new Date();
+        const premiumEndDate = new Date();
+        premiumEndDate.setDate(premiumEndDate.getDate() + 7);
 
-      // Calcola le date per Premium (7 giorni)
-      const premiumStartDate = new Date();
-      const premiumEndDate = new Date();
-      premiumEndDate.setDate(premiumEndDate.getDate() + 7);
+        // Aggiorna il nuovo utente con Premium
+        const newUserData = newUserDoc.exists ? newUserDoc.data() : null;
+        const newUserSubscription = newUserData?.subscription;
+        let newUserEndDate = premiumEndDate;
 
-      // Aggiorna il nuovo utente con Premium
-      const newUserSubscription = newUserDoc.exists && newUserDoc.data().subscription;
-      let newUserEndDate = premiumEndDate;
-
-      // Se ha già Premium, estendi la data di scadenza
-      if (newUserSubscription && newUserSubscription.endDate) {
-        const existingEndDate = newUserSubscription.endDate.toDate ?
+        // Se ha già Premium, estendi la data di scadenza
+        if (newUserSubscription && newUserSubscription.endDate) {
+          const existingEndDate = newUserSubscription.endDate.toDate ?
                                 newUserSubscription.endDate.toDate() :
                                 new Date(newUserSubscription.endDate);
 
-        if (existingEndDate > premiumEndDate) {
-          newUserEndDate = existingEndDate;
-        } else {
+          if (existingEndDate > premiumEndDate) {
+            newUserEndDate = existingEndDate;
+          } else {
           // Estendi di 7 giorni dalla data esistente
-          newUserEndDate = new Date(existingEndDate);
-          newUserEndDate.setDate(newUserEndDate.getDate() + 7);
+            newUserEndDate = new Date(existingEndDate);
+            newUserEndDate.setDate(newUserEndDate.getDate() + 7);
+          }
         }
-      }
 
-      transaction.update(newUserRef, {
-        referralProcessed: true,
-        referredBy: referrerUid,
-        referralCodeUsed: referralCode,
-        referralProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
-        subscription: {
-          status: 'active',
-          startDate: admin.firestore.Timestamp.fromDate(premiumStartDate),
-          endDate: admin.firestore.Timestamp.fromDate(newUserEndDate),
-          type: 'referral',
-          price: 0,
-          verified: true,
-          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        // Usa set se il documento non esiste, update se esiste
+        const newUserUpdateData = {
+          referralProcessed: true,
+          referredBy: referrerUid,
+          referralCodeUsed: referralCode,
+          referralProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+          subscription: {
+            status: 'active',
+            startDate: admin.firestore.Timestamp.fromDate(premiumStartDate),
+            endDate: admin.firestore.Timestamp.fromDate(newUserEndDate),
+            type: 'referral',
+            price: 0,
+            verified: true,
+            activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
 
-      // Aggiorna il referrer con Premium e incrementa il contatore
-      const referrerRef = db.collection('users').doc(referrerUid);
-      const referrerSubscription = referrerData.subscription;
-      let referrerEndDate = premiumEndDate;
+        // Se il documento esiste, aggiungi anche i campi base
+        if (!newUserDoc.exists) {
+          newUserUpdateData.email = context.auth.token.email || '';
+          newUserUpdateData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+        }
 
-      // Se ha già Premium, estendi la data di scadenza
-      if (referrerSubscription && referrerSubscription.endDate) {
-        const existingEndDate = referrerSubscription.endDate.toDate ?
+        if (newUserDoc.exists) {
+          transaction.update(newUserRef, newUserUpdateData);
+        } else {
+          transaction.set(newUserRef, newUserUpdateData);
+        }
+
+        // Aggiorna il referrer con Premium e incrementa il contatore
+        const referrerRef = db.collection('users').doc(referrerUid);
+        const referrerSubscription = referrerData.subscription;
+        let referrerEndDate = premiumEndDate;
+
+        // Se ha già Premium, estendi la data di scadenza
+        if (referrerSubscription && referrerSubscription.endDate) {
+          const existingEndDate = referrerSubscription.endDate.toDate ?
                                 referrerSubscription.endDate.toDate() :
                                 new Date(referrerSubscription.endDate);
 
-        if (existingEndDate > premiumEndDate) {
-          referrerEndDate = existingEndDate;
-        } else {
+          if (existingEndDate > premiumEndDate) {
+            referrerEndDate = existingEndDate;
+          } else {
           // Estendi di 7 giorni dalla data esistente
-          referrerEndDate = new Date(existingEndDate);
-          referrerEndDate.setDate(referrerEndDate.getDate() + 7);
+            referrerEndDate = new Date(existingEndDate);
+            referrerEndDate.setDate(referrerEndDate.getDate() + 7);
+          }
         }
-      }
 
-      transaction.update(referrerRef, {
-        referralsCount: admin.firestore.FieldValue.increment(1),
-        referrals: admin.firestore.FieldValue.arrayUnion({
-          referredUser: newUserUid,
-          referredAt: admin.firestore.FieldValue.serverTimestamp(),
-        }),
-        subscription: {
-          status: 'active',
-          startDate: admin.firestore.Timestamp.fromDate(premiumStartDate),
-          endDate: admin.firestore.Timestamp.fromDate(referrerEndDate),
-          type: referrerSubscription?.type || 'referral',
-          price: referrerSubscription?.price || 0,
+        transaction.update(referrerRef, {
+          referralsCount: admin.firestore.FieldValue.increment(1),
+          referrals: admin.firestore.FieldValue.arrayUnion({
+            referredUser: newUserUid,
+            referredAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+          subscription: {
+            status: 'active',
+            startDate: admin.firestore.Timestamp.fromDate(premiumStartDate),
+            endDate: admin.firestore.Timestamp.fromDate(referrerEndDate),
+            type: referrerSubscription?.type || 'referral',
+            price: referrerSubscription?.price || 0,
+            verified: true,
+            activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Crea un documento di tracciamento referral
+        const referralTrackingRef = db.collection('referrals').doc();
+        transaction.set(referralTrackingRef, {
+          referrerUid: referrerUid,
+          referredUserUid: newUserUid,
+          referralCode: referralCode,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
           verified: true,
-          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        });
 
-      // Crea un documento di tracciamento referral
-      const referralTrackingRef = db.collection('referrals').doc();
-      transaction.set(referralTrackingRef, {
-        referrerUid: referrerUid,
-        referredUserUid: newUserUid,
-        referralCode: referralCode,
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        verified: true,
-      });
+        console.log(`Referral processato: ${referrerUid} -> ${newUserUid}`);
 
-      console.log(`Referral processato: ${referrerUid} -> ${newUserUid}`);
+        return {
+          success: true,
+          message: 'Referral processato con successo! Hai ricevuto 7 giorni di Premium.',
+          premiumEndDate: newUserEndDate.toISOString(),
+        };
+      } catch (transactionError) {
+        console.error('[Referral] ❌ ERRORE nella transazione:', transactionError);
+        console.error('[Referral] Dettagli errore transazione:', {
+          code: transactionError.code,
+          message: transactionError.message,
+          stack: transactionError.stack,
+        });
 
-      return {
-        success: true,
-        message: 'Referral processato con successo! Hai ricevuto 7 giorni di Premium.',
-        premiumEndDate: newUserEndDate.toISOString(),
-      };
+        // Se è già un HttpsError, rilancialo
+        if (transactionError instanceof functions.https.HttpsError) {
+          throw transactionError;
+        }
+
+        // Altrimenti, rilancia l'errore della transazione
+        throw transactionError;
+      }
     });
   } catch (error) {
-    console.error('Errore processamento referral:', error);
+    console.error('[Referral] ❌ ERRORE processamento referral:', error);
+    console.error('[Referral] Dettagli errore completo:', {
+      name: error.name,
+      code: error.code,
+      message: error.message,
+      stack: error.stack,
+      toString: error.toString(),
+    });
 
     // Se è già un HttpsError, rilancialo
     if (error instanceof functions.https.HttpsError) {
       throw error;
     }
 
-    // Altrimenti, crea un errore generico
+    // Altrimenti, crea un errore generico con più dettagli
     throw new functions.https.HttpsError(
         'internal',
-        'Errore durante il processamento del referral',
-        error.message,
+        `Errore durante il processamento del referral: ${error.message || 'Errore sconosciuto'}`,
+        {
+          originalError: error.message,
+          code: error.code,
+          stack: error.stack,
+        },
     );
   }
 });
