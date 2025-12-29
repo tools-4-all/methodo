@@ -5815,6 +5815,7 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
       });
 
       const doneKey = `sp_task_done_${taskId}`;
+      const skippedKey = `sp_task_skipped_${taskId}`;
       const isDone = (() => {
         try {
           return localStorage.getItem(doneKey) === "1";
@@ -5822,9 +5823,16 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
           return false;
         }
       })();
+      const isSkipped = (() => {
+        try {
+          return localStorage.getItem(skippedKey) === "1";
+        } catch {
+          return false;
+        }
+      })();
 
       const row = document.createElement("div");
-      row.className = `task taskClickable taskCompact ${isDone ? "taskDone" : ""}`;
+      row.className = `task taskClickable taskCompact ${isDone ? "taskDone" : ""} ${isSkipped ? "taskSkipped" : ""}`;
       row.dataset.taskid = taskId;
       row.draggable = true;
       row.dataset.originalIndex = i;
@@ -5832,9 +5840,9 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
 
       row.innerHTML = `
         <div class="taskDragHandle" title="Trascina per riordinare">⋮⋮</div>
-        <input type="checkbox" class="taskChk" ${isDone ? "checked" : ""} />
+        <input type="checkbox" class="taskChk" ${isDone ? "checked" : ""} ${isSkipped ? "disabled" : ""} />
         <div class="taskCompactContent">
-          <div class="taskCompactTitle">${escapeHtml(t.examName)}</div>
+          <div class="taskCompactTitle">${escapeHtml(t.examName)}${isSkipped ? ' <span class="taskSkippedBadge">⏭ Saltato</span>' : ''}</div>
           <div class="taskCompactMeta">
             <span class="tag tagSmall">${escapeHtml(t.type)}</span>
             <span class="taskMinutes">${t.minutes}m</span>
@@ -5845,13 +5853,26 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
       const chk = row.querySelector(".taskChk");
       chk?.addEventListener("click", (e) => {
         e.stopPropagation();
-        // Non preventDefault per permettere il toggle naturale del checkbox
+        // Se il task è saltato, impedisci il toggle
+        if (isSkipped) {
+          e.preventDefault();
+          chk.checked = false;
+        }
       });
       chk?.addEventListener("change", (e) => {
+        // Se il task è saltato, non permettere di segnarlo come fatto
+        if (isSkipped) {
+          chk.checked = false;
+          return;
+        }
         const checked = chk.checked;
         try {
-          if (checked) localStorage.setItem(doneKey, "1");
-          else localStorage.removeItem(doneKey);
+          if (checked) {
+            localStorage.setItem(doneKey, "1");
+            localStorage.removeItem(skippedKey); // Rimuovi skipped se viene segnato come fatto
+          } else {
+            localStorage.removeItem(doneKey);
+          }
         } catch {}
         row.classList.toggle("taskDone", checked);
         // Aggiorna il grafico di completamento
@@ -6902,6 +6923,7 @@ function mountTask() {
 
       try {
         localStorage.removeItem(`sp_task_done_${tid}`);
+        localStorage.removeItem(`sp_task_skipped_${tid}`);
       } catch {}
 
       renderTimer();
@@ -6923,6 +6945,7 @@ function mountTask() {
 
       try {
         localStorage.setItem(`sp_task_done_${tid}`, "1");
+        localStorage.removeItem(`sp_task_skipped_${tid}`); // Rimuovi skipped se viene segnato come fatto
       } catch {}
 
       renderTimer();
@@ -6934,16 +6957,447 @@ function mountTask() {
       }
     }
 
-    function markSkip() {
-      st.skipped = true;
-      st.done = false;
-      saveState(st);
+    async function markSkip() {
+      // Calcola le conseguenze usando i dati del task e payload disponibili nello scope
+      const consequences = await calculateSkipConsequences(t, payload, st);
+      
+      // Mostra popup con le conseguenze
+      showSkipConsequencesModal(consequences, () => {
+        // Conferma: salta il task
+        st.skipped = true;
+        st.done = false;
+        saveState(st);
 
+        try {
+          localStorage.removeItem(`sp_task_done_${tid}`);
+          localStorage.setItem(`sp_task_skipped_${tid}`, "1");
+        } catch {}
+
+        renderTimer();
+      });
+    }
+    
+    /**
+     * Calcola le conseguenze del saltare un task
+     * Usa direttamente i dati del task invece di decodificare il taskId
+     */
+    async function calculateSkipConsequences(task, payload, taskState) {
+      console.log("[Skip] Calcolo conseguenze:", { task, payload, taskState });
+      
       try {
-        localStorage.removeItem(`sp_task_done_${tid}`);
-      } catch {}
-
-      renderTimer();
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn("[Skip] Utente non loggato");
+          return {
+            examName: task?.examName || "Sconosciuto",
+            taskType: task?.type || "task",
+            taskLabel: task?.label || task?.type || "task",
+            taskMinutes: Math.round(task?.minutes || (taskState?.plannedSec / 60) || 0),
+            impact: "sconosciuto",
+            readinessLoss: 0,
+            currentReadiness: 0,
+            newReadiness: 0,
+            daysLeft: 0,
+            examDate: null,
+            hoursNeeded: 0,
+            hoursAvailable: 0,
+            impactMessage: "",
+            message: "Devi essere loggato per calcolare l'impatto"
+          };
+        }
+        
+        // Carica piano e profilo usando payload.weekStartISO o calcola dalla data
+        let weekStartISOStr = payload?.weekStartISO;
+        if (!weekStartISOStr && payload?.dateISO) {
+          // Calcola weekStartISO dalla data del task
+          const taskDate = new Date(payload.dateISO);
+          const weekStart = startOfWeekISO(taskDate);
+          const z = (n) => String(n).padStart(2, "0");
+          weekStartISOStr = `${weekStart.getFullYear()}-${z(weekStart.getMonth() + 1)}-${z(weekStart.getDate())}`;
+        }
+        if (!weekStartISOStr) {
+          // Fallback: usa la settimana corrente
+          const weekStart = startOfWeekISO(new Date());
+          const z = (n) => String(n).padStart(2, "0");
+          weekStartISOStr = `${weekStart.getFullYear()}-${z(weekStart.getMonth() + 1)}-${z(weekStart.getDate())}`;
+        }
+        
+        const plan = await loadWeeklyPlan(user.uid, weekStartISOStr);
+        const profile = await getProfile(user.uid);
+        const exams = await listExams(user.uid);
+        
+        if (!plan || !profile || !exams) {
+          return {
+            examName: task?.examName || "Sconosciuto",
+            taskType: task?.type || "task",
+            taskLabel: task?.label || task?.type || "task",
+            taskMinutes: Math.round(task?.minutes || (taskState?.plannedSec / 60) || 0),
+            impact: "sconosciuto",
+            readinessLoss: 0,
+            currentReadiness: 0,
+            newReadiness: 0,
+            daysLeft: 0,
+            examDate: null,
+            message: "Impossibile caricare i dati del piano"
+          };
+        }
+        
+        // Trova l'esame usando examId o examName dal task
+        let exam = null;
+        
+        // Prova prima con examId
+        if (task?.examId) {
+          exam = exams.find(e => {
+            // Gestisci esami con appelli (ID virtuali)
+            if (e.appelli && e.appelli.length > 0) {
+              const selectedAppelli = e.appelli.filter(a => a.selected !== false);
+              const primaryAppello = selectedAppelli.find(a => a.primary === true) || selectedAppelli[0];
+              if (primaryAppello) {
+                const virtualId = `${e.id}_${primaryAppello.date}`;
+                return virtualId === task.examId || e.id === task.examId;
+              }
+            }
+            return e.id === task.examId;
+          });
+        }
+        
+        // Fallback: usa examName
+        if (!exam && task?.examName) {
+          exam = exams.find(e => e.name === task.examName);
+        }
+        
+        // Se ancora non trovato, prova a cercare per nome parziale
+        if (!exam && task?.examName) {
+          exam = exams.find(e => e.name?.toLowerCase().includes(task.examName.toLowerCase()) || 
+                                 task.examName.toLowerCase().includes(e.name?.toLowerCase()));
+        }
+        
+        console.log("[Skip] Esame trovato:", { 
+          found: !!exam, 
+          examName: exam?.name,
+          taskExamId: task?.examId,
+          taskExamName: task?.examName
+        });
+        
+        if (!exam) {
+          console.warn("[Skip] Esame non trovato:", { 
+            taskExamId: task?.examId, 
+            taskExamName: task?.examName,
+            availableExams: exams.map(e => ({ id: e.id, name: e.name }))
+          });
+          return {
+            examName: task?.examName || "Sconosciuto",
+            taskType: task?.type || "task",
+            taskLabel: task?.label || task?.type || "task",
+            taskMinutes: Math.round(task?.minutes || (taskState?.plannedSec / 60) || 0),
+            impact: "sconosciuto",
+            readinessLoss: 0,
+            currentReadiness: 0,
+            newReadiness: 0,
+            daysLeft: 0,
+            examDate: null,
+            hoursNeeded: 0,
+            hoursAvailable: 0,
+            impactMessage: "",
+            message: `Esame "${task?.examName || 'Sconosciuto'}" non trovato. Verifica che l'esame sia stato aggiunto correttamente.`
+          };
+        }
+        
+        // Calcola readiness attuale
+        // Trova l'allocazione per questo esame nel piano
+        const allocThisWeek = plan.allocations?.find(a => {
+          // Gestisci ID virtuali per appelli
+          const allocExamId = a.examId.includes('_') ? a.examId.split('_').slice(0, -1).join('_') : a.examId;
+          if (allocExamId === exam.id || a.examId === exam.id) return true;
+          
+          // Controlla anche ID virtuali
+          if (exam.appelli && exam.appelli.length > 0) {
+            const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
+            const primaryAppello = selectedAppelli.find(a => a.primary === true) || selectedAppelli[0];
+            if (primaryAppello) {
+              const virtualId = `${exam.id}_${primaryAppello.date}`;
+              return a.examId === virtualId;
+            }
+          }
+          return false;
+        });
+        
+        const currentAlloc = allocThisWeek?.targetMin || 0;
+        const currentReadiness = estimateReadinessPercent(exam, profile, currentAlloc);
+        
+        // Calcola readiness dopo aver saltato (riduci allocazione di questo task)
+        const taskMinutes = task?.minutes || (taskState?.plannedSec / 60) || 0;
+        const newAlloc = Math.max(0, currentAlloc - taskMinutes);
+        const newReadiness = estimateReadinessPercent(exam, profile, newAlloc);
+        
+        const readinessLoss = currentReadiness - newReadiness;
+        
+        // Determina impatto basato sulla perdita di readiness e sulla percentuale
+        let impact = "minimo";
+        let impactMessage = "";
+        if (readinessLoss > 5 || (readinessLoss > 0 && currentReadiness < 70)) {
+          impact = "significativo";
+          impactMessage = "Potresti avere difficoltà a raggiungere una preparazione adeguata.";
+        } else if (readinessLoss > 2 || (readinessLoss > 0 && currentReadiness < 85)) {
+          impact = "moderato";
+          impactMessage = "La tua preparazione potrebbe essere leggermente compromessa.";
+        } else {
+          impactMessage = "L'impatto sulla tua preparazione sarà limitato.";
+        }
+        
+        // Calcola giorni rimanenti
+        const examDate = exam.appelli && exam.appelli.length > 0 
+          ? (exam.appelli.find(a => a.primary === true) || exam.appelli[0])?.date 
+          : exam.date;
+        const daysLeft = examDate ? daysTo(examDate) : 0;
+        
+        // Calcola ore totali necessarie e rimanenti
+        const required = estimateRequiredMinutes(exam, profile);
+        const capacity = estimateCapacityUntilExamMinutes(exam, profile);
+        const hoursNeeded = Math.round(required / 60);
+        const hoursAvailable = Math.round(capacity / 60);
+        
+        return {
+          examName: exam.name,
+          taskType: task?.type || "task",
+          taskLabel: task?.label || task?.type || "task",
+          taskMinutes: Math.round(taskMinutes),
+          impact,
+          readinessLoss: Math.max(0, readinessLoss),
+          currentReadiness,
+          newReadiness: Math.max(0, newReadiness),
+          daysLeft,
+          examDate,
+          hoursNeeded,
+          hoursAvailable,
+          impactMessage,
+          message: readinessLoss > 0 
+            ? `La tua preparazione per "${exam.name}" scenderà da ${currentReadiness}% a ${Math.max(0, newReadiness)}% (-${readinessLoss}%)`
+            : `L'impatto sulla preparazione per "${exam.name}" sarà minimo`
+        };
+      } catch (err) {
+        console.error("Errore calcolo conseguenze:", err);
+        return {
+          examName: task?.examName || "Sconosciuto",
+          taskType: task?.type || "task",
+          taskLabel: task?.label || task?.type || "task",
+          taskMinutes: Math.round(task?.minutes || (taskState?.plannedSec / 60) || 0),
+          impact: "sconosciuto",
+          readinessLoss: 0,
+          currentReadiness: 0,
+          newReadiness: 0,
+          daysLeft: 0,
+          examDate: null,
+          hoursNeeded: 0,
+          hoursAvailable: 0,
+          impactMessage: "",
+          message: `Errore: ${err?.message || "Impossibile calcolare l'impatto esatto"}`
+        };
+      }
+    }
+    
+    /**
+     * Mostra popup con le conseguenze del saltare un task
+     */
+    function showSkipConsequencesModal(consequences, onConfirm) {
+      if (!consequences) {
+        // Se non possiamo calcolare, chiedi conferma semplice
+        if (confirm("Sei sicuro di voler saltare questo task?")) {
+          if (onConfirm) onConfirm();
+        }
+        return;
+      }
+      
+      // Crea modale
+      const overlay = document.createElement("div");
+      overlay.id = "skip-consequences-modal";
+      Object.assign(overlay.style, {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.8)",
+        zIndex: "10000",
+        padding: "20px",
+        animation: "fadeIn 0.2s ease-out",
+      });
+      
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.maxWidth = "500px";
+      card.style.width = "95%";
+      card.style.padding = "32px";
+      card.style.position = "relative";
+      card.style.animation = "slideUp 0.3s ease-out";
+      
+      // Header
+      const header = document.createElement("div");
+      header.style.cssText = "margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);";
+      header.innerHTML = `
+        <h2 style="margin: 0; font-size: 24px; font-weight: 900; color: rgba(255,255,255,0.95);">
+          ⚠️ Conseguenze del Saltare il Task
+        </h2>
+      `;
+      
+      // Contenuto
+      const content = document.createElement("div");
+      content.style.cssText = "margin-bottom: 24px;";
+      
+      let impactColor = "rgba(245,158,11,1)";
+      let impactBg = "rgba(245,158,11,0.1)";
+      if (consequences.impact === "significativo") {
+        impactColor = "rgba(239,68,68,1)";
+        impactBg = "rgba(239,68,68,0.1)";
+      } else if (consequences.impact === "minimo") {
+        impactColor = "rgba(34,197,94,1)";
+        impactBg = "rgba(34,197,94,0.1)";
+      }
+      
+      content.innerHTML = `
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Task da saltare:</div>
+          <div style="font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.95); margin-bottom: 4px;">
+            ${escapeHtml(consequences.taskLabel || consequences.taskType)}
+          </div>
+          <div style="font-size: 13px; color: rgba(255,255,255,0.6);">
+            ${escapeHtml(consequences.examName)} · ${consequences.taskMinutes} minuti (${Math.round(consequences.taskMinutes / 60 * 10) / 10}h)
+          </div>
+        </div>
+        
+        ${consequences.daysLeft > 0 ? `
+          <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span><strong>Esame:</strong> ${escapeHtml(consequences.examName)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span><strong>Data esame:</strong> ${escapeHtml(consequences.examDate || "N/A")}</span>
+              <span style="color: rgba(245,158,11,1); font-weight: 600;">Tra ${consequences.daysLeft} giorni</span>
+            </div>
+          </div>
+        ` : ''}
+        
+        <div style="padding: 16px; background: ${impactBg}; border-radius: 12px; border-left: 3px solid ${impactColor}; margin-bottom: 16px;">
+          <div style="font-size: 13px; font-weight: 600; color: ${impactColor}; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">
+            Impatto sulla preparazione: ${consequences.impact}
+          </div>
+          <div style="font-size: 14px; color: rgba(255,255,255,0.9); line-height: 1.6; margin-bottom: 12px;">
+            ${escapeHtml(consequences.message)}
+          </div>
+          ${consequences.impactMessage ? `
+            <div style="font-size: 13px; color: ${impactColor}; font-weight: 500; padding-top: 8px; border-top: 1px solid ${impactColor}40;">
+              ${escapeHtml(consequences.impactMessage)}
+            </div>
+          ` : ''}
+        </div>
+        
+        ${consequences.readinessLoss > 0 ? `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div style="padding: 12px; background: rgba(99,102,241,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(99,102,241,0.3);">
+              <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Preparazione attuale</div>
+              <div style="font-size: 28px; font-weight: 900; color: rgba(99,102,241,1); margin-bottom: 4px;">${consequences.currentReadiness}%</div>
+              <div style="font-size: 10px; color: rgba(255,255,255,0.5);">Readiness stimata</div>
+            </div>
+            <div style="padding: 12px; background: rgba(239,68,68,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(239,68,68,0.3);">
+              <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Dopo aver saltato</div>
+              <div style="font-size: 28px; font-weight: 900; color: rgba(239,68,68,1); margin-bottom: 4px;">${consequences.newReadiness}%</div>
+              <div style="font-size: 10px; color: rgba(255,255,255,0.5);">Perdita: -${consequences.readinessLoss}%</div>
+            </div>
+          </div>
+        ` : consequences.currentReadiness > 0 ? `
+          <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center; margin-bottom: 16px;">
+            <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">Preparazione attuale</div>
+            <div style="font-size: 24px; font-weight: 900; color: rgba(99,102,241,1);">${consequences.currentReadiness}%</div>
+          </div>
+        ` : ''}
+        
+        ${consequences.hoursNeeded > 0 && consequences.hoursAvailable > 0 ? `
+          <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 13px; margin-bottom: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <div style="color: rgba(255,255,255,0.6); margin-bottom: 4px;">Ore necessarie</div>
+                <div style="font-weight: 600; color: rgba(255,255,255,0.9);">${consequences.hoursNeeded}h</div>
+              </div>
+              <div>
+                <div style="color: rgba(255,255,255,0.6); margin-bottom: 4px;">Ore disponibili</div>
+                <div style="font-weight: 600; color: ${consequences.hoursAvailable >= consequences.hoursNeeded ? 'rgba(34,197,94,1)' : 'rgba(239,68,68,1)'};">
+                  ${consequences.hoursAvailable}h
+                  ${consequences.hoursAvailable < consequences.hoursNeeded ? ' ⚠️' : ''}
+                </div>
+              </div>
+            </div>
+            ${consequences.hoursAvailable < consequences.hoursNeeded ? `
+              <div style="margin-top: 8px; padding: 8px; background: rgba(239,68,68,0.1); border-radius: 6px; font-size: 12px; color: rgba(239,68,68,1);">
+                ⚠️ Hai meno ore disponibili di quelle necessarie. Saltare questo task peggiorerà la situazione.
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+        
+        ${consequences.readinessLoss > 0 ? `
+          <div style="padding: 12px; background: rgba(245,158,11,0.1); border-radius: 8px; border-left: 3px solid rgba(245,158,11,0.6); font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.6;">
+            <strong style="color: rgba(245,158,11,1);">💡 Suggerimento:</strong><br>
+            ${consequences.readinessLoss > 5 
+              ? `Considera di riprogrammare questo task per un altro giorno o aumentare le ore di studio settimanali per compensare.`
+              : `Se possibile, prova a completare almeno una parte di questo task per mantenere la tua preparazione.`
+            }
+          </div>
+        ` : ''}
+      `;
+      
+      // Footer con bottoni
+      const footer = document.createElement("div");
+      footer.style.cssText = "display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);";
+      
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = "Annulla";
+      cancelBtn.addEventListener("click", () => closeModal());
+      
+      const confirmBtn = document.createElement("button");
+      confirmBtn.className = "btn";
+      confirmBtn.style.background = "rgba(239,68,68,0.2)";
+      confirmBtn.style.borderColor = "rgba(239,68,68,0.4)";
+      confirmBtn.style.color = "rgba(239,68,68,1)";
+      confirmBtn.textContent = "Conferma: Salta Task";
+      confirmBtn.addEventListener("click", () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+      });
+      
+      footer.appendChild(cancelBtn);
+      footer.appendChild(confirmBtn);
+      
+      card.appendChild(header);
+      card.appendChild(content);
+      card.appendChild(footer);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = "hidden";
+      
+      function closeModal() {
+        overlay.style.animation = "fadeOut 0.2s ease-out";
+        card.style.animation = "slideDown 0.2s ease-out";
+        setTimeout(() => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+          document.body.style.overflow = "";
+        }, 200);
+      }
+      
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) closeModal();
+      });
+      
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.getElementById("skip-consequences-modal")) {
+          closeModal();
+        }
+      });
     }
 
     // Wrapper per controlli premium sul timer
