@@ -927,6 +927,47 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
       );
     }
 
+    // SICUREZZA: Verifica che il codice referral non sia già stato usato
+    // Controlla se esiste già un referral con questo codice
+    const existingReferral = await db.collection('referrals')
+        .where('referralCode', '==', referralCode)
+        .limit(1)
+        .get();
+
+    if (!existingReferral.empty) {
+      console.error(`[Referral] ❌ Codice referral già utilizzato: ${referralCode}`);
+      throw new functions.https.HttpsError(
+          'already-exists',
+          'Questo codice referral è già stato utilizzato. Ogni codice può essere usato solo una volta.',
+      );
+    }
+
+    // SICUREZZA: Verifica che l'utente non abbia già usato un referral code
+    // Controlla se esiste già un referral per questo utente
+    const existingUserReferral = await db.collection('referrals')
+        .where('referredUserUid', '==', newUserUid)
+        .limit(1)
+        .get();
+
+    if (!existingUserReferral.empty) {
+      console.error(`[Referral] ❌ Utente ha già usato un referral code: ${newUserUid}`);
+      throw new functions.https.HttpsError(
+          'already-exists',
+          'Hai già utilizzato un codice referral. Ogni utente può usare solo un codice referral.',
+      );
+    }
+
+    // Verifica anche nel documento utente (doppio controllo)
+    const newUserRef = db.collection('users').doc(newUserUid);
+    const newUserDocCheck = await newUserRef.get();
+    if (newUserDocCheck.exists && newUserDocCheck.data()?.referralProcessed === true) {
+      console.error(`[Referral] ❌ Utente ha già processato un referral: ${newUserUid}`);
+      throw new functions.https.HttpsError(
+          'already-exists',
+          'Hai già utilizzato un codice referral. Ogni utente può usare solo un codice referral.',
+      );
+    }
+
     return await db.runTransaction(async (transaction) => {
       try {
         const referrerDoc = referrerQuery.docs[0];
