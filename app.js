@@ -120,6 +120,112 @@ function showToast(msg, ms = 4500) {
   showToast._t = window.setTimeout(hide, ms);
 }
 
+/**
+ * Mostra un popup di errore/avviso con design coerente
+ */
+function showErrorModal(message, title = "Attenzione") {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("error-modal")) return;
+  
+  const overlay = document.createElement("div");
+  overlay.id = "error-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.75)",
+    zIndex: "10000",
+    padding: "20px",
+    animation: "fadeIn 0.2s ease-out",
+    backdropFilter: "blur(4px)",
+  });
+  
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "450px";
+  card.style.width = "95%";
+  card.style.padding = "32px";
+  card.style.position = "relative";
+  card.style.animation = "slideUp 0.3s ease-out";
+  card.style.background = "rgba(10, 12, 20, 0.95)";
+  card.style.backdropFilter = "blur(10px)";
+  card.style.border = "1px solid rgba(239, 68, 68, 0.3)";
+  
+  // Icona di errore
+  const icon = document.createElement("div");
+  icon.style.cssText = `
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 24px;
+    color: rgba(239, 68, 68, 1);
+  `;
+  icon.textContent = "⚠";
+  
+  // Titolo
+  const titleEl = document.createElement("h2");
+  titleEl.textContent = title;
+  titleEl.style.cssText = `
+    font-size: 22px;
+    font-weight: 900;
+    margin: 0 0 12px 0;
+    color: rgba(255,255,255,0.95);
+    text-align: center;
+  `;
+  
+  // Messaggio
+  const messageEl = document.createElement("p");
+  messageEl.textContent = message;
+  messageEl.style.cssText = `
+    color: rgba(255,255,255,0.8);
+    font-size: 15px;
+    margin: 0 0 24px 0;
+    text-align: center;
+    line-height: 1.5;
+  `;
+  
+  // Bottone OK
+  const okBtn = document.createElement("button");
+  okBtn.className = "btn primary";
+  okBtn.textContent = "OK";
+  okBtn.style.cssText = "width: 100%; padding: 12px; font-size: 15px; font-weight: 600;";
+  
+  card.appendChild(icon);
+  card.appendChild(titleEl);
+  card.appendChild(messageEl);
+  card.appendChild(okBtn);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  
+  // Funzione per chiudere
+  const closeModal = () => {
+    try {
+      document.body.removeChild(overlay);
+    } catch {}
+  };
+  
+  // Event listeners
+  okBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("error-modal")) {
+      closeModal();
+    }
+  });
+}
+
 // ----------------- Firestore helpers -----------------
 async function ensureUserDoc(user) {
   const ref = doc(db, "users", user.uid);
@@ -1829,6 +1935,17 @@ function getAppelliFromForm() {
   });
   
   return appelli;
+}
+
+// Verifica se una data è quella odierna (confronta solo giorno/mese/anno)
+function isToday(dateString) {
+  if (!dateString) return false;
+  const today = new Date();
+  const date = new Date(dateString);
+  
+  return date.getFullYear() === today.getFullYear() &&
+         date.getMonth() === today.getMonth() &&
+         date.getDate() === today.getDate();
 }
 
 // Popola il form con gli appelli esistenti
@@ -3595,7 +3712,23 @@ function mountOnboarding() {
 
         if (!name) throw new Error("Nome esame mancante.");
         if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
+        
+        // Controllo se qualche appello ha la data odierna
+        const hasTodayAppello = appelli.some(appello => isToday(appello.date));
+        if (hasTodayAppello) {
+          showErrorModal("Non è possibile aggiungere un esame con un appello nella data odierna. Scegli una data futura.", "Data non valida");
+          return;
+        }
+        
         if (cfu < 1) throw new Error("CFU non validi.");
+        if (cfu > 30) {
+          showErrorModal("Il numero di CFU non può superare 30.", "Valore non valido");
+          return;
+        }
+        if (level < 0 || level > 5) {
+          showErrorModal("Il livello di preparazione deve essere compreso tra 0 e 5.", "Valore non valido");
+          return;
+        }
 
         // Controllo limite esami per versione free
         const canAdd = await canAddExam(user.uid);
@@ -4507,7 +4640,23 @@ async function openEditExamModal(uid, exam, onSuccess) {
 
       if (!name) throw new Error("Nome esame mancante.");
       if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
+      
+      // Controllo se qualche appello ha la data odierna
+      const hasTodayAppello = appelli.some(appello => isToday(appello.date));
+      if (hasTodayAppello) {
+        showErrorModal("Non è possibile aggiungere un esame con un appello nella data odierna. Scegli una data futura.", "Data non valida");
+        return;
+      }
+      
       if (cfu < 1) throw new Error("CFU non validi.");
+      if (cfu > 30) {
+        showErrorModal("Il numero di CFU non può superare 30.", "Valore non valido");
+        return;
+      }
+      if (level < 0 || level > 5) {
+        showErrorModal("Il livello di preparazione deve essere compreso tra 0 e 5.", "Valore non valido");
+        return;
+      }
 
       // Auto-rileva categoria se necessario
       let finalCategory = category;
