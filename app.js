@@ -5333,8 +5333,7 @@ async function renderSubscription(uid) {
         
         <div class="subscriptionActions">
           ${!isCancelled ? `
-          <button class="btn" id="cancel-subscription-btn" type="button">Annulla abbonamento</button>
-          <button class="btn primary" id="renew-subscription-btn" type="button">Rinnova</button>
+          <button class="btn" id="cancel-subscription-btn" type="button" style="width: 100%;">Annulla abbonamento</button>
           ` : `
           <button class="btn primary" id="reactivate-subscription-btn" type="button" style="width: 100%;">Riattiva abbonamento</button>
           `}
@@ -5380,28 +5379,6 @@ async function renderSubscription(uid) {
             btn.textContent = "Annulla abbonamento";
           }
         }
-      }
-    });
-    
-    // Gestore rinnovo
-    qs("renew-subscription-btn")?.addEventListener("click", async () => {
-      try {
-        const newEndDate = new Date(endDate);
-        newEndDate.setMonth(newEndDate.getMonth() + 1);
-        
-        await setProfile(uid, {
-          subscription: {
-            ...subscription,
-            status: 'active',
-            endDate: newEndDate.toISOString(),
-            renewedAt: new Date().toISOString()
-          }
-        });
-        showToast("Abbonamento rinnovato con successo!");
-        setTimeout(() => window.location.reload(), 1500);
-      } catch (err) {
-        console.error(err);
-        alert("Errore durante il rinnovo: " + (err?.message || err));
       }
     });
     
