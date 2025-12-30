@@ -1016,9 +1016,31 @@ async function saveWeeklyPlan(uid, weekStartISO, plan) {
   );
 }
 
-async function loadWeeklyPlan(uid, weekStartISO) {
+async function loadWeeklyPlan(uid, weekStartISO, forceRefresh = false) {
   const ref = doc(db, "users", uid, "plans", weekStartISO);
-  const snap = await getDoc(ref);
+  let snap;
+  try {
+    if (forceRefresh) {
+      // Prova a forzare il refresh dal server, ma fallback a cache se fallisce
+      try {
+        snap = await getDoc(ref, { source: 'server' });
+      } catch (serverError) {
+        // Se il refresh dal server fallisce (es. CORS), usa la cache
+        console.warn("[loadWeeklyPlan] Refresh dal server fallito, uso cache:", serverError.message);
+        snap = await getDoc(ref);
+      }
+    } else {
+      snap = await getDoc(ref);
+    }
+  } catch (error) {
+    // Gestisci errori CORS o di rete in modo silenzioso se non critici
+    if (error.message && error.message.includes('access control')) {
+      console.warn("[loadWeeklyPlan] Errore CORS (non critico), riprovo con cache");
+      snap = await getDoc(ref);
+    } else {
+      throw error;
+    }
+  }
   return snap.exists() ? snap.data()?.plan : null;
 }
 
@@ -7089,7 +7111,62 @@ function mountApp() {
         const needsRegeneration = hasPlanChanges(profile, normalizedExams, plan);
         if (needsRegeneration) {
           console.log("[App] Rilevate modifiche, rigenero il piano...");
-          plan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+          
+          // Salva le modifiche manuali ai task prima di rigenerare
+          // Crea una mappa delle modifiche manuali usando una chiave composta: dateISO_examId_index
+          // Questo permette di preservare le modifiche anche se gli ID cambiano
+          const manualTaskModifications = new Map();
+          if (plan.days) {
+            for (const day of plan.days) {
+              if (day.tasks) {
+                for (let i = 0; i < day.tasks.length; i++) {
+                  const task = day.tasks[i];
+                  // Crea una chiave univoca basata su dateISO, examId e posizione
+                  const key = `${day.dateISO}_${task.examId}_${i}`;
+                  manualTaskModifications.set(key, {
+                    label: task.label,
+                    type: task.type,
+                    minutes: task.minutes,
+                    examId: task.examId,
+                    examName: task.examName,
+                    dateISO: day.dateISO,
+                    index: i
+                  });
+                }
+              }
+            }
+          }
+          
+          // Rigenera il piano
+          const newPlan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+          
+          // Ripristina le modifiche manuali ai task dopo la rigenerazione
+          if (manualTaskModifications.size > 0) {
+            console.log("[App] Ripristino modifiche manuali ai task:", manualTaskModifications.size);
+            for (const day of newPlan.days || []) {
+              if (day.tasks) {
+                for (let i = 0; i < day.tasks.length; i++) {
+                  const task = day.tasks[i];
+                  const key = `${day.dateISO}_${task.examId}_${i}`;
+                  const manualMod = manualTaskModifications.get(key);
+                  if (manualMod && manualMod.examId === task.examId) {
+                    // Ripristina le modifiche manuali solo se il task corrisponde
+                    task.label = manualMod.label;
+                    task.type = manualMod.type;
+                    task.minutes = manualMod.minutes;
+                    console.log("[App] Task ripristinato:", {
+                      key,
+                      label: task.label,
+                      type: task.type,
+                      minutes: task.minutes
+                    });
+                  }
+                }
+              }
+            }
+          }
+          
+          plan = newPlan;
           addSnapshotToPlan(plan, profile, normalizedExams);
           await saveWeeklyPlan(user.uid, weekStartISO, plan);
           console.log("[App] Piano rigenerato e salvato:", {
@@ -7099,12 +7176,165 @@ function mountApp() {
           });
         } else {
           console.log("[App] Nessuna modifica rilevata, uso piano esistente.");
+          // Controlla se ci sono aggiornamenti manuali al piano (es. task modificati)
+          // Ricarica il piano dal server per assicurarsi di avere la versione più recente
+          const latestPlan = await loadWeeklyPlan(user.uid, weekStartISO, true);
+          if (latestPlan) {
+            console.log("[App] Piano ricaricato dal server per verificare aggiornamenti manuali");
+            plan = latestPlan;
+          }
         }
       }
 
       renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
+
+      // Listener per aggiornare la dashboard quando un task viene modificato
+      // Solo se siamo nella pagina app.html
+      if (window.location.pathname.includes('app.html')) {
+        const planUpdateKey = `plan_updated_${user.uid}_${weekStartISO}`;
+        let lastPlanUpdate = null;
+        try {
+          lastPlanUpdate = localStorage.getItem(planUpdateKey);
+          console.log("[Dashboard] Listener aggiornamento piano inizializzato:", { planUpdateKey, lastPlanUpdate });
+        } catch (e) {
+          console.warn("[Dashboard] Errore lettura localStorage:", e);
+        }
+
+        const refreshDashboard = async () => {
+          try {
+            console.log("[Dashboard] Piano modificato, ricarico dal server...");
+            // Forza il refresh dal server per evitare problemi di cache
+            const updatedPlan = await loadWeeklyPlan(user.uid, weekStartISO, true);
+            if (updatedPlan) {
+              const todayISO = isoToday();
+              const todayDay = updatedPlan.days?.find((d) => d.dateISO === todayISO) || updatedPlan.days?.[0] || null;
+              
+              console.log("[Dashboard] Piano ricaricato:", {
+                weekStart: updatedPlan.weekStart,
+                daysCount: updatedPlan.days?.length,
+                totalTasks: updatedPlan.days?.reduce((sum, d) => sum + (d.tasks?.length || 0), 0),
+                todayISO,
+                todayTasks: todayDay?.tasks?.length || 0,
+                todayTasksDetails: todayDay?.tasks?.map(t => ({
+                  id: t.id,
+                  label: t.label,
+                  type: t.type,
+                  minutes: t.minutes
+                })) || []
+              });
+              
+              // Usa gli esami e il profilo già caricati (non serve ricaricarli)
+              console.log("[Dashboard] Chiamando renderDashboard con piano aggiornato...");
+              renderDashboard(updatedPlan, normalizedExams, profile, user, weekStartISO);
+              bindAddTaskButton(updatedPlan, normalizedExams, profile, user, weekStartISO);
+              console.log("[Dashboard] Dashboard aggiornata con successo");
+            } else {
+              console.warn("[Dashboard] Piano non trovato dopo aggiornamento");
+            }
+          } catch (err) {
+            console.error("[Dashboard] Errore ricaricamento piano:", err);
+          }
+        };
+
+        // Handler per eventi planUpdated (stessa scheda)
+        const handlePlanUpdated = async (e) => {
+          console.log("[Dashboard] Evento planUpdated ricevuto:", e.detail);
+          if (e.detail?.weekStartISO === weekStartISO) {
+            console.log("[Dashboard] weekStartISO corrisponde, aggiorno dashboard");
+            await refreshDashboard();
+          } else {
+            console.log("[Dashboard] weekStartISO non corrisponde:", {
+              received: e.detail?.weekStartISO,
+              expected: weekStartISO
+            });
+          }
+        };
+
+        // Handler per eventi storage (altre schede)
+        const handleStorageChange = async (e) => {
+          console.log("[Dashboard] Evento storage ricevuto:", { key: e.key, newValue: e.newValue, oldValue: e.oldValue });
+          if (e.key === planUpdateKey && e.newValue !== lastPlanUpdate) {
+            console.log("[Dashboard] Storage change rilevato, aggiorno dashboard");
+            lastPlanUpdate = e.newValue;
+            await refreshDashboard();
+          }
+        };
+
+        // Aggiungi listener (rimuovi quelli precedenti se esistono)
+        window.removeEventListener('planUpdated', handlePlanUpdated);
+        window.removeEventListener('storage', handleStorageChange);
+        window.addEventListener('planUpdated', handlePlanUpdated);
+        window.addEventListener('storage', handleStorageChange);
+        console.log("[Dashboard] Listener aggiunti per aggiornamento piano:", {
+          planUpdateKey,
+          weekStartISO,
+          hasHandlePlanUpdated: typeof handlePlanUpdated === 'function',
+          hasHandleStorageChange: typeof handleStorageChange === 'function'
+        });
+
+        // Polling periodico come fallback (controlla ogni 1 secondo per essere più reattivo)
+        let pollInterval = null;
+        const startPolling = () => {
+          if (pollInterval) clearInterval(pollInterval);
+          pollInterval = setInterval(async () => {
+            try {
+              const currentUpdate = localStorage.getItem(planUpdateKey);
+              if (currentUpdate && currentUpdate !== lastPlanUpdate) {
+                console.log("[Dashboard] Polling: rilevato aggiornamento piano", {
+                  old: lastPlanUpdate,
+                  new: currentUpdate
+                });
+                lastPlanUpdate = currentUpdate;
+                await refreshDashboard();
+              }
+            } catch (e) {
+              // Ignora errori di localStorage
+            }
+          }, 1000); // Ridotto a 1 secondo per essere più reattivo
+        };
+        startPolling();
+        console.log("[Dashboard] Polling avviato (controllo ogni 1 secondo)");
+        
+        // Test immediato: verifica se c'è già un aggiornamento pendente
+        try {
+          const currentUpdate = localStorage.getItem(planUpdateKey);
+          if (currentUpdate && currentUpdate !== lastPlanUpdate) {
+            console.log("[Dashboard] Aggiornamento pendente rilevato all'avvio, aggiorno immediatamente");
+            lastPlanUpdate = currentUpdate;
+            await refreshDashboard();
+          }
+        } catch (e) {
+          console.warn("[Dashboard] Errore verifica aggiornamento pendente:", e);
+        }
+        
+        // Listener per quando la pagina diventa visibile (utente torna sulla scheda)
+        const handleVisibilityChange = async () => {
+          if (!document.hidden) {
+            console.log("[Dashboard] Pagina diventata visibile, verifico aggiornamenti");
+            try {
+              const currentUpdate = localStorage.getItem(planUpdateKey);
+              if (currentUpdate && currentUpdate !== lastPlanUpdate) {
+                console.log("[Dashboard] Aggiornamento rilevato quando pagina diventa visibile");
+                lastPlanUpdate = currentUpdate;
+                await refreshDashboard();
+              }
+            } catch (e) {
+              console.warn("[Dashboard] Errore verifica aggiornamento su visibility change:", e);
+            }
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        console.log("[Dashboard] Listener visibilitychange aggiunto");
+
+        // Pulisci l'intervallo quando la pagina viene chiusa
+        window.addEventListener('beforeunload', () => {
+          if (pollInterval) clearInterval(pollInterval);
+          window.removeEventListener('planUpdated', handlePlanUpdated);
+          window.removeEventListener('storage', handleStorageChange);
+        });
+      }
 
       document.getElementById("mark-today-done")?.addEventListener("click", async () => {
         document.getElementById("status-line").textContent = "Segnato: oggi completato (MVP).";
@@ -7222,6 +7452,18 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
     safeText("status-line", "Dashboard HTML incompleta: manca #today-tasks.");
     return;
   }
+
+  console.log("[renderDashboard] Rendering dashboard:", {
+    todayISO,
+    todayDayExists: !!todayDay,
+    todayTasksCount: todayDay?.tasks?.length || 0,
+    todayTasks: todayDay?.tasks?.map(t => ({
+      id: t.id,
+      label: t.label,
+      type: t.type,
+      minutes: t.minutes
+    })) || []
+  });
 
   if (!todayDay || !todayDay.tasks || todayDay.tasks.length === 0) {
     todayWrap.innerHTML = `<div class="callout"><h3>Vuoto</h3><p>Nessun task oggi. Controlla disponibilità o rigenera.</p></div>`;
@@ -8155,13 +8397,35 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
 }
 
 /**
- * Mostra un popup modale con i dettagli della task
+ * Mostra un popup modale con i dettagli della task e permette la modifica
  * @param {object} task - Oggetto task con tutte le informazioni
  * @param {string} dateISO - Data ISO della task
+ * @param {object} options - Opzioni: { user, weekStartISO, plan, onUpdate }
  */
-function showTaskDetailsModal(task, dateISO) {
+function showTaskDetailsModal(task, dateISO, options = {}) {
   // Evita di aprire più modali contemporaneamente
   if (document.getElementById("task-details-modal")) return;
+  
+  const { user, weekStartISO, plan, onUpdate } = options;
+  const canEdit = !!(user && weekStartISO && plan);
+  
+  console.log("[Task Modal] Apertura modale:", {
+    hasUser: !!user,
+    weekStartISO,
+    hasPlan: !!plan,
+    canEdit,
+    taskId: task?.id,
+    taskLabel: task?.label
+  });
+  
+  // Mappa dei tipi di task per le label
+  const typeLabels = {
+    theory: "Teoria",
+    practice: "Esercizi",
+    exam: "Prove d'esame",
+    review: "Ripasso",
+    spaced: "Spaced repetition"
+  };
   
   // Overlay oscurante
   const overlay = document.createElement("div");
@@ -8208,64 +8472,210 @@ function showTaskDetailsModal(task, dateISO) {
   const infoSection = document.createElement("div");
   infoSection.className = "infoSection";
   
-  const infoRows = [
-    { label: "Esame", value: task.examName || "—", highlight: true },
-    { label: "Descrizione", value: task.label || "—" },
-    { label: "Tipo", value: task.type || "—" },
-    { label: "Durata", value: `${task.minutes || 0} min` },
-    { label: "Data", value: dateISO || "—" },
-  ];
+  // Esame (non modificabile)
+  const examRow = document.createElement("div");
+  examRow.className = "infoRow";
+  examRow.style.cssText = `
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  `;
+  const examLabel = document.createElement("div");
+  examLabel.className = "infoLabel";
+  examLabel.style.cssText = `font-size: 13px; color: rgba(255, 255, 255, 0.5);`;
+  examLabel.textContent = "Esame";
+  const examValue = document.createElement("div");
+  examValue.className = "infoValue";
+  examValue.style.cssText = `font-weight: 700; color: rgba(99, 102, 241, 1); font-size: 14px;`;
+  examValue.textContent = task.examName || "—";
+  examRow.appendChild(examLabel);
+  examRow.appendChild(examValue);
+  infoSection.appendChild(examRow);
   
-  infoRows.forEach((row, index) => {
-    const infoRow = document.createElement("div");
-    infoRow.className = "infoRow";
-    infoRow.style.cssText = `
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 12px;
-      padding: 12px 0;
-      border-bottom: ${index < infoRows.length - 1 ? "1px solid rgba(255, 255, 255, 0.08)" : "none"};
-    `;
-    
-    const label = document.createElement("div");
-    label.className = "infoLabel";
-    label.style.cssText = `
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.5);
-    `;
-    label.textContent = row.label;
-    
-    const value = document.createElement("div");
-    value.className = "infoValue";
-    value.style.cssText = `
-      font-weight: ${row.highlight ? "700" : "600"};
-      color: ${row.highlight ? "rgba(99, 102, 241, 1)" : "rgba(255, 255, 255, 0.9)"};
+  // Descrizione (modificabile)
+  const descRow = document.createElement("div");
+  descRow.className = "infoRow";
+  descRow.style.cssText = `
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  `;
+  const descLabel = document.createElement("div");
+  descLabel.className = "infoLabel";
+  descLabel.style.cssText = `font-size: 13px; color: rgba(255, 255, 255, 0.5);`;
+  descLabel.textContent = "Descrizione";
+  const descValue = canEdit ? document.createElement("input") : document.createElement("div");
+  if (canEdit) {
+    descValue.type = "text";
+    descValue.value = task.label || "";
+    descValue.style.cssText = `
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.9);
       font-size: 14px;
+      font-weight: 600;
     `;
-    value.textContent = row.value;
-    
-    infoRow.appendChild(label);
-    infoRow.appendChild(value);
-    infoSection.appendChild(infoRow);
-  });
+  } else {
+    descValue.className = "infoValue";
+    descValue.style.cssText = `font-weight: 600; color: rgba(255, 255, 255, 0.9); font-size: 14px;`;
+    descValue.textContent = task.label || "—";
+  }
+  descRow.appendChild(descLabel);
+  descRow.appendChild(descValue);
+  infoSection.appendChild(descRow);
   
-  // Bottone chiudi
+  // Tipo (modificabile con select)
+  const typeRow = document.createElement("div");
+  typeRow.className = "infoRow";
+  typeRow.style.cssText = `
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  `;
+  const typeLabel = document.createElement("div");
+  typeLabel.className = "infoLabel";
+  typeLabel.style.cssText = `font-size: 13px; color: rgba(255, 255, 255, 0.5);`;
+  typeLabel.textContent = "Tipo";
+  const typeValue = canEdit ? document.createElement("select") : document.createElement("div");
+  if (canEdit) {
+    const taskTypes = [
+      { value: "theory", label: "Teoria" },
+      { value: "practice", label: "Esercizi" },
+      { value: "exam", label: "Prove d'esame" },
+      { value: "review", label: "Ripasso" },
+      { value: "spaced", label: "Spaced repetition" }
+    ];
+    taskTypes.forEach(type => {
+      const option = document.createElement("option");
+      option.value = type.value;
+      option.textContent = type.label;
+      if (type.value === (task.type || "")) option.selected = true;
+      typeValue.appendChild(option);
+    });
+    typeValue.style.cssText = `
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 600;
+    `;
+  } else {
+    typeValue.className = "infoValue";
+    typeValue.style.cssText = `font-weight: 600; color: rgba(255, 255, 255, 0.9); font-size: 14px;`;
+    const typeLabels = {
+      theory: "Teoria",
+      practice: "Esercizi",
+      exam: "Prove d'esame",
+      review: "Ripasso",
+      spaced: "Spaced repetition"
+    };
+    typeValue.textContent = typeLabels[task.type] || task.type || "—";
+  }
+  typeRow.appendChild(typeLabel);
+  typeRow.appendChild(typeValue);
+  infoSection.appendChild(typeRow);
+  
+  // Durata (modificabile)
+  const minutesRow = document.createElement("div");
+  minutesRow.className = "infoRow";
+  minutesRow.style.cssText = `
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  `;
+  const minutesLabel = document.createElement("div");
+  minutesLabel.className = "infoLabel";
+  minutesLabel.style.cssText = `font-size: 13px; color: rgba(255, 255, 255, 0.5);`;
+  minutesLabel.textContent = "Durata";
+  const minutesValue = canEdit ? document.createElement("input") : document.createElement("div");
+  if (canEdit) {
+    minutesValue.type = "number";
+    minutesValue.min = "15";
+    minutesValue.max = "100";
+    minutesValue.step = "5";
+    minutesValue.value = task.minutes || 30;
+    minutesValue.style.cssText = `
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 600;
+    `;
+    const minutesSuffix = document.createElement("span");
+    minutesSuffix.textContent = " min";
+    minutesSuffix.style.cssText = `margin-left: 8px; color: rgba(255, 255, 255, 0.6); font-size: 13px;`;
+    const minutesWrapper = document.createElement("div");
+    minutesWrapper.style.cssText = `display: flex; align-items: center;`;
+    minutesWrapper.appendChild(minutesValue);
+    minutesWrapper.appendChild(minutesSuffix);
+    minutesRow.appendChild(minutesLabel);
+    minutesRow.appendChild(minutesWrapper);
+  } else {
+    minutesValue.className = "infoValue";
+    minutesValue.style.cssText = `font-weight: 600; color: rgba(255, 255, 255, 0.9); font-size: 14px;`;
+    minutesValue.textContent = `${task.minutes || 0} min`;
+    minutesRow.appendChild(minutesLabel);
+    minutesRow.appendChild(minutesValue);
+  }
+  infoSection.appendChild(minutesRow);
+  
+  // Data (non modificabile)
+  const dateRow = document.createElement("div");
+  dateRow.className = "infoRow";
+  dateRow.style.cssText = `
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 12px 0;
+  `;
+  const dateLabel = document.createElement("div");
+  dateLabel.className = "infoLabel";
+  dateLabel.style.cssText = `font-size: 13px; color: rgba(255, 255, 255, 0.5);`;
+  dateLabel.textContent = "Data";
+  const dateValue = document.createElement("div");
+  dateValue.className = "infoValue";
+  dateValue.style.cssText = `font-weight: 600; color: rgba(255, 255, 255, 0.9); font-size: 14px;`;
+  dateValue.textContent = dateISO || "—";
+  dateRow.appendChild(dateLabel);
+  dateRow.appendChild(dateValue);
+  infoSection.appendChild(dateRow);
+  
+  // Bottoni
   const btnRow = document.createElement("div");
   btnRow.className = "btnRow";
   btnRow.style.marginTop = "24px";
+  btnRow.style.display = "flex";
+  btnRow.style.gap = "12px";
   
   const closeBtn = document.createElement("button");
-  closeBtn.className = "btn primary";
+  closeBtn.className = "btn";
   closeBtn.textContent = "Chiudi";
-  closeBtn.style.width = "100%";
+  closeBtn.style.flex = canEdit ? "1" : "1";
   
-  // Assemblea
-  card.appendChild(title);
-  card.appendChild(infoSection);
-  btnRow.appendChild(closeBtn);
-  card.appendChild(btnRow);
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  let saveBtn = null;
+  if (canEdit) {
+    saveBtn = document.createElement("button");
+    saveBtn.className = "btn primary";
+    saveBtn.textContent = "Salva modifiche";
+    saveBtn.style.flex = "1";
+    console.log("[Task Modal] Bottone Salva creato");
+  } else {
+    console.warn("[Task Modal] Bottone Salva NON creato - canEdit è false");
+  }
   
   // Funzione per chiudere
   const closeModal = () => {
@@ -8277,6 +8687,187 @@ function showTaskDetailsModal(task, dateISO) {
       }
     }, 200);
   };
+  
+  // Gestore salvataggio
+  if (saveBtn && canEdit) {
+    console.log("[Task Modal] Aggiungo event listener al bottone Salva");
+    saveBtn.addEventListener("click", async () => {
+      console.log("[Task Update] CLICK sul bottone Salva - inizio salvataggio");
+      try {
+        const newLabel = descValue.value.trim();
+        const newType = typeValue.value;
+        const newMinutes = parseInt(minutesValue.value);
+        
+        console.log("[Task Update] Valori da salvare:", { newLabel, newType, newMinutes });
+        
+        if (!newLabel) {
+          showErrorModal("La descrizione non può essere vuota", "Errore di validazione");
+          return;
+        }
+        if (!newMinutes || isNaN(newMinutes)) {
+          showErrorModal("La durata deve essere un numero valido", "Errore di validazione");
+          return;
+        }
+        if (newMinutes < 15) {
+          showErrorModal("La durata deve essere almeno 15 minuti", "Errore di validazione");
+          return;
+        }
+        if (newMinutes > 100) {
+          showErrorModal("La durata non può superare 100 minuti", "Errore di validazione");
+          return;
+        }
+        
+        // Trova il task nel piano e aggiornalo
+        console.log("[Task Update] Cercando task nel piano:", {
+          taskId: task.id,
+          taskLabel: task.label,
+          taskType: task.type,
+          taskExamId: task.examId,
+          dateISO,
+          weekStartISO,
+          planDays: plan.days?.length
+        });
+        
+        let taskFound = false;
+        let foundDay = null;
+        let foundTaskIndex = -1;
+        
+        for (const day of plan.days || []) {
+          if (day.dateISO === dateISO) {
+            console.log("[Task Update] Giorno trovato:", { dateISO: day.dateISO, tasksCount: day.tasks?.length });
+            const tasks = day.tasks || [];
+            for (let i = 0; i < tasks.length; i++) {
+              const t = tasks[i];
+              // Prova prima con l'ID
+              if (t.id === task.id) {
+                console.log("[Task Update] Task trovato per ID:", t.id);
+                foundDay = day;
+                foundTaskIndex = i;
+                taskFound = true;
+                break;
+              }
+              // Fallback: cerca per examId, label e type (prima di modificare)
+              if (t.examId === task.examId && 
+                  t.label === task.label && 
+                  t.type === task.type) {
+                console.log("[Task Update] Task trovato per match (examId, label, type):", {
+                  examId: t.examId,
+                  label: t.label,
+                  type: t.type
+                });
+                foundDay = day;
+                foundTaskIndex = i;
+                taskFound = true;
+                break;
+              }
+            }
+            if (taskFound) break;
+          }
+        }
+        
+        if (!taskFound) {
+          console.error("[Task Update] Task non trovato nel piano. Dettagli:", {
+            taskId: task.id,
+            taskLabel: task.label,
+            taskType: task.type,
+            taskExamId: task.examId,
+            dateISO,
+            availableDays: plan.days?.map(d => ({
+              dateISO: d.dateISO,
+              tasksCount: d.tasks?.length,
+              tasks: d.tasks?.map(t => ({ id: t.id, label: t.label, type: t.type, examId: t.examId }))
+            }))
+          });
+          showErrorModal("Task non trovato nel piano. Potrebbe essere necessario rigenerare il piano.", "Errore");
+          return;
+        }
+        
+        // Aggiorna il task trovato
+        console.log("[Task Update] Aggiornando task:", {
+          oldLabel: foundDay.tasks[foundTaskIndex].label,
+          newLabel,
+          oldType: foundDay.tasks[foundTaskIndex].type,
+          newType,
+          oldMinutes: foundDay.tasks[foundTaskIndex].minutes,
+          newMinutes
+        });
+        
+        foundDay.tasks[foundTaskIndex].label = newLabel;
+        foundDay.tasks[foundTaskIndex].type = newType;
+        foundDay.tasks[foundTaskIndex].minutes = newMinutes;
+        
+        // Salva il piano aggiornato
+        console.log("[Task Update] Salvando piano aggiornato...");
+        try {
+          await saveWeeklyPlan(user.uid, weekStartISO, plan);
+          console.log("[Task Update] Piano salvato con successo");
+        } catch (err) {
+          console.error("[Task Update] Errore durante il salvataggio:", err);
+          alert("Errore durante il salvataggio: " + (err?.message || err));
+          return;
+        }
+        
+        // Notifica che il piano è stato modificato (per aggiornare la dashboard)
+        const planUpdateKey = `plan_updated_${user.uid}_${weekStartISO}`;
+        const updateTimestamp = Date.now().toString();
+        try {
+          localStorage.setItem(planUpdateKey, updateTimestamp);
+          console.log("[Task Update] Flag aggiornamento salvato:", { planUpdateKey, updateTimestamp });
+          // Emetti anche un evento personalizzato per la stessa scheda
+          const event = new CustomEvent('planUpdated', { 
+            detail: { weekStartISO, taskId: task.id, timestamp: updateTimestamp } 
+          });
+          window.dispatchEvent(event);
+          console.log("[Task Update] Evento planUpdated emesso");
+        } catch (e) {
+          console.warn("Impossibile salvare flag aggiornamento piano:", e);
+        }
+        
+        // Aggiorna anche la pagina task.html se siamo lì
+        if (window.location.pathname.includes('task.html')) {
+          // Aggiorna i valori nella pagina
+          const set = (id, v) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = v ?? "—";
+          };
+          set("info-label", newLabel);
+          set("info-type", typeLabels[newType] || newType);
+          set("info-minutes", `${newMinutes} min`);
+          
+          // Aggiorna anche il titolo e sottotitolo
+          const elTitle = document.getElementById("task-title");
+          const elSub = document.getElementById("task-subtitle");
+          if (elTitle) elTitle.textContent = `${task.examName || "Esame"} · ${newLabel}`;
+          if (elSub) elSub.textContent = `${dateISO || "—"} · ${newMinutes} min`;
+          
+          // Aggiorna il task nel payload
+          task.label = newLabel;
+          task.type = newType;
+          task.minutes = newMinutes;
+        }
+        
+        // Callback per aggiornare la dashboard se necessario
+        if (onUpdate) {
+          onUpdate();
+        }
+        
+        showToast("Task aggiornato con successo!", 3000);
+        closeModal();
+      } catch (err) {
+        console.error("Errore aggiornamento task:", err);
+        showErrorModal("Errore durante l'aggiornamento: " + (err?.message || err), "Errore");
+      }
+    });
+  }
+  
+  // Assemblea
+  card.appendChild(title);
+  card.appendChild(infoSection);
+  if (saveBtn) btnRow.appendChild(saveBtn);
+  btnRow.appendChild(closeBtn);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
   
   // Event listeners
   closeBtn.addEventListener("click", closeModal);
@@ -8362,9 +8953,16 @@ function mountTask() {
       const el = document.getElementById(id);
       if (el) el.textContent = v ?? "—";
     };
+    const typeLabels = {
+      theory: "Teoria",
+      practice: "Esercizi",
+      exam: "Prove d'esame",
+      review: "Ripasso",
+      spaced: "Spaced repetition"
+    };
     set("info-exam", t.examName || "—");
     set("info-label", t.label || "—");
-    set("info-type", t.type || "—");
+    set("info-type", typeLabels[t.type] || t.type || "—");
     set("info-minutes", `${t.minutes || 0} min`);
     set("info-date", payload.dateISO || "—");
 
@@ -8382,8 +8980,40 @@ function mountTask() {
         taskInfoCard.style.transform = "translateY(0)";
         taskInfoCard.style.boxShadow = "";
       });
-      taskInfoCard.addEventListener("click", () => {
-        showTaskDetailsModal(t, payload.dateISO);
+      taskInfoCard.addEventListener("click", async () => {
+        // Carica il piano se disponibile per permettere la modifica
+        let plan = null;
+        let weekStartISO = payload.weekStartISO;
+        if (user && weekStartISO) {
+          plan = await loadWeeklyPlan(user.uid, weekStartISO);
+        }
+        showTaskDetailsModal(t, payload.dateISO, {
+          user,
+          weekStartISO,
+          plan,
+          onUpdate: async () => {
+            // Ricarica il payload e aggiorna la pagina
+            if (user && weekStartISO) {
+              const updatedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
+              if (updatedPlan) {
+                // Trova il task aggiornato
+                for (const day of updatedPlan.days || []) {
+                  if (day.dateISO === payload.dateISO) {
+                    const updatedTask = (day.tasks || []).find(task => 
+                      task.id === t.id || 
+                      (task.examId === t.examId && task.label === t.label && task.type === t.type)
+                    );
+                    if (updatedTask) {
+                      payload.task = updatedTask;
+                      await bootWithPayload(payload, user);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
       });
     }
 
