@@ -676,22 +676,46 @@ async function listExams(uid) {
 
 async function addExam(uid, exam) {
   const col = collection(db, "users", uid, "exams");
+  
+  // Filtra i campi undefined (Firestore non li accetta)
+  const cleanExam = {};
+  for (const [key, value] of Object.entries(exam)) {
+    if (value !== undefined) {
+      cleanExam[key] = value;
+    }
+  }
+  
   const ref = await addDoc(col, {
-    ...exam,
+    ...cleanExam,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  // Invalida il piano per forzare la rigenerazione automatica
+  await invalidateWeeklyPlan(uid);
   return ref.id;
 }
 
 async function removeExam(uid, examId) {
   const ref = doc(db, "users", uid, "exams", examId);
   await deleteDoc(ref);
+  // Invalida il piano per forzare la rigenerazione automatica
+  await invalidateWeeklyPlan(uid);
 }
 
 async function updateExam(uid, examId, examData) {
   const ref = doc(db, "users", uid, "exams", examId);
-  await updateDoc(ref, { ...examData, updatedAt: serverTimestamp() });
+  
+  // Filtra i campi undefined (Firestore non li accetta)
+  const cleanExamData = {};
+  for (const [key, value] of Object.entries(examData)) {
+    if (value !== undefined) {
+      cleanExamData[key] = value;
+    }
+  }
+  
+  await updateDoc(ref, { ...cleanExamData, updatedAt: serverTimestamp() });
+  // Invalida il piano per forzare la rigenerazione automatica
+  await invalidateWeeklyPlan(uid);
 }
 
 async function addPassedExam(uid, examData) {
@@ -731,6 +755,22 @@ async function loadWeeklyPlan(uid, weekStartISO) {
   const ref = doc(db, "users", uid, "plans", weekStartISO);
   const snap = await getDoc(ref);
   return snap.exists() ? snap.data()?.plan : null;
+}
+
+/**
+ * Invalida il piano settimanale corrente eliminandolo dal database.
+ * Questo forza la rigenerazione automatica del piano alla prossima apertura della dashboard.
+ */
+async function invalidateWeeklyPlan(uid) {
+  try {
+    const weekStart = startOfWeekISO(new Date());
+    const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
+    const ref = doc(db, "users", uid, "plans", weekStartISO);
+    await deleteDoc(ref);
+    console.log("[Plan] Piano invalidato per settimana:", weekStartISO);
+  } catch (err) {
+    console.error("[Plan] Errore invalidazione piano:", err);
+  }
 }
 
 /**
@@ -3403,6 +3443,9 @@ function mountOnboarding() {
           targetHours: isPremiumUser && targetHours > 0 ? targetHours : null
         });
         
+        // Invalida il piano per forzare la rigenerazione automatica
+        await invalidateWeeklyPlan(user.uid);
+        
         if (savedEl) {
           setText(savedEl, "Impostazioni salvate con successo!");
         } else {
@@ -3580,7 +3623,8 @@ function mountOnboarding() {
           difficulty,
           category: finalCategory,
           topics: topics,
-          taskDistribution: taskDistribution || undefined // Salva solo se personalizzata
+          // Includi taskDistribution solo se è definito e non null
+          ...(taskDistribution ? { taskDistribution } : {})
         });
         
         // Reset form
@@ -6140,10 +6184,6 @@ function setupMenu() {
     if (e.key === "Escape") close();
   });
 
-  document.getElementById("regen-week-menu")?.addEventListener("click", () => {
-    close();
-    document.getElementById("regen-week")?.click();
-  });
 
   document.getElementById("go-today")?.addEventListener("click", () => {
     close();
@@ -6153,7 +6193,6 @@ function setupMenu() {
 
   document.addEventListener("keydown", (e) => {
     if (e.target && ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
-    if (e.key === "r" || e.key === "R") document.getElementById("regen-week")?.click();
     if (e.key === "m" || e.key === "M") toggle();
   });
 }
@@ -6476,16 +6515,6 @@ function mountApp() {
       renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
-
-      document.getElementById("regen-week")?.addEventListener("click", async () => {
-        const plan2 = generateWeeklyPlan(profile, normalizedExams, weekStart);
-        // Aggiungi snapshot per future comparazioni
-        addSnapshotToPlan(plan2, profile, normalizedExams);
-        await saveWeeklyPlan(user.uid, weekStartISO, plan2);
-        renderDashboard(plan2, normalizedExams, profile, user, weekStartISO);
-        // Ricollega il bottone per il nuovo piano
-        bindAddTaskButton(plan2, normalizedExams, profile, user, weekStartISO);
-      });
 
       document.getElementById("mark-today-done")?.addEventListener("click", async () => {
         document.getElementById("status-line").textContent = "Segnato: oggi completato (MVP).";
@@ -8606,7 +8635,7 @@ window.addEventListener("DOMContentLoaded", () => {
     mountOnboarding();
     return;
   }
-  if (qs("regen-week") || qs("exam-cards")) {
+  if (qs("add-task-btn") || qs("exam-cards")) {
     mountApp();
     return;
   }
