@@ -5386,15 +5386,13 @@ async function renderSubscription(uid) {
     qs("reactivate-subscription-btn")?.addEventListener("click", async () => {
       if (confirm("Vuoi riattivare l'abbonamento? Verrà rinnovato automaticamente ogni mese.")) {
         try {
-          // Estendi la data di scadenza di un mese dalla data attuale
-          const newEndDate = new Date();
-          newEndDate.setMonth(newEndDate.getMonth() + 1);
-          
+          // Mantieni la data di scadenza originale, non aggiungere giorni
+          // La riattivazione cambia solo lo status, non la data di scadenza
           await setProfile(uid, {
             subscription: {
               ...subscription,
               status: 'active',
-              endDate: newEndDate.toISOString(),
+              // Mantieni endDate originale - non modificarla
               reactivatedAt: new Date().toISOString()
             }
           });
