@@ -8271,15 +8271,30 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
   labelInput.required = true;
   labelLabel.appendChild(labelInput);
 
-  // Campo tipo
+  // Campo tipo (select con opzioni disponibili)
   const typeLabel = document.createElement("label");
   typeLabel.innerHTML = '<span>Tipo</span>';
-  const typeInput = document.createElement("input");
-  typeInput.type = "text";
-  typeInput.id = "nt-type";
-  typeInput.placeholder = "theory, practice, review...";
-  typeInput.required = true;
-  typeLabel.appendChild(typeInput);
+  const typeSelect = document.createElement("select");
+  typeSelect.id = "nt-type";
+  typeSelect.required = true;
+  
+  // Opzioni disponibili per il tipo di task
+  const taskTypes = [
+    { value: "theory", label: "Teoria" },
+    { value: "practice", label: "Esercizi" },
+    { value: "exam", label: "Prove d'esame" },
+    { value: "review", label: "Ripasso" },
+    { value: "spaced", label: "Spaced repetition" }
+  ];
+  
+  taskTypes.forEach(type => {
+    const option = document.createElement("option");
+    option.value = type.value;
+    option.textContent = type.label;
+    typeSelect.appendChild(option);
+  });
+  
+  typeLabel.appendChild(typeSelect);
 
   // Campo minuti
   const minutesLabel = document.createElement("label");
@@ -8287,7 +8302,9 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
   const minutesInput = document.createElement("input");
   minutesInput.type = "number";
   minutesInput.id = "nt-minutes";
-  minutesInput.min = "1";
+  minutesInput.min = "15";
+  minutesInput.max = "100";
+  minutesInput.step = "5";
   minutesInput.value = "30";
   minutesInput.required = true;
   minutesLabel.appendChild(minutesInput);
@@ -8340,11 +8357,32 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
     const examId = examSelect.value;
     const exam = exams.find((e) => String(e.id) === String(examId));
     const labelVal = labelInput.value.trim();
-    const typeVal = typeInput.value.trim();
+    const typeVal = typeSelect.value;
     const minutesVal = parseInt(minutesInput.value, 10);
 
-    if (!exam || !labelVal || !typeVal || !minutesVal || minutesVal <= 0) {
-      alert("Compila tutti i campi con valori validi.");
+    // Validazione con modali coerenti
+    if (!exam) {
+      showErrorModal("Seleziona un esame", "Errore di validazione");
+      return;
+    }
+    if (!labelVal) {
+      showErrorModal("La descrizione non può essere vuota", "Errore di validazione");
+      return;
+    }
+    if (!typeVal) {
+      showErrorModal("Seleziona un tipo di task", "Errore di validazione");
+      return;
+    }
+    if (!minutesVal || isNaN(minutesVal)) {
+      showErrorModal("La durata deve essere un numero valido", "Errore di validazione");
+      return;
+    }
+    if (minutesVal < 15) {
+      showErrorModal("La durata deve essere almeno 15 minuti", "Errore di validazione");
+      return;
+    }
+    if (minutesVal > 100) {
+      showErrorModal("La durata non può superare 100 minuti", "Errore di validazione");
       return;
     }
     try {
@@ -8364,7 +8402,7 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       const day =
         plan.days?.find((d) => d.dateISO === todayISO) || plan.days?.[0];
       if (!day) {
-        alert("Errore: giorno non trovato.");
+        showErrorModal("Errore: giorno non trovato nel piano.", "Errore");
         return;
       }
       // Assegna periodo (mattina/pomeriggio) basato sulla capacità giornaliera
@@ -8391,7 +8429,7 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       closeModal();
     } catch (err) {
       console.error(err);
-      alert("Errore creazione task: " + (err?.message || err));
+      showErrorModal("Errore creazione task: " + (err?.message || err), "Errore");
     }
   });
 }
