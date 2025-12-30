@@ -897,24 +897,30 @@ async function updateExamLevelAutomatically(uid, exam) {
   // 1. Task completate (ogni 5 task = +0.5 livello, max +2.5)
   // 2. Giorni passati (ogni 7 giorni = +0.2 livello, max +1.0)
   // 3. Minuti totali (ogni 300 minuti = +0.1 livello, max +0.5)
-  const taskProgress = Math.min(completedTasks / 5, 2.5); // Max +2.5
+  // Formula migliorata: più coerente e graduale
+  const taskProgress = Math.min(completedTasks / 5 * 0.5, 2.5); // Max +2.5
   const daysProgress = Math.min(daysSinceStart / 7 * 0.2, 1.0); // Max +1.0
   const minutesProgress = Math.min(totalMinutes / 300 * 0.1, 0.5); // Max +0.5
   
-  // Il nuovo livello è il minimo tra:
-  // - Livello iniziale + progresso
-  // - 5 (massimo)
+  // Il nuovo livello è calcolato dal livello iniziale + progresso
+  // Questo evita accumuli e rende il calcolo più coerente
   const calculatedLevel = Math.min(
-    Math.round((currentLevel + taskProgress + daysProgress + minutesProgress) * 10) / 10,
+    Math.round((initialLevel + taskProgress + daysProgress + minutesProgress) * 10) / 10,
     5
   );
   
   const newLevel = clamp(Math.floor(calculatedLevel), 0, 5);
   
-  // Aggiorna solo se il livello è aumentato di almeno 0.5
-  if (newLevel > currentLevel + 0.4) {
+  // Aggiorna solo se il livello è aumentato di almeno 0.5 rispetto al livello corrente
+  // E assicurati che non scenda mai sotto il livello iniziale
+  if (newLevel > currentLevel + 0.4 && newLevel >= initialLevel) {
     try {
-      await updateExam(uid, examId, { level: newLevel });
+      // Salva anche il livello iniziale se non presente
+      const updateData = { level: newLevel };
+      if (!exam.initialLevel) {
+        updateData.initialLevel = initialLevel;
+      }
+      await updateExam(uid, examId, updateData);
       return newLevel;
     } catch (e) {
       console.error("Errore aggiornamento livello esame:", e);
@@ -3687,7 +3693,9 @@ function mountOnboarding() {
           taskMinutes, 
           dayMinutes,
           currentHours: isPremiumUser && currentHours > 0 ? currentHours : null,
-          targetHours: isPremiumUser && targetHours > 0 ? targetHours : null
+          targetHours: isPremiumUser && targetHours > 0 ? targetHours : null,
+          coachStartDate: isPremiumUser && currentHours > 0 && targetHours > 0 && targetHours > currentHours ? 
+            (getCoachStartDate()?.toISOString() || new Date().toISOString()) : null
         });
         
         // Invalida il piano per forzare la rigenerazione automatica
@@ -4089,9 +4097,16 @@ function calculateSuggestedWeeklyHours(currentHours, targetHours, exams = []) {
   return Math.max(currentHours, hoursThisWeek);
 }
 
-// Ottiene la data di inizio dell'allenatore (salvata nel profilo o usa oggi)
-function getCoachStartDate() {
-  // Prova a recuperare dal localStorage quando è stato impostato l'allenatore
+// Ottiene la data di inizio dell'allenatore (salvata nel profilo o localStorage)
+async function getCoachStartDate(profile = null) {
+  // Prima prova dal profilo (priorità)
+  if (profile?.coachStartDate) {
+    try {
+      return new Date(profile.coachStartDate);
+    } catch {}
+  }
+  
+  // Fallback: localStorage
   try {
     const saved = localStorage.getItem('coach_start_date');
     if (saved) return new Date(saved);

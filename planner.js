@@ -77,9 +77,20 @@ function calculateProgressiveWeeklyBudget(profile, weekStartDate, exams) {
   const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
   
   // Calcola quale settimana siamo (0 = prima settimana, totalWeeks-1 = ultima)
-  // Per ora assumiamo che questa sia la settimana 0 (inizio)
-  // In futuro potremmo tracciare quante settimane sono passate dall'inizio
-  const currentWeek = 0; // TODO: tracciare settimane passate
+  // Usa la data di inizio dell'allenatore se disponibile nel profilo
+  let currentWeek = 0;
+  
+  // Se il profilo ha una data di inizio allenatore, calcola la settimana corrente
+  if (profile.coachStartDate) {
+    const coachStart = new Date(profile.coachStartDate);
+    coachStart.setHours(0, 0, 0, 0);
+    const weeksSinceStart = Math.floor((weekStart - coachStart) / (7 * 24 * 60 * 60 * 1000));
+    currentWeek = Math.max(0, weeksSinceStart);
+  } else {
+    // Fallback: calcola dalla data di inizio del profilo o usa settimana 0
+    // Se non c'è tracciamento, assumiamo che sia la settimana 0
+    currentWeek = 0;
+  }
   
   // Calcola incremento settimanale
   const totalIncrease = targetHours - currentHours;

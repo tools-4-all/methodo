@@ -81,3 +81,9 @@ docs/*.pdf
 # =========================
 coverage/
 .cache-loader/
+
+# =========================
+# Test files
+# =========================
+test-coherence.html
+test-algorithm-coherence.js
