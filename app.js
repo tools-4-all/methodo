@@ -824,6 +824,107 @@ async function updateExam(uid, examId, examData) {
   await invalidateWeeklyPlan(uid);
 }
 
+/**
+ * Calcola e aggiorna automaticamente il livello di preparazione di un esame
+ * basato su task completate e giorni passati dall'inizio della preparazione.
+ * 
+ * @param {string} uid - ID utente
+ * @param {object} exam - Oggetto esame con id, name, date, level, createdAt
+ * @returns {Promise<number|null>} Nuovo livello calcolato (0-5) o null se non aggiornato
+ */
+async function updateExamLevelAutomatically(uid, exam) {
+  if (!exam || !exam.id) return null;
+  
+  const currentLevel = clamp(exam.level ?? 0, 0, 5);
+  const examId = exam.id;
+  const examName = exam.name;
+  
+  // Trova l'ID corretto (può essere l'ID originale o un ID virtuale con appello)
+  const examIdsToCheck = [examId];
+  if (exam.appelli && Array.isArray(exam.appelli) && exam.appelli.length > 0) {
+    const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
+    for (const appello of selectedAppelli) {
+      examIdsToCheck.push(`${examId}_${appello.date}`);
+    }
+  }
+  
+  // Conta task completate per questo esame
+  let completedTasks = 0;
+  let totalMinutes = 0;
+  
+  try {
+    // Scansiona localStorage per task completate
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sp_task_done_")) {
+        try {
+          const taskId = key.replace("sp_task_done_", "");
+          // Prova a recuperare il payload della task
+          const payloadKey = `sp_task_${taskId}`;
+          const payloadStr = localStorage.getItem(payloadKey) || sessionStorage.getItem(payloadKey);
+          if (payloadStr) {
+            const payload = JSON.parse(payloadStr);
+            const task = payload?.task;
+            if (task && (examIdsToCheck.includes(task.examId) || task.examName === examName)) {
+              completedTasks++;
+              totalMinutes += Number(task.minutes || 0);
+            }
+          }
+        } catch (e) {
+          // Ignora errori di parsing
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Errore scansionando localStorage:", e);
+  }
+  
+  // Calcola giorni dall'inizio della preparazione
+  // Usa createdAt se disponibile, altrimenti stima dalla data dell'esame
+  let daysSinceStart = 0;
+  if (exam.createdAt) {
+    const createdAt = exam.createdAt.toDate ? exam.createdAt.toDate() : new Date(exam.createdAt);
+    daysSinceStart = Math.floor((new Date() - createdAt) / (1000 * 60 * 60 * 24));
+  } else if (exam.date) {
+    // Stima: assumi che la preparazione sia iniziata 30 giorni prima dell'esame
+    const examDate = new Date(exam.date);
+    const estimatedStart = new Date(examDate);
+    estimatedStart.setDate(estimatedStart.getDate() - 30);
+    daysSinceStart = Math.floor((new Date() - estimatedStart) / (1000 * 60 * 60 * 24));
+  }
+  
+  // Calcola nuovo livello basato su:
+  // 1. Task completate (ogni 5 task = +0.5 livello, max +2.5)
+  // 2. Giorni passati (ogni 7 giorni = +0.2 livello, max +1.0)
+  // 3. Minuti totali (ogni 300 minuti = +0.1 livello, max +0.5)
+  const taskProgress = Math.min(completedTasks / 5, 2.5); // Max +2.5
+  const daysProgress = Math.min(daysSinceStart / 7 * 0.2, 1.0); // Max +1.0
+  const minutesProgress = Math.min(totalMinutes / 300 * 0.1, 0.5); // Max +0.5
+  
+  // Il nuovo livello è il minimo tra:
+  // - Livello iniziale + progresso
+  // - 5 (massimo)
+  const calculatedLevel = Math.min(
+    Math.round((currentLevel + taskProgress + daysProgress + minutesProgress) * 10) / 10,
+    5
+  );
+  
+  const newLevel = clamp(Math.floor(calculatedLevel), 0, 5);
+  
+  // Aggiorna solo se il livello è aumentato di almeno 0.5
+  if (newLevel > currentLevel + 0.4) {
+    try {
+      await updateExam(uid, examId, { level: newLevel });
+      return newLevel;
+    } catch (e) {
+      console.error("Errore aggiornamento livello esame:", e);
+      return null;
+    }
+  }
+  
+  return null;
+}
+
 async function addPassedExam(uid, examData) {
   const col = collection(db, "users", uid, "passedExams");
   const ref = await addDoc(col, {
@@ -6971,7 +7072,7 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
           chk.checked = false;
         }
       });
-      chk?.addEventListener("change", (e) => {
+      chk?.addEventListener("change", async (e) => {
         // Se il task è saltato, non permettere di segnarlo come fatto
         if (isSkipped) {
           chk.checked = false;
@@ -6989,6 +7090,36 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
         row.classList.toggle("taskDone", checked);
         // Aggiorna il grafico di completamento
         updateTodayProgress(plan, todayDay);
+        
+        // Aggiorna automaticamente il livello dell'esame se la task è stata completata
+        if (checked && user && t?.examId) {
+          try {
+            const exams = await listExams(user.uid);
+            // Trova l'esame (può essere con appelli)
+            let exam = exams.find(e => {
+              if (e.id === t.examId) return true;
+              if (e.appelli && Array.isArray(e.appelli)) {
+                const selectedAppelli = e.appelli.filter(a => a.selected !== false);
+                for (const appello of selectedAppelli) {
+                  if (`${e.id}_${appello.date}` === t.examId) return true;
+                }
+              }
+              return false;
+            });
+            
+            // Se non trovato per ID, prova per nome
+            if (!exam && t.examName) {
+              exam = exams.find(e => e.name === t.examName);
+            }
+            
+            if (exam) {
+              await updateExamLevelAutomatically(user.uid, exam);
+            }
+          } catch (err) {
+            console.error("Errore aggiornamento livello esame:", err);
+            // Non bloccare l'utente se c'è un errore
+          }
+        }
       });
 
       // Click handler (solo se non è un drag)
@@ -7801,6 +7932,146 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
   });
 }
 
+/**
+ * Mostra un popup modale con i dettagli della task
+ * @param {object} task - Oggetto task con tutte le informazioni
+ * @param {string} dateISO - Data ISO della task
+ */
+function showTaskDetailsModal(task, dateISO) {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("task-details-modal")) return;
+  
+  // Overlay oscurante
+  const overlay = document.createElement("div");
+  overlay.id = "task-details-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.75)",
+    zIndex: "10000",
+    padding: "20px",
+    animation: "fadeIn 0.2s ease-out",
+    backdropFilter: "blur(4px)",
+  });
+  
+  // Contenitore principale con stile card
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "800px";
+  card.style.width = "90%";
+  card.style.padding = "28px";
+  card.style.position = "relative";
+  card.style.animation = "slideUp 0.3s ease-out";
+  card.style.background = "rgba(10, 12, 20, 0.95)";
+  card.style.backdropFilter = "blur(10px)";
+  card.style.border = "1px solid rgba(255, 255, 255, 0.15)";
+  
+  // Titolo modale
+  const title = document.createElement("h2");
+  title.textContent = "Dettagli Task";
+  title.style.cssText = `
+    font-size: 24px;
+    font-weight: 900;
+    margin: 0 0 24px 0;
+    color: rgba(255,255,255,0.95);
+  `;
+  
+  // Sezione informazioni
+  const infoSection = document.createElement("div");
+  infoSection.className = "infoSection";
+  
+  const infoRows = [
+    { label: "Esame", value: task.examName || "—", highlight: true },
+    { label: "Descrizione", value: task.label || "—" },
+    { label: "Tipo", value: task.type || "—" },
+    { label: "Durata", value: `${task.minutes || 0} min` },
+    { label: "Data", value: dateISO || "—" },
+  ];
+  
+  infoRows.forEach((row, index) => {
+    const infoRow = document.createElement("div");
+    infoRow.className = "infoRow";
+    infoRow.style.cssText = `
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: ${index < infoRows.length - 1 ? "1px solid rgba(255, 255, 255, 0.08)" : "none"};
+    `;
+    
+    const label = document.createElement("div");
+    label.className = "infoLabel";
+    label.style.cssText = `
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+    `;
+    label.textContent = row.label;
+    
+    const value = document.createElement("div");
+    value.className = "infoValue";
+    value.style.cssText = `
+      font-weight: ${row.highlight ? "700" : "600"};
+      color: ${row.highlight ? "rgba(99, 102, 241, 1)" : "rgba(255, 255, 255, 0.9)"};
+      font-size: 14px;
+    `;
+    value.textContent = row.value;
+    
+    infoRow.appendChild(label);
+    infoRow.appendChild(value);
+    infoSection.appendChild(infoRow);
+  });
+  
+  // Bottone chiudi
+  const btnRow = document.createElement("div");
+  btnRow.className = "btnRow";
+  btnRow.style.marginTop = "24px";
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "btn primary";
+  closeBtn.textContent = "Chiudi";
+  closeBtn.style.width = "100%";
+  
+  // Assemblea
+  card.appendChild(title);
+  card.appendChild(infoSection);
+  btnRow.appendChild(closeBtn);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  
+  // Funzione per chiudere
+  const closeModal = () => {
+    overlay.style.animation = "fadeOut 0.2s ease-out";
+    card.style.animation = "slideDown 0.2s ease-out";
+    setTimeout(() => {
+      if (document.body.contains(overlay)) {
+        document.body.removeChild(overlay);
+      }
+    }, 200);
+  };
+  
+  // Event listeners
+  closeBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  
+  // Chiudi con ESC
+  const escHandler = (e) => {
+    if (e.key === "Escape" && document.getElementById("task-details-modal")) {
+      closeModal();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
+}
+
 // ----------------- TASK PAGE -----------------
 function mountTask() {
   setupMenu();
@@ -7874,6 +8145,25 @@ function mountTask() {
     set("info-type", t.type || "—");
     set("info-minutes", `${t.minutes || 0} min`);
     set("info-date", payload.dateISO || "—");
+
+    // Rendi l'intera card "Dettagli Task" cliccabile per aprire popup
+    const taskInfoCard = document.querySelector(".taskInfoCard");
+    if (taskInfoCard) {
+      taskInfoCard.style.cursor = "pointer";
+      taskInfoCard.style.userSelect = "none";
+      taskInfoCard.style.transition = "transform 0.2s ease, box-shadow 0.2s ease";
+      taskInfoCard.addEventListener("mouseenter", () => {
+        taskInfoCard.style.transform = "translateY(-2px)";
+        taskInfoCard.style.boxShadow = "0 8px 24px rgba(99, 102, 241, 0.2)";
+      });
+      taskInfoCard.addEventListener("mouseleave", () => {
+        taskInfoCard.style.transform = "translateY(0)";
+        taskInfoCard.style.boxShadow = "";
+      });
+      taskInfoCard.addEventListener("click", () => {
+        showTaskDetailsModal(t, payload.dateISO);
+      });
+    }
 
     // Carica informazioni esame per contesto
     if (user) {
@@ -8045,7 +8335,7 @@ function mountTask() {
       }
     }
 
-    function markDone() {
+    async function markDone() {
       st.done = true;
       st.skipped = false;
       st.running = false;
@@ -8066,6 +8356,43 @@ function mountTask() {
       if (statusEl) {
         statusEl.textContent = "✓ Task completata! Ottimo lavoro!";
         statusEl.style.color = "rgba(34, 197, 94, 1)";
+      }
+      
+      // Aggiorna automaticamente il livello dell'esame se l'utente è autenticato
+      if (user && t?.examId) {
+        try {
+          const exams = await listExams(user.uid);
+          // Trova l'esame (può essere con appelli)
+          let exam = exams.find(e => {
+            if (e.id === t.examId) return true;
+            if (e.appelli && Array.isArray(e.appelli)) {
+              const selectedAppelli = e.appelli.filter(a => a.selected !== false);
+              for (const appello of selectedAppelli) {
+                if (`${e.id}_${appello.date}` === t.examId) return true;
+              }
+            }
+            return false;
+          });
+          
+          // Se non trovato per ID, prova per nome
+          if (!exam && t.examName) {
+            exam = exams.find(e => e.name === t.examName);
+          }
+          
+          if (exam) {
+            const newLevel = await updateExamLevelAutomatically(user.uid, exam);
+            if (newLevel !== null && newLevel > (exam.level || 0)) {
+              // Mostra notifica discreta del progresso
+              if (statusEl) {
+                statusEl.textContent = `✓ Task completata! Livello preparazione: ${exam.level || 0} → ${newLevel}`;
+                statusEl.style.color = "rgba(34, 197, 94, 1)";
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Errore aggiornamento livello esame:", err);
+          // Non bloccare l'utente se c'è un errore
+        }
       }
     }
 

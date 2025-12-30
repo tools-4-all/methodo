@@ -132,9 +132,15 @@ function normalizeWeights(items) {
   return items.map((x) => ({ ...x, frac: x.weight / sum }));
 }
 
-function buildTaskTemplates(goalMode, examCategory = "mixed") {
+function buildTaskTemplates(goalMode, examCategory = "mixed", examLevel = 0) {
   // Task primitives: cambiano in base all'obiettivo e al tipo di esame
   // pass: più esercizi d'esame presto, top: più teoria/approfondimento
+  // IMPORTANTE: Filtra task "exam" in base al livello di preparazione
+  // Livello 0-1: NO esercizi d'esame (preparazione graduale)
+  // Livello 2-3: Esercizi d'esame con percentuale ridotta
+  // Livello 4-5: Esercizi d'esame normalmente inclusi
+  
+  const level = clamp(examLevel ?? 0, 0, 5);
   
   // Template base per ogni obiettivo
   const passBase = [
@@ -160,6 +166,14 @@ function buildTaskTemplates(goalMode, examCategory = "mixed") {
   
   // Seleziona template base
   let templates = goalMode === "top" ? topBase : goalMode === "good" ? goodBase : passBase;
+  
+  // Filtra task "exam" in base al livello di preparazione
+  if (level <= 1) {
+    // Livello 0-1: Escludi completamente esercizi d'esame
+    templates = templates.filter(t => t.type !== "exam");
+  }
+  // Livello 2-3: Mantieni "exam" ma verrà ridotta la percentuale nella generazione
+  // Livello 4-5: Nessuna restrizione
   
   // Filtra in base alla categoria dell'esame
   if (examCategory === "scientific") {
@@ -575,6 +589,7 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     // trova esame per recuperare difficulty/level e categoria
     const exam = validExams.find((ex) => ex.id === a.examId);
     const examCategory = exam?.category || "mixed";
+    const examLevel = clamp(exam?.level ?? 0, 0, 5);
     
     // Controlla se l'esame ha una distribuzione personalizzata
     const customDistribution = exam?.taskDistribution;
@@ -583,11 +598,37 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     const nTasks = Math.max(1, Math.floor(a.targetMin / examTaskMin));
     const queue = [];
     
+    // Funzione helper per generare label con messaggio esplicativo per task "exam"
+    const getExamTaskLabel = (baseLabel, level) => {
+      if (level <= 1) {
+        // Non dovrebbe mai arrivare qui perché filtriamo, ma per sicurezza
+        return baseLabel;
+      } else if (level >= 2 && level <= 3) {
+        // Livello 2-3: aggiungi messaggio esplicativo
+        return `${baseLabel} (familiarizzazione graduale - livello ${level}/5)`;
+      } else {
+        // Livello 4-5: nessun messaggio aggiuntivo
+        return baseLabel;
+      }
+    };
+    
     if (customDistribution) {
       // Usa distribuzione personalizzata
+      let examPercent = customDistribution.exam || 0;
+      
+      // Riduci percentuale "exam" in base al livello
+      if (examLevel <= 1) {
+        // Livello 0-1: escludi completamente
+        examPercent = 0;
+      } else if (examLevel >= 2 && examLevel <= 3) {
+        // Livello 2-3: riduci a max 15% del totale
+        examPercent = Math.min(examPercent, 15);
+      }
+      // Livello 4-5: usa percentuale originale
+      
       const totalPercent = (customDistribution.theory || 0) + 
                           (customDistribution.practice || 0) + 
-                          (customDistribution.exam || 0) + 
+                          examPercent + 
                           (customDistribution.review || 0) + 
                           (customDistribution.spaced || 0);
       
@@ -596,7 +637,7 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
         const taskCounts = {
           theory: Math.round((nTasks * (customDistribution.theory || 0)) / totalPercent),
           practice: Math.round((nTasks * (customDistribution.practice || 0)) / totalPercent),
-          exam: Math.round((nTasks * (customDistribution.exam || 0)) / totalPercent),
+          exam: Math.round((nTasks * examPercent) / totalPercent),
           review: Math.round((nTasks * (customDistribution.review || 0)) / totalPercent),
           spaced: Math.round((nTasks * (customDistribution.spaced || 0)) / totalPercent)
         };
@@ -605,17 +646,21 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
         const taskLabels = {
           theory: "Teoria (lettura attiva)",
           practice: "Esercizi mirati",
-          exam: "Prove d'esame + correzione",
+          exam: getExamTaskLabel("Prove d'esame + correzione", examLevel),
           review: "Ripasso attivo",
           spaced: "Spaced repetition / flashcard"
         };
         
-        // Filtra in base alla categoria (come nel comportamento di default)
+        // Filtra in base alla categoria e al livello
         let allowedTypes = ["theory", "practice", "exam", "review", "spaced"];
         // Spaced repetition è efficace anche per esami scientifici (come tecnica di scheduling)
         // Rimuoviamo solo per umanistici se non ha practice
         if (examCategory === "humanistic") {
           allowedTypes = allowedTypes.filter(t => t !== "practice");
+        }
+        // Filtra "exam" se livello è 0-1
+        if (examLevel <= 1) {
+          allowedTypes = allowedTypes.filter(t => t !== "exam");
         }
         // Per scientifici, manteniamo tutti i tipi incluso spaced repetition
         
@@ -658,15 +703,20 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     
     // Se non c'è distribuzione personalizzata o non è valida, usa il comportamento di default
     if (queue.length === 0) {
-      const templates = buildTaskTemplates(goalMode, examCategory);
+      const templates = buildTaskTemplates(goalMode, examCategory, examLevel);
       for (let i = 0; i < nTasks; i++) {
         const t = pickTaskType(i, templates);
+        // Se il template include "exam" e il livello è 2-3, aggiungi messaggio esplicativo
+        let label = t.label;
+        if (t.type === "exam" && examLevel >= 2 && examLevel <= 3) {
+          label = getExamTaskLabel(t.label, examLevel);
+        }
         queue.push({
           id: cryptoId(),
           examId: a.examId,
           examName: a.name,
           type: t.type,
-          label: t.label,
+          label: label,
           minutes: examTaskMin,
           done: false,
         });
