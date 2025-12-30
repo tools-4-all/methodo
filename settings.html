@@ -39,6 +39,10 @@
             </a>
 
             <div class="menuSep"></div>
+
+            <a class="menuItem" role="menuitem" href="./settings.html">
+              <span>Impostazioni</span>
+            </a>
       
             <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
               <span>Logout</span>
@@ -115,8 +119,16 @@
       if (!menuPanel.classList.contains("hidden")) closeMenu();
     });
 
-    // click dentro panel -> non chiudere
-    menuPanel.addEventListener("click", (e) => e.stopPropagation());
+    // click dentro panel -> non chiudere (tranne per i link che devono navigare)
+    menuPanel.addEventListener("click", (e) => {
+      // Se è un link o un bottone, non fermare la propagazione per permettere la navigazione
+      if (e.target.closest("a") || e.target.closest("button")) {
+        // Chiudi il menu quando si clicca su un link o bottone
+        closeMenu();
+        return;
+      }
+      e.stopPropagation();
+    });
 
     // ESC -> chiudi
     document.addEventListener("keydown", (e) => {
