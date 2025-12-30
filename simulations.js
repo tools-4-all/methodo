@@ -150,7 +150,7 @@ function showUpgradeModal() {
     <div style="background: rgba(99,102,241,0.1); border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(99,102,241,0.3);">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
         <div>
-          <div style="font-size: 32px; font-weight: 900; color: rgba(255,255,255,0.95);">€5<span style="font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.6);">/mese</span></div>
+          <div style="font-size: 32px; font-weight: 900; color: rgba(255,255,255,0.95);">€4,99<span style="font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.6);">/mese</span></div>
         </div>
       </div>
       <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
@@ -1408,7 +1408,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
             startDate: serverTimestamp(),
             endDate: endDate.toISOString(),
             type: 'monthly',
-            price: 5,
+            price: 4.99,
           },
           updatedAt: serverTimestamp(),
         });

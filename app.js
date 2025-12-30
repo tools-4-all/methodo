@@ -424,30 +424,58 @@ function showUpgradeModal(onClose = null) {
       </p>
     </div>
     
-    <div style="background: rgba(99,102,241,0.1); border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid rgba(99,102,241,0.3);">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-        <div>
-          <div style="font-size: 32px; font-weight: 900; color: rgba(255,255,255,0.95);">€5<span style="font-size: 18px; font-weight: 600; color: rgba(255,255,255,0.6);">/mese</span></div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+      <!-- Piano Mensile -->
+      <div id="plan-monthly" class="plan-card" style="background: rgba(99,102,241,0.1); border-radius: 12px; padding: 20px; border: 2px solid rgba(99,102,241,0.3); cursor: pointer; transition: all 0.2s; position: relative;">
+        <div style="text-align: center; margin-bottom: 12px;">
+          <div style="font-size: 24px; font-weight: 900; color: rgba(255,255,255,0.95);">€4,99</div>
+          <div style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px;">al mese</div>
+        </div>
+        <div style="text-align: center; margin-top: 16px;">
+          <button class="btn primary" style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600;" data-plan="monthly">
+            Scegli Mensile
+          </button>
         </div>
       </div>
-      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
-        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+      
+      <!-- Piano Annuale -->
+      <div id="plan-yearly" class="plan-card" style="background: rgba(34,197,94,0.1); border-radius: 12px; padding: 20px; border: 2px solid rgba(34,197,94,0.3); cursor: pointer; transition: all 0.2s; position: relative;">
+        <div style="position: absolute; top: -8px; right: -8px; background: rgba(34,197,94,1); color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">
+          RISPARMIA 17%
+        </div>
+        <div style="text-align: center; margin-bottom: 12px;">
+          <div style="font-size: 24px; font-weight: 900; color: rgba(255,255,255,0.95);">€50</div>
+          <div style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px;">all'anno</div>
+          <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">€4,17/mese</div>
+        </div>
+        <div style="text-align: center; margin-top: 16px;">
+          <button class="btn primary" style="width: 100%; padding: 10px; font-size: 14px; font-weight: 600; background: rgba(34,197,94,1);" data-plan="yearly">
+            Scegli Annuale
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div style="background: rgba(99,102,241,0.05); border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(99,102,241,0.2);">
+      <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); margin-bottom: 12px;">Tutte le funzionalità Premium:</div>
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 13px;">
           <span style="color: rgba(34,197,94,1);">✓</span>
           <span>Esami illimitati</span>
         </li>
-        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 13px;">
           <span style="color: rgba(34,197,94,1);">✓</span>
           <span>Simulazione appelli avanzata</span>
         </li>
-        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 13px;">
           <span style="color: rgba(34,197,94,1);">✓</span>
           <span>Statistiche dettagliate</span>
         </li>
-        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 13px;">
           <span style="color: rgba(34,197,94,1);">✓</span>
           <span>Pianificazione multi-settimana</span>
         </li>
-        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 14px;">
+        <li style="display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.9); font-size: 13px;">
           <span style="color: rgba(34,197,94,1);">✓</span>
           <span>Esportazione piano di studio</span>
         </li>
@@ -476,9 +504,6 @@ function showUpgradeModal(onClose = null) {
     </div>
     
     <div style="display: flex; flex-direction: column; gap: 12px;">
-      <button id="upgrade-subscribe-btn" class="btn primary" style="width: 100%; padding: 14px; font-size: 16px; font-weight: 700;">
-        Passa a Premium
-      </button>
       <button id="upgrade-close-btn" class="btn ghost" style="width: 100%;">
         Forse più tardi
       </button>
@@ -596,8 +621,24 @@ function showUpgradeModal(onClose = null) {
     }
   });
   
-  qs("upgrade-subscribe-btn")?.addEventListener("click", async () => {
-    const subscribeBtn = qs("upgrade-subscribe-btn");
+  // Gestione selezione piano e click sui bottoni
+  let selectedPlan = 'monthly'; // Default
+  
+  // Aggiungi stile hover ai piani
+  const planCards = card.querySelectorAll('.plan-card');
+  planCards.forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      card.style.transform = 'translateY(-2px)';
+      card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'translateY(0)';
+      card.style.boxShadow = 'none';
+    });
+  });
+  
+  // Gestore click sui bottoni dei piani
+  const handlePlanSelection = async (planType) => {
     const loadingEl = qs("upgrade-loading");
     const user = auth.currentUser;
     
@@ -614,18 +655,20 @@ function showUpgradeModal(onClose = null) {
     }
     
     try {
-      // Disabilita il bottone e mostra loading
-      if (subscribeBtn) {
-        subscribeBtn.disabled = true;
-        subscribeBtn.style.opacity = "0.6";
-      }
+      // Disabilita tutti i bottoni e mostra loading
+      const allButtons = card.querySelectorAll('button[data-plan]');
+      allButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = "0.6";
+      });
       if (loadingEl) loadingEl.style.display = "block";
       
-      console.log("Creazione sessione Stripe Checkout...");
+      console.log(`Creazione sessione Stripe Checkout per piano: ${planType}...`);
       
       // Chiama Firebase Functions per creare la sessione Stripe
       const result = await createCheckoutSession({
         email: user.email,
+        planType: planType, // 'monthly' o 'yearly'
         successUrl: `${window.location.origin}${window.location.pathname.includes('profile') ? '/profile.html' : '/app.html'}?premium=success`,
         cancelUrl: `${window.location.origin}${window.location.pathname.includes('profile') ? '/profile.html' : '/app.html'}?premium=canceled`
       });
@@ -657,13 +700,22 @@ function showUpgradeModal(onClose = null) {
       
       showToast(errorMessage, 5000);
       
-      // Riabilita il bottone
-      if (subscribeBtn) {
-        subscribeBtn.disabled = false;
-        subscribeBtn.style.opacity = "1";
-      }
+      // Riabilita i bottoni
+      const allButtons = card.querySelectorAll('button[data-plan]');
+      allButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+      });
       if (loadingEl) loadingEl.style.display = "none";
     }
+  };
+  
+  // Aggiungi event listener ai bottoni dei piani
+  card.querySelectorAll('button[data-plan]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const planType = e.target.getAttribute('data-plan');
+      handlePlanSelection(planType);
+    });
   });
   
   overlay.addEventListener("click", (e) => {
@@ -720,7 +772,7 @@ async function testPremium(activate = true) {
         startDate: serverTimestamp(),
         endDate: endDate.toISOString(),
         type: 'monthly',
-        price: 5,
+        price: 4.99,
         verified: false, // Marca come non verificato (solo per test)
         testMode: true // Flag per indicare che è un test
       }
@@ -5416,7 +5468,7 @@ async function renderSubscription(uid) {
                 : '<span class="badge good">Premium Attivo</span>'}
             </div>
             <div class="subscriptionTitle">Abbonamento Premium</div>
-            <div class="subscriptionPrice">€${subscription.price || 5}/mese</div>
+            <div class="subscriptionPrice">€${subscription.price || 4.99}${subscription.type === 'yearly' ? '/anno' : '/mese'}</div>
           </div>
         </div>
         
@@ -5443,7 +5495,7 @@ async function renderSubscription(uid) {
           </div>
           <div class="subscriptionDetailRow">
             <span class="subscriptionDetailLabel">Tipo</span>
-            <span class="subscriptionDetailValue">${subscription.type === 'monthly' ? 'Mensile' : subscription.type || 'Mensile'}</span>
+            <span class="subscriptionDetailValue">${subscription.type === 'yearly' ? 'Annuale' : subscription.type === 'monthly' ? 'Mensile' : subscription.type || 'Mensile'}</span>
           </div>
         </div>
         
@@ -5560,7 +5612,7 @@ async function renderSubscription(uid) {
         
         <div class="subscriptionActions">
           <button class="btn primary" id="upgrade-subscription-btn" type="button" style="width: 100%;">
-            Passa a Premium - €5/mese
+            Passa a Premium
           </button>
         </div>
         

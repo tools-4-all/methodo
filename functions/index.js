@@ -29,8 +29,17 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
 
   const uid = context.auth.uid;
   const email = context.auth.token.email || data.email;
-  const priceId = functions.config().stripe.price_id; // ID del prezzo in Stripe (opzionale)
-  const priceAmount = parseInt(functions.config().subscription.price || '500'); // Default: €5.00
+  const planType = data.planType || 'monthly'; // 'monthly' o 'yearly'
+  
+  // Recupera il Price ID in base al tipo di piano
+  const priceIdMonthly = functions.config().stripe.price_id_monthly;
+  const priceIdYearly = functions.config().stripe.price_id_yearly;
+  const priceId = planType === 'yearly' ? priceIdYearly : priceIdMonthly;
+  
+  // Prezzi di fallback (in centesimi)
+  const priceAmountMonthly = parseInt(functions.config().subscription.price || '499'); // Default: €4.99
+  const priceAmountYearly = 5000; // €50.00 in centesimi
+  const priceAmount = planType === 'yearly' ? priceAmountYearly : priceAmountMonthly;
 
   try {
     // PROTEZIONE: Verifica che non sia già premium (evita doppi pagamenti)
@@ -124,15 +133,18 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
       }];
     } else {
       // Crea un prezzo temporaneo (non consigliato per produzione)
+      const interval = planType === 'yearly' ? 'year' : 'month';
+      const description = planType === 'yearly' ? 'Abbonamento annuale Premium' : 'Abbonamento mensile Premium';
+      
       sessionParams.line_items = [{
         price_data: {
           currency: 'eur',
           product_data: {
             name: 'Methodo Premium',
-            description: 'Abbonamento mensile Premium',
+            description: description,
           },
           recurring: {
-            interval: 'month',
+            interval: interval,
           },
           unit_amount: priceAmount,
         },
@@ -547,7 +559,7 @@ async function handleCheckoutCompleted(session) {
       stripeCustomerId: customerId,
       startDate: admin.firestore.Timestamp.fromDate(currentPeriodStart),
       endDate: admin.firestore.Timestamp.fromDate(currentPeriodEnd),
-      type: 'monthly',
+      type: subscription.items.data[0].price.recurring?.interval === 'year' ? 'yearly' : 'monthly',
       price: subscription.items.data[0].price.unit_amount / 100, // Converti da centesimi
       lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
       activatedAt: admin.firestore.FieldValue.serverTimestamp(),

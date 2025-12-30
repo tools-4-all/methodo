@@ -863,9 +863,9 @@
 
     .pricingGrid{
       display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap:32px;
-      max-width:900px;
+      max-width:1200px;
       margin:0 auto;
     }
 
@@ -1912,13 +1912,13 @@
           <button class="btn" style="width:100%; margin-top:24px;" id="cta-login-free">Inizia gratis</button>
         </div>
 
-        <!-- Premium Plan -->
+        <!-- Premium Plan Mensile -->
         <div class="pricingCard featured">
           <div class="pricingBadge">Consigliato</div>
           <div class="pricingHeader">
-            <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:700;">Premium</h3>
+            <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:700;">Premium Mensile</h3>
             <div class="pricingPrice">
-              <span style="font-size:48px; font-weight:900;">€5</span>
+              <span style="font-size:48px; font-weight:900;">€4,99</span>
               <span style="font-size:18px; color:rgba(255,255,255,.6);">/mese</span>
             </div>
             <p style="margin:16px 0 0 0; color:rgba(255,255,255,.6); font-size:14px;">Per studenti seri</p>
@@ -1953,7 +1953,54 @@
               <span>Esportazione piano di studio</span>
             </div>
           </div>
-          <button class="btn primary" style="width:100%; margin-top:24px;" id="cta-login-premium">Passa a Premium</button>
+          <button class="btn primary" style="width:100%; margin-top:24px;" id="cta-login-premium-monthly">Passa a Premium</button>
+        </div>
+
+        <!-- Premium Plan Annuale -->
+        <div class="pricingCard" style="background: linear-gradient(135deg, rgba(34,197,94,.1), rgba(34,197,94,.05)); border:2px solid rgba(34,197,94,.5); position: relative;">
+          <div style="position:absolute; top:-12px; left:50%; transform: translateX(-50%); background: rgba(34,197,94,1); color: white; padding:6px 20px; border-radius:20px; font-size:12px; font-weight:700; letter-spacing:0.02em;">
+            RISPARMIA 17%
+          </div>
+          <div class="pricingHeader">
+            <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:700;">Premium Annuale</h3>
+            <div class="pricingPrice">
+              <span style="font-size:48px; font-weight:900;">€50</span>
+              <span style="font-size:18px; color:rgba(255,255,255,.6);">/anno</span>
+            </div>
+            <p style="margin:8px 0 0 0; color:rgba(255,255,255,.6); font-size:14px;">€4,17/mese</p>
+            <p style="margin:8px 0 0 0; color:rgba(255,255,255,.5); font-size:12px;">Per studenti dedicati</p>
+          </div>
+          <div class="pricingFeatures">
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span><strong>Tutto del piano Gratis</strong></span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Esami illimitati</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Simulazione appelli avanzata</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Simulazioni "what-if"</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Statistiche dettagliate</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Pianificazione multi-settimana</span>
+            </div>
+            <div class="pricingFeature">
+              <span class="featureCheck premium">✓</span>
+              <span>Esportazione piano di studio</span>
+            </div>
+          </div>
+          <button class="btn primary" style="width:100%; margin-top:24px; background: rgba(34,197,94,1);" id="cta-login-premium-yearly">Passa a Premium Annuale</button>
         </div>
       </div>
     </section>
@@ -2298,7 +2345,58 @@
 
     // Handler per i bottoni pricing
     document.getElementById("cta-login-free")?.addEventListener("click", openLoginModal);
-    document.getElementById("cta-login-premium")?.addEventListener("click", openLoginModal);
+    
+    // Funzione helper per verificare se l'utente è loggato
+    async function checkAuthAndHandlePremium(planType) {
+      try {
+        const authModule = await import("./auth.js");
+        if (authModule.auth && authModule.auth.currentUser) {
+          // Utente loggato: avvia checkout diretto
+          const functionsModule = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js");
+          const { getFunctions, httpsCallable } = functionsModule;
+          const { app } = await import("./auth.js");
+          
+          const functions = getFunctions(app, 'us-central1');
+          const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
+          
+          try {
+            const result = await createCheckoutSession({
+              email: authModule.auth.currentUser.email,
+              planType: planType,
+              successUrl: `${window.location.origin}/profile.html?premium=success`,
+              cancelUrl: `${window.location.origin}/profile.html?premium=canceled`
+            });
+            
+            if (result?.data?.url) {
+              window.location.href = result.data.url;
+            } else {
+              throw new Error("URL di checkout non ricevuto");
+            }
+          } catch (error) {
+            console.error("Errore checkout:", error);
+            // Fallback: reindirizza al profilo dove può scegliere
+            window.location.href = "./profile.html";
+          }
+        } else {
+          // Utente non loggato: apri modal login
+          openLoginModal();
+        }
+      } catch (error) {
+        // Se c'è un errore, apri semplicemente il modal di login
+        console.log("Errore verifica auth, apro modal login:", error);
+        openLoginModal();
+      }
+    }
+    
+    // Handler per Premium Mensile
+    document.getElementById("cta-login-premium-monthly")?.addEventListener("click", () => {
+      checkAuthAndHandlePremium('monthly');
+    });
+    
+    // Handler per Premium Annuale
+    document.getElementById("cta-login-premium-yearly")?.addEventListener("click", () => {
+      checkAuthAndHandlePremium('yearly');
+    });
   </script>
 </body>
 </html>
