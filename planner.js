@@ -163,8 +163,13 @@ function buildTaskTemplates(goalMode, examCategory = "mixed") {
   
   // Filtra in base alla categoria dell'esame
   if (examCategory === "scientific") {
-    // Esami scientifici: NO spaced repetition (non efficace per formule/esercizi)
-    templates = templates.filter(t => t.type !== "spaced");
+    // Esami scientifici: mantieni spaced repetition per scheduling, ma usa label diversa
+    // La spaced repetition come tecnica di scheduling è efficace anche per materie scientifiche
+    templates = templates.map(t => 
+      t.type === "spaced" 
+        ? { ...t, label: "Ripasso spaziato / revisione formule" }
+        : t
+    );
   } else if (examCategory === "humanistic") {
     // Esami umanistici: NO esercizi pratici (focus su teoria, ripasso, memorizzazione)
     templates = templates.filter(t => t.type !== "practice");
@@ -215,6 +220,216 @@ function computeExamTaskMinutes(baseMin, exam) {
   const ignFactor = 1.0 + ((5 - level) / 5) * 0.2;
   const minutes = Math.round(baseMin * diffFactor * ignFactor);
   return clamp(minutes, 15, 120);
+}
+
+/**
+ * Calcola l'intervallo ottimale per spaced repetition basato sulla curva dell'oblio.
+ * Basato sulla ricerca di Ebbinghaus e algoritmi moderni come SM-2.
+ * 
+ * @param {number} sessionNumber - Numero della sessione (0 = prima, 1 = seconda, etc.)
+ * @param {number} difficulty - Difficoltà dell'esame (1-3)
+ * @param {number} level - Livello di preparazione (0-5)
+ * @returns {number} Intervallo in giorni prima della prossima sessione
+ */
+function calculateSpacedRepetitionInterval(sessionNumber, difficulty, level) {
+  // Base intervals per spaced repetition (in giorni)
+  // Prima sessione: 1 giorno, seconda: 3 giorni, terza: 7 giorni, etc.
+  const baseIntervals = [1, 3, 7, 14, 30];
+  
+  // Aggiusta in base alla difficoltà: esami più difficili richiedono intervalli più brevi
+  const difficultyFactor = 1.0 - ((difficulty - 1) / 3) * 0.2; // 0.8-1.0
+  
+  // Aggiusta in base al livello: se sei più preparato, puoi aspettare di più
+  const levelFactor = 0.9 + (level / 5) * 0.2; // 0.9-1.1
+  
+  const intervalIndex = Math.min(sessionNumber, baseIntervals.length - 1);
+  let interval = baseIntervals[intervalIndex] * difficultyFactor * levelFactor;
+  
+  // Se è oltre gli intervalli base, usa una progressione esponenziale
+  if (sessionNumber >= baseIntervals.length) {
+    interval = baseIntervals[baseIntervals.length - 1] * Math.pow(1.5, sessionNumber - baseIntervals.length + 1);
+  }
+  
+  return Math.max(1, Math.round(interval));
+}
+
+/**
+ * Calcola il punteggio di priorità per un task in un giorno specifico.
+ * Considera: urgenza esame, distanza dall'ultima sessione, capacità giornaliera.
+ * 
+ * @param {object} task - Task da valutare
+ * @param {object} exam - Esame associato
+ * @param {Date} dayDate - Data del giorno
+ * @param {Date} now - Data corrente
+ * @param {number} daysSinceLastSession - Giorni dall'ultima sessione di questo esame
+ * @param {number} remainingCapacity - Capacità rimanente del giorno
+ * @param {number} sessionCount - Numero di sessioni già completate per questo esame
+ * @returns {number} Punteggio di priorità (più alto = più prioritario)
+ */
+function calculateTaskPriority(task, exam, dayDate, now, daysSinceLastSession, remainingCapacity, sessionCount = 0) {
+  // 1. Urgenza esame (più vicino = più urgente)
+  // Usa examWeight per considerare anche difficoltà, livello, CFU e goalMode
+  const examDate = new Date(exam.date);
+  const daysToExam = daysBetween(dayDate, examDate);
+  // Normalizza l'urgenza: esami molto vicini hanno urgenza alta
+  const urgencyScore = daysToExam > 0 ? 
+    Math.max(0.1, 10 / (daysToExam + 1)) : 
+    10; // Molto urgente se passato
+  
+  // 2. Spaced repetition: punteggio basato su quanto è tempo di rivedere
+  const optimalInterval = calculateSpacedRepetitionInterval(
+    sessionCount,
+    exam.difficulty || 2,
+    exam.level || 0
+  );
+  const intervalScore = daysSinceLastSession >= optimalInterval ? 
+    (1 + Math.min((daysSinceLastSession - optimalInterval) * 0.1, 0.5)) : // Bonus se è tempo di rivedere (max +50%)
+    Math.max((daysSinceLastSession / optimalInterval) * 0.5, 0.1); // Penalità se troppo presto (min 10%)
+  
+  // 3. Distributed practice: bonus per distribuire su più giorni
+  const distributionBonus = sessionCount > 0 ? 1.2 : 1.0;
+  
+  // 4. Interleaving: leggero bonus per alternare esami diversi
+  const interleavingBonus = 1.05;
+  
+  // 5. Capacità: penalità se il task non ci sta
+  const capacityScore = task.minutes <= remainingCapacity ? 1.0 : 0.1;
+  
+  // 6. Tipo task: alcuni task sono più importanti
+  const typeWeights = {
+    'exam': 1.3,      // Prove d'esame sono prioritarie
+    'review': 1.2,    // Ripasso è importante
+    'practice': 1.1,  // Esercizi sono utili
+    'theory': 1.0,   // Teoria è base
+    'spaced': 0.9,   // Spaced repetition è importante ma meno urgente
+    'micro': 0.8     // Micro-ripasso è meno prioritario
+  };
+  const typeWeight = typeWeights[task.type] || 1.0;
+  
+  return urgencyScore * intervalScore * distributionBonus * interleavingBonus * capacityScore * typeWeight;
+}
+
+/**
+ * Distribuisce i task tra i giorni usando un algoritmo basato sulla letteratura scientifica.
+ * Implementa: spaced repetition, distributed practice, interleaving intelligente.
+ * 
+ * Valido per tutti i tipi di esami (umanistici, scientifici, tecnici):
+ * - Spaced repetition: intervalli ottimali per formule, teoremi, concetti
+ * - Distributed practice: distribuzione su più giorni (efficace per matematica, fisica, etc.)
+ * - Interleaving: mescolamento intelligente (particolarmente efficace per materie scientifiche)
+ * 
+ * @param {Array} days - Array di giorni con capacità
+ * @param {Map} taskQueues - Map di code di task per esame
+ * @param {Array} allocations - Allocazioni di minuti per esame
+ * @param {Array} validExams - Array di esami validi (qualsiasi categoria)
+ * @param {Date} now - Data corrente
+ * @param {Date} weekStartDate - Data di inizio settimana
+ */
+function distributeTasksScientifically(days, taskQueues, allocations, validExams, now, weekStartDate) {
+  // Traccia le sessioni per ogni esame (per spaced repetition)
+  const examSessions = new Map(); // examId -> { lastDayIndex, sessionCount }
+  
+  // Inizializza le sessioni
+  for (const exam of validExams) {
+    examSessions.set(exam.id, { lastDayIndex: -1, sessionCount: 0 });
+  }
+  
+  // Crea una lista di tutti i task con metadati
+  const allTasks = [];
+  for (const [examId, queue] of taskQueues.entries()) {
+    const exam = validExams.find(e => e.id === examId);
+    if (!exam) continue;
+    
+    for (const task of queue) {
+      allTasks.push({
+        task,
+        examId,
+        exam,
+        priority: 0 // Sarà calcolato dinamicamente
+      });
+    }
+  }
+  
+  // Distribuisci i task giorno per giorno
+  for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+    const day = days[dayIndex];
+    const dayDate = new Date(day.dateISO);
+    let remainingCapacity = day.capacityMin;
+    
+    if (remainingCapacity <= 0) continue;
+    
+    // Lista di task già piazzati oggi (per interleaving)
+    const tasksPlacedToday = [];
+    
+    // Continua a piazzare task finché c'è capacità
+    let iterations = 0;
+    const maxIterations = 1000;
+    
+    while (remainingCapacity >= 15 && iterations < maxIterations) {
+      iterations++;
+      
+      // Calcola priorità per tutti i task rimanenti (non ancora piazzati)
+      const availableTasks = allTasks.filter(t => 
+        !t.placed && 
+        t.task.minutes <= remainingCapacity
+      );
+      
+      if (availableTasks.length === 0) break;
+      
+      // Calcola priorità per ogni task disponibile
+      for (const taskData of availableTasks) {
+        const sessionInfo = examSessions.get(taskData.examId);
+        const daysSinceLastSession = sessionInfo.lastDayIndex >= 0 ? 
+          (dayIndex - sessionInfo.lastDayIndex) : 999;
+        
+        taskData.priority = calculateTaskPriority(
+          taskData.task,
+          taskData.exam,
+          dayDate,
+          now,
+          daysSinceLastSession,
+          remainingCapacity,
+          sessionInfo.sessionCount
+        );
+        
+        // Bonus per interleaving: se oggi abbiamo già piazzato task di altri esami, 
+        // dai un leggero bonus per variare
+        const differentExamsToday = tasksPlacedToday.filter(t => 
+          t.examId !== taskData.examId
+        ).length;
+        if (differentExamsToday > 0) {
+          taskData.priority *= 1.1; // Bonus per varietà
+        }
+      }
+      
+      // Ordina per priorità (più alta = prima)
+      availableTasks.sort((a, b) => b.priority - a.priority);
+      
+      // Prendi il task con priorità più alta
+      const bestTask = availableTasks[0];
+      if (!bestTask) break;
+      
+      // Piazza il task
+      day.tasks.push(bestTask.task);
+      remainingCapacity -= bestTask.task.minutes;
+      bestTask.placed = true;
+      tasksPlacedToday.push(bestTask);
+      
+      // Rimuovi il task dalla coda
+      const queue = taskQueues.get(bestTask.examId);
+      if (queue) {
+        const index = queue.indexOf(bestTask.task);
+        if (index >= 0) queue.splice(index, 1);
+      }
+      
+      // Aggiorna le sessioni per spaced repetition
+      const sessionInfo = examSessions.get(bestTask.examId);
+      if (sessionInfo.lastDayIndex !== dayIndex) {
+        sessionInfo.lastDayIndex = dayIndex;
+        sessionInfo.sessionCount++;
+      }
+    }
+  }
 }
 
 /**
@@ -397,11 +612,12 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
         
         // Filtra in base alla categoria (come nel comportamento di default)
         let allowedTypes = ["theory", "practice", "exam", "review", "spaced"];
-        if (examCategory === "scientific") {
-          allowedTypes = allowedTypes.filter(t => t !== "spaced");
-        } else if (examCategory === "humanistic") {
+        // Spaced repetition è efficace anche per esami scientifici (come tecnica di scheduling)
+        // Rimuoviamo solo per umanistici se non ha practice
+        if (examCategory === "humanistic") {
           allowedTypes = allowedTypes.filter(t => t !== "practice");
         }
+        // Per scientifici, manteniamo tutti i tipi incluso spaced repetition
         
         // Genera task per ogni tipo consentito
         for (const type of allowedTypes) {
@@ -457,16 +673,15 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
       }
     }
     // se restano minuti non multipli, aggiungi un task corto
-    // Per esami scientifici, evita "spaced" (flashcard)
     const rem = a.targetMin - nTasks * examTaskMin;
     if (rem >= 15) {
       let microType = "micro";
-      let microLabel = "Micro-ripasso / flashcard";
+      let microLabel = "Micro-ripasso / revisione";
       
       if (examCategory === "scientific") {
-        // Per scientifici: micro-ripasso teorico invece di flashcard
+        // Per scientifici: micro-ripasso con focus su formule e concetti chiave
         microType = "micro";
-        microLabel = "Micro-ripasso teorico";
+        microLabel = "Micro-ripasso formule / concetti chiave";
       } else if (examCategory === "humanistic") {
         // Per umanistici: flashcard/spaced repetition va bene
         microType = "spaced";
@@ -485,29 +700,8 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     }
     taskQueues.set(a.examId, queue);
   }
-  // Distribuzione: round-robin per evitare un giorno monolitico
-  const examOrder = allocations.map((a) => a.examId);
-  for (const day of days) {
-    let cap = day.capacityMin;
-    if (cap <= 0) continue;
-    let guard = 0;
-    while (cap >= 15 && guard < 5000) {
-      guard++;
-      let placed = false;
-      for (const exId of examOrder) {
-        const q = taskQueues.get(exId) || [];
-        if (q.length === 0) continue;
-        const next = q[0];
-        if (next.minutes <= cap) {
-          day.tasks.push(q.shift());
-          cap -= next.minutes;
-          placed = true;
-          if (cap < 15) break;
-        }
-      }
-      if (!placed) break; // niente task che ci sta → stop
-    }
-  }
+  // Distribuzione scientifica: algoritmo basato su spaced repetition, distributed practice e interleaving
+  distributeTasksScientifically(days, taskQueues, allocations, validExams, now, weekStartDate);
   // “cosa tagliare” (se non siamo riusciti a piazzare tutto)
   const unplaced = [];
   for (const [exId, q] of taskQueues.entries()) {

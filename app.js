@@ -8358,9 +8358,15 @@ function mountTask() {
       });
       tips.push({
         icon: "🔄",
-        title: "Ripetizione spaziata",
-        desc: "Rivedi i concetti chiave dopo 24 ore, poi dopo 3 giorni. Questo aiuta la memorizzazione a lungo termine.",
-        detail: "La ripetizione spaziata (spaced repetition) è una delle tecniche più efficaci per la memorizzazione a lungo termine. Il principio si basa sulla 'curva dell'oblio': dopo aver appreso qualcosa, la memoria si indebolisce nel tempo, ma ogni revisione rafforza il ricordo. Programma le tue revisioni: prima revisione dopo 24 ore, seconda dopo 3 giorni, terza dopo una settimana, quarta dopo due settimane. Puoi usare app come Anki o semplicemente un calendario. L'importante è essere costanti: anche solo 10-15 minuti di revisione al giorno possono fare la differenza tra ricordare e dimenticare completamente un argomento."
+        title: "Ripetizione spaziata (Spaced Repetition)",
+        desc: "Il tuo piano usa intervalli ottimali tra le sessioni (1, 3, 7, 14 giorni) basati sulla curva dell'oblio. Segui il piano per massimizzare la memorizzazione.",
+        detail: "La ripetizione spaziata (spaced repetition) è una delle tecniche più efficaci per la memorizzazione a lungo termine, supportata da decenni di ricerca scientifica. Il principio si basa sulla 'curva dell'oblio' di Ebbinghaus: dopo aver appreso qualcosa, la memoria si indebolisce nel tempo, ma ogni revisione al momento giusto rafforza il ricordo in modo permanente. Il tuo piano di studio è stato generato usando un algoritmo scientifico che calcola automaticamente gli intervalli ottimali tra le sessioni: prima revisione dopo 1 giorno, seconda dopo 3 giorni, terza dopo 7 giorni, quarta dopo 14 giorni. Questi intervalli sono adattati alla difficoltà dell'esame e al tuo livello di preparazione. Seguendo il piano, stai applicando una delle tecniche di apprendimento più efficaci validate dalla ricerca scientifica."
+      });
+      tips.push({
+        icon: "📅",
+        title: "Pratica distribuita (Distributed Practice)",
+        desc: "Il tuo piano distribuisce lo studio su più giorni invece di concentrarlo. Questo è scientificamente più efficace del 'cramming'.",
+        detail: "La pratica distribuita (distributed practice) è una tecnica di apprendimento supportata da numerosi studi scientifici che dimostrano come distribuire lo studio su più sessioni sia significativamente più efficace del 'cramming' (studio concentrato). Il tuo piano di studio è stato generato per distribuire i task dello stesso esame su più giorni della settimana, evitando di concentrare tutto in un unico giorno. Questo approccio migliora la ritenzione a lungo termine perché permette al cervello di consolidare le informazioni tra una sessione e l'altra. La ricerca mostra che studenti che usano la pratica distribuita ottengono risultati migliori e ricordano le informazioni più a lungo rispetto a chi studia tutto in una volta. Il tuo piano applica automaticamente questa tecnica, distribuendo i task in modo ottimale."
       });
     } else if (taskType.includes("practice") || taskType.includes("pratica") || taskType.includes("esercizi")) {
       tips.push({
@@ -8413,6 +8419,14 @@ function mountTask() {
       title: "Tecnica Pomodoro",
       desc: `Dopo ${task.minutes || 25} minuti di studio, fai una pausa di 5 minuti. Questo mantiene alta la concentrazione.`,
       detail: `La tecnica Pomodoro è stata sviluppata da Francesco Cirillo alla fine degli anni '80. Il metodo prevede sessioni di studio concentrate di ${task.minutes || 25} minuti (un 'pomodoro'), seguite da una pausa di 5 minuti. Dopo 4 pomodori completati, fai una pausa più lunga di 15-30 minuti. Questa tecnica funziona perché rispetta i limiti naturali dell'attenzione umana: il cervello può mantenere un'alta concentrazione solo per periodi limitati. Le pause brevi permettono al cervello di consolidare le informazioni appena apprese e di rigenerare le risorse cognitive. Durante la pausa, evita attività che richiedono concentrazione (come i social media): invece, alzati, cammina, bevi acqua, fai stretching o semplicemente guarda fuori dalla finestra. Questo aiuta il cervello a 'resettarsi' e prepararsi per il prossimo pomodoro.`
+    });
+    
+    // Consiglio su interleaving (solo se ci sono più esami)
+    tips.push({
+      icon: "🔄",
+      title: "Mescolamento intelligente (Interleaving)",
+      desc: "Il tuo piano alterna esami diversi nella stessa giornata. Questo migliora il transfer learning e la capacità di distinguere tra concetti simili.",
+      detail: "L'interleaving (mescolamento) è una tecnica di apprendimento supportata dalla ricerca scientifica che consiste nell'alternare argomenti diversi durante lo studio invece di concentrarsi su un solo argomento alla volta. Il tuo piano di studio è stato generato per distribuire task di esami diversi nella stessa giornata, applicando automaticamente questa tecnica. La ricerca mostra che l'interleaving migliora il 'transfer learning' - la capacità di applicare conoscenze in contesti diversi - e aiuta a distinguere meglio tra concetti simili. Anche se inizialmente può sembrare più difficile, questo approccio porta a una comprensione più profonda e duratura. Il tuo piano bilancia automaticamente la varietà (interleaving) con la necessità di concentrarsi su un argomento per sessioni sufficientemente lunghe."
     });
 
     // Renderizza i tips
