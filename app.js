@@ -6566,6 +6566,7 @@ function mountApp() {
         return;
       }
 
+      // Imposta temporaneamente l'email, verrà aggiornato con il nome dopo il caricamento del profilo
       document.getElementById("user-line").textContent = user.email ?? "—";
 
       await ensureUserDoc(user);
@@ -6670,6 +6671,15 @@ function mountApp() {
       }
 
       const profile = await getProfile(user.uid);
+      
+      // Aggiorna il nome nell'header se disponibile
+      if (profile?.name) {
+        const userLine = document.getElementById("user-line");
+        if (userLine) {
+          userLine.textContent = `${profile.name} · ${profile.faculty || ""}`;
+        }
+      }
+      
       if (!profile?.goalMode || !profile?.dayMinutes) {
         console.log("[App] Profilo incompleto, redirect a settings:", {
           hasGoalMode: !!profile?.goalMode,

@@ -1142,6 +1142,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
     setupSimUI();
 
     if(!user){ location.href="./index.html"; return; }
+    // Imposta temporaneamente l'email, verrà aggiornato con il nome dopo il caricamento del profilo
     setText("user-line", user.email ?? "—");
 
     // Controllo premium - mostra popup ma lascia vedere la pagina sotto
@@ -1181,6 +1182,15 @@ window.addEventListener("DOMContentLoaded", ()=>{
     }
 
     const profile = await getProfile(user.uid);
+    
+    // Aggiorna il nome nell'header se disponibile
+    if (profile?.name) {
+      const userLine = qs("user-line");
+      if (userLine) {
+        userLine.textContent = `${profile.name} · ${profile.faculty || ""}`;
+      }
+    }
+    
     const exams = await listExams(user.uid);
 
     if(!profile?.dayMinutes || !profile?.goalMode){
