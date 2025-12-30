@@ -1843,10 +1843,9 @@ function initAppelliInterface() {
   
   if (!container || !addBtn) return;
   
-  // Assicura che ci sia almeno un appello
-  if (container.children.length === 0) {
-    addAppelloItem(container);
-  }
+  // Non aggiungere automaticamente un appello - l'utente deve cliccare "Aggiungi appello"
+  // Rimuovi eventuali appelli iniziali presenti nell'HTML
+  container.innerHTML = "";
   
   // Handler per aggiungere appello
   addBtn.addEventListener("click", () => {
@@ -1857,15 +1856,15 @@ function initAppelliInterface() {
   container.addEventListener("click", (e) => {
     if (e.target.classList.contains("remove-appello")) {
       const item = e.target.closest(".appelloItem");
-      if (item && container.children.length > 1) {
+      if (item) {
         const removedRadio = item.querySelector('input[name="primary-appello"]');
         const wasPrimary = removedRadio && removedRadio.checked;
         
         item.remove();
         updateRemoveButtons(container);
         
-        // Se è stato rimosso l'appello primario, seleziona il primo rimanente
-        if (wasPrimary) {
+        // Se è stato rimosso l'appello primario e ci sono altri appelli, seleziona il primo rimanente
+        if (wasPrimary && container.children.length > 0) {
           const firstRemainingRadio = container.querySelector('input[name="primary-appello"]');
           if (firstRemainingRadio) {
             firstRemainingRadio.checked = true;
@@ -1908,7 +1907,8 @@ function updateRemoveButtons(container) {
   items.forEach((item, index) => {
     const removeBtn = item.querySelector(".remove-appello");
     if (removeBtn) {
-      removeBtn.style.display = items.length > 1 ? "block" : "none";
+      // Mostra sempre il bottone rimuovi (permette di rimuovere anche l'ultimo appello)
+      removeBtn.style.display = "block";
     }
   });
 }
@@ -1946,6 +1946,18 @@ function isToday(dateString) {
   return date.getFullYear() === today.getFullYear() &&
          date.getMonth() === today.getMonth() &&
          date.getDate() === today.getDate();
+}
+
+// Verifica se una data è passata (prima di oggi)
+function isPastDate(dateString) {
+  if (!dateString) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Imposta a mezzanotte per confronto corretto
+  
+  const date = new Date(dateString);
+  date.setHours(0, 0, 0, 0);
+  
+  return date < today;
 }
 
 // Popola il form con gli appelli esistenti
@@ -3713,10 +3725,25 @@ function mountOnboarding() {
         if (!name) throw new Error("Nome esame mancante.");
         if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
         
+        // Controllo se ci sono appelli con la stessa data
+        const dates = appelli.map(appello => appello.date).filter(date => date); // Filtra date vuote
+        const uniqueDates = new Set(dates);
+        if (dates.length !== uniqueDates.size) {
+          showErrorModal("Non è possibile aggiungere più appelli con la stessa data. Ogni appello deve avere una data diversa.", "Date duplicate");
+          return;
+        }
+        
         // Controllo se qualche appello ha la data odierna
         const hasTodayAppello = appelli.some(appello => isToday(appello.date));
         if (hasTodayAppello) {
           showErrorModal("Non è possibile aggiungere un esame con un appello nella data odierna. Scegli una data futura.", "Data non valida");
+          return;
+        }
+        
+        // Controllo se qualche appello ha una data passata
+        const hasPastAppello = appelli.some(appello => isPastDate(appello.date));
+        if (hasPastAppello) {
+          showErrorModal("Non è possibile aggiungere un esame con un appello in una data passata. Scegli una data futura.", "Data non valida");
           return;
         }
         
@@ -3765,7 +3792,7 @@ function mountOnboarding() {
         const appelliContainer = qs("appelli-container");
         if (appelliContainer) {
           appelliContainer.innerHTML = "";
-          addAppelloItem(appelliContainer);
+          // Non aggiungere automaticamente un appello - l'utente deve cliccare "Aggiungi appello"
         }
         qs("exam-cfu").value = "6";
         qs("exam-level").value = "0";
@@ -4641,10 +4668,25 @@ async function openEditExamModal(uid, exam, onSuccess) {
       if (!name) throw new Error("Nome esame mancante.");
       if (appelli.length === 0) throw new Error("Aggiungi almeno un appello o esonero.");
       
+      // Controllo se ci sono appelli con la stessa data
+      const dates = appelli.map(appello => appello.date).filter(date => date); // Filtra date vuote
+      const uniqueDates = new Set(dates);
+      if (dates.length !== uniqueDates.size) {
+        showErrorModal("Non è possibile aggiungere più appelli con la stessa data. Ogni appello deve avere una data diversa.", "Date duplicate");
+        return;
+      }
+      
       // Controllo se qualche appello ha la data odierna
       const hasTodayAppello = appelli.some(appello => isToday(appello.date));
       if (hasTodayAppello) {
         showErrorModal("Non è possibile aggiungere un esame con un appello nella data odierna. Scegli una data futura.", "Data non valida");
+        return;
+      }
+      
+      // Controllo se qualche appello ha una data passata
+      const hasPastAppello = appelli.some(appello => isPastDate(appello.date));
+      if (hasPastAppello) {
+        showErrorModal("Non è possibile aggiungere un esame con un appello in una data passata. Scegli una data futura.", "Data non valida");
         return;
       }
       
