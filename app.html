@@ -69,6 +69,19 @@
             <button class="btn tiny" id="mark-today-less" type="button">Ho fatto meno</button> -->
           </div>
         </div>
+        
+        <!-- Bottoni esporta e condividi piano -->
+        <!-- Rimossi dalla dashboard -->
+        <!--
+        <div class="toolbar" style="justify-content:center; margin-top:12px; gap:8px;">
+          <button class="btn" id="export-plan-pdf-btn" type="button" style="flex:1; max-width:150px;">
+            📄 Esporta PDF
+          </button>
+          <button class="btn primary" id="share-plan-btn" type="button" style="flex:1; max-width:150px;">
+            📤 Condividi piano
+          </button>
+        </div>
+        -->
 
         <div id="today-progress" class="todayProgress"></div>
 
@@ -104,6 +117,9 @@
     </main>
   </div>
 
+  <!-- Librerie per esportazione e condivisione -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

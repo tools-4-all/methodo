@@ -4155,6 +4155,83 @@ function mountOnboarding() {
       }
     });
 
+    // Setup bottoni esporta e condividi piano (solo in strategies.html)
+    // Bottone Esporta PDF temporaneamente disabilitato
+    // const exportPdfBtn = qs("export-plan-pdf-btn");
+    const sharePlanBtn = qs("share-plan-btn");
+    
+    if (sharePlanBtn) {
+      // Carica piano e dati necessari quando l'utente clicca
+      const handleExportOrShare = async (action) => {
+        try {
+          const profile = await getProfile(user.uid);
+          const exams = await listExams(user.uid);
+          
+          if (!profile?.goalMode || !profile?.dayMinutes) {
+            alert("Completa prima le impostazioni del profilo.");
+            return;
+          }
+          
+          if (exams.length === 0) {
+            alert("Aggiungi almeno un esame per generare il piano.");
+            return;
+          }
+          
+          // Genera o carica il piano
+          const weekStart = startOfWeekISO(new Date());
+          const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
+          
+          let plan = await loadWeeklyPlan(user.uid, weekStartISO);
+          if (!plan) {
+            // Normalizza esami
+            const normalizedExams = exams.map(e => ({
+              ...e,
+              category: e.category || detectExamCategory(e.name || "") || "mixed"
+            }));
+            plan = generateWeeklyPlan(profile, normalizedExams, weekStart);
+          }
+          
+          // Bottone Esporta PDF temporaneamente disabilitato
+          /*
+          if (action === 'export') {
+            await exportPlanToPDF(plan, exams, profile, weekStartISO);
+            showToast("PDF generato con successo!", 2000);
+          } else */
+          if (action === 'share') {
+            await sharePlan(plan, exams, profile, weekStartISO);
+          }
+        } catch (err) {
+          console.error("Errore esportazione/condivisione:", err);
+          alert("Errore: " + (err?.message || err));
+        }
+      };
+      
+      // Bottone Esporta PDF temporaneamente disabilitato
+      /*
+      if (exportPdfBtn && !exportPdfBtn.dataset.bound) {
+        exportPdfBtn.dataset.bound = "1";
+        exportPdfBtn.addEventListener("click", async () => {
+          exportPdfBtn.disabled = true;
+          exportPdfBtn.textContent = "⏳ Generazione...";
+          await handleExportOrShare('export');
+          exportPdfBtn.disabled = false;
+          exportPdfBtn.textContent = "📄 Esporta PDF";
+        });
+      }
+      */
+      
+      if (sharePlanBtn && !sharePlanBtn.dataset.bound) {
+        sharePlanBtn.dataset.bound = "1";
+        sharePlanBtn.addEventListener("click", async () => {
+        sharePlanBtn.disabled = true;
+        sharePlanBtn.textContent = "Generazione...";
+        await handleExportOrShare('share');
+        sharePlanBtn.disabled = false;
+        sharePlanBtn.textContent = "Condividi piano";
+        });
+      }
+    }
+
     // Gestore "Vai alla dashboard" (sia da onboarding che da strategies)
     const finishBtn = qs("finish-onboarding");
     const goToDashboardBtn = qs("go-to-dashboard");
@@ -6755,6 +6832,597 @@ function showWhatsAppLink(text) {
   }
 }
 
+/**
+ * Esporta il piano di studio in PDF
+ */
+async function exportPlanToPDF(plan, exams, profile, weekStartISO) {
+  // Verifica se jsPDF è disponibile
+  if (typeof window.jspdf === "undefined") {
+    throw new Error("Libreria PDF non disponibile. Ricarica la pagina.");
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  // Colori tema scuro - Arancione e Nero (definiti prima dell'uso)
+  const primaryColor = [249, 115, 22]; // Arancione
+  const primaryDark = [200, 80, 10]; // Arancione scuro
+  const bgDark = [20, 20, 20]; // Nero scuro
+  const bgCard = [30, 30, 30]; // Grigio scuro per card
+  const bgAlt = [40, 40, 40]; // Grigio medio per alternanza
+  const textColor = [255, 255, 255]; // Bianco per testo principale
+  const textSecondary = [180, 180, 180]; // Grigio chiaro per testo secondario
+  const borderColor = [249, 115, 22]; // Arancione per bordi
+  const borderDark = [60, 60, 60]; // Grigio scuro per bordi secondari
+
+  // Imposta sfondo scuro per tutte le pagine
+  doc.setFillColor(...bgDark);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Helper per disegnare box con bordo
+  const drawBox = (x, y, w, h, fillColor = null, borderColor = null) => {
+    if (fillColor) {
+      doc.setFillColor(...fillColor);
+      doc.rect(x, y, w, h, 'F');
+    }
+    if (borderColor) {
+      doc.setDrawColor(...borderColor);
+      doc.rect(x, y, w, h, 'S');
+    }
+  };
+
+  // Helper per disegnare linea
+  const drawLine = (x1, y1, x2, y2, color = borderColor) => {
+    doc.setDrawColor(...color);
+    doc.line(x1, y1, x2, y2);
+  };
+
+  // Header arancione
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, 210, 40, 'F');
+  
+  // Linea decorativa nera sotto header
+  doc.setFillColor(...bgDark);
+  doc.rect(0, 37, 210, 3, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont(undefined, 'bold');
+  doc.text('PIANO DI STUDIO SETTIMANALE', 105, 20, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'normal');
+  doc.text(`Settimana: ${plan.weekStart}`, 105, 28, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setTextColor(220, 220, 220);
+  doc.text('Generato con Methodo', 105, 34, { align: 'center' });
+
+  let yPos = 50;
+
+  // Sezione Informazioni Generali con box scuro
+  drawBox(10, yPos - 5, 190, 28, bgCard, borderColor);
+  
+  // Titolo sezione con bordo arancione
+  doc.setFillColor(...primaryColor);
+  doc.rect(10, yPos - 5, 190, 6, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.text('INFORMAZIONI GENERALI', 15, yPos - 0.5);
+  yPos += 8;
+
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  
+  // Box per ogni informazione con tema scuro
+  const infoItems = [
+    { prefix: 'B', label: 'Budget settimanale', value: `${Math.round(plan.weeklyBudgetMin / 60)} ore` },
+    { prefix: 'T', label: 'Durata task', value: `${plan.taskMinutes} minuti` },
+    { prefix: 'E', label: 'Esami', value: `${exams.length}` }
+  ];
+
+  const boxWidth = 58;
+  const boxHeight = 14;
+  let xStart = 15;
+  
+  for (let i = 0; i < infoItems.length; i++) {
+    const item = infoItems[i];
+    const x = xStart + (i * (boxWidth + 3));
+    
+    // Box con sfondo scuro e bordo arancione
+    drawBox(x, yPos, boxWidth, boxHeight, bgAlt, borderColor);
+    
+    // Badge arancione per prefisso
+    doc.setFillColor(...primaryColor);
+    doc.rect(x + 2, yPos + 1, 6, 6, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'bold');
+    doc.text(item.prefix, x + 4.5, yPos + 5, { align: 'center' });
+    
+    // Label
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(...textSecondary);
+    doc.text(item.label, x + 10, yPos + 5);
+    
+    // Valore in grassetto
+    doc.setFontSize(10);
+    doc.setTextColor(...textColor);
+    doc.setFont(undefined, 'bold');
+    doc.text(item.value, x + 2, yPos + 11);
+  }
+  
+  yPos += 22;
+
+  // Allocazioni per esame con tabella
+  if (plan.allocations && plan.allocations.length > 0) {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Titolo sezione
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(...textColor);
+    doc.text('DISTRIBUZIONE TEMPO PER ESAME', 10, yPos);
+    yPos += 8;
+
+    // Tabella con header
+    const tableX = 10;
+    const tableY = yPos;
+    const colWidth = [120, 70];
+    const rowHeight = 8;
+    
+    // Header della tabella arancione
+    drawBox(tableX, tableY, 190, rowHeight, primaryColor, borderColor);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('ESAME', tableX + 3, tableY + 5.5);
+    doc.text('TEMPO ALLOCATO', tableX + colWidth[0] + 3, tableY + 5.5);
+    
+    yPos += rowHeight;
+    
+    // Righe della tabella
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    
+    for (let i = 0; i < plan.allocations.length; i++) {
+      const alloc = plan.allocations[i];
+      const hours = Math.round(alloc.targetMin / 60);
+      const minutes = alloc.targetMin % 60;
+      const timeStr = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+      
+      if (yPos > 270) {
+        doc.addPage();
+        // Sfondo scuro per nuova pagina
+        doc.setFillColor(...bgDark);
+        doc.rect(0, 0, 210, 297, 'F');
+        yPos = 20;
+        // Ridisegna header su nuova pagina
+        drawBox(tableX, yPos, 190, rowHeight, primaryColor, borderColor);
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text('ESAME', tableX + 3, yPos + 5.5);
+        doc.text('TEMPO ALLOCATO', tableX + colWidth[0] + 3, yPos + 5.5);
+        yPos += rowHeight;
+      }
+      
+      // Alterna colore di sfondo scuro
+      const rowBg = i % 2 === 0 ? bgCard : bgAlt;
+      drawBox(tableX, yPos, 190, rowHeight, rowBg, borderDark);
+      
+      doc.setTextColor(...textColor);
+      doc.text(alloc.name.length > 30 ? alloc.name.substring(0, 27) + '...' : alloc.name, tableX + 3, yPos + 5.5);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.text(timeStr, tableX + colWidth[0] + 3, yPos + 5.5);
+      doc.setFont(undefined, 'normal');
+      
+      yPos += rowHeight;
+    }
+    
+    yPos += 5;
+  }
+
+  // Task per giorno con design migliorato
+  if (plan.days && plan.days.length > 0) {
+    for (const day of plan.days) {
+      if (yPos > 240) {
+        doc.addPage();
+        // Sfondo scuro per nuova pagina
+        doc.setFillColor(...bgDark);
+        doc.rect(0, 0, 210, 297, 'F');
+        yPos = 20;
+      }
+
+      // Box per il giorno con tema scuro
+      const dayBoxHeight = 50; // Altezza iniziale, verrà estesa
+      drawBox(10, yPos - 3, 190, dayBoxHeight, bgCard, borderColor);
+      
+      // Header del giorno arancione
+      doc.setFillColor(...primaryColor);
+      doc.rect(10, yPos - 3, 190, 9, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(`${day.label.toUpperCase()}`, 15, yPos + 3);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text(day.dateISO, 195, yPos + 3, { align: 'right' });
+      
+      yPos += 12;
+
+      const dayTotal = (day.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
+      const dayHours = Math.round(dayTotal / 60 * 10) / 10;
+      
+      // Badge totale arancione
+      doc.setFillColor(...primaryColor);
+      doc.rect(15, yPos, 55, 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text(`TOTALE: ${Math.round(dayTotal)}m (${dayHours}h)`, 18, yPos + 5);
+      doc.setTextColor(...textColor);
+      
+      yPos += 11;
+
+      if (day.tasks && day.tasks.length > 0) {
+        // Raggruppa per periodo
+        const morningTasks = day.tasks.filter(t => (t.period || 'morning') === 'morning');
+        const afternoonTasks = day.tasks.filter(t => (t.period || 'morning') === 'afternoon');
+
+        // Mattina
+        if (morningTasks.length > 0) {
+          doc.setFontSize(11);
+          doc.setFont(undefined, 'bold');
+          doc.setTextColor(...primaryColor);
+          doc.text('MATTINA', 15, yPos);
+          yPos += 7;
+          
+          doc.setFontSize(9);
+          doc.setFont(undefined, 'normal');
+          
+          for (const task of morningTasks) {
+            if (yPos > 270) {
+              doc.addPage();
+              // Sfondo scuro per nuova pagina
+              doc.setFillColor(...bgDark);
+              doc.rect(0, 0, 210, 297, 'F');
+              yPos = 20;
+            }
+            
+            // Box per ogni task con tema scuro
+            const taskBoxHeight = 9;
+            drawBox(20, yPos - 2, 170, taskBoxHeight, bgAlt, borderDark);
+            
+            // Indicatore arancione a sinistra
+            doc.setFillColor(...primaryColor);
+            doc.rect(20, yPos - 2, 2, taskBoxHeight, 'F');
+            
+            // Nome esame in grassetto
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(...textColor);
+            const examName = task.examName.length > 25 ? task.examName.substring(0, 22) + '...' : task.examName;
+            doc.text(examName, 25, yPos + 2.5);
+            
+            // Tipo task
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(...textSecondary);
+            const taskLabel = task.label.length > 30 ? task.label.substring(0, 27) + '...' : task.label;
+            doc.text(taskLabel, 25, yPos + 6);
+            
+            // Durata a destra in arancione
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(...primaryColor);
+            doc.text(`${task.minutes}m`, 185, yPos + 4, { align: 'right' });
+            
+            yPos += taskBoxHeight + 3;
+          }
+          yPos += 3;
+        }
+
+        // Pomeriggio
+        if (afternoonTasks.length > 0) {
+          if (yPos > 250) {
+            doc.addPage();
+            // Sfondo scuro per nuova pagina
+            doc.setFillColor(...bgDark);
+            doc.rect(0, 0, 210, 297, 'F');
+            yPos = 20;
+          }
+          
+          doc.setFontSize(11);
+          doc.setFont(undefined, 'bold');
+          doc.setTextColor(...primaryColor);
+          doc.text('POMERIGGIO', 15, yPos);
+          yPos += 7;
+          
+          doc.setFontSize(9);
+          doc.setFont(undefined, 'normal');
+          
+          for (const task of afternoonTasks) {
+            if (yPos > 270) {
+              doc.addPage();
+              // Sfondo scuro per nuova pagina
+              doc.setFillColor(...bgDark);
+              doc.rect(0, 0, 210, 297, 'F');
+              yPos = 20;
+            }
+            
+            // Box per ogni task con tema scuro
+            const taskBoxHeight = 9;
+            drawBox(20, yPos - 2, 170, taskBoxHeight, bgAlt, borderDark);
+            
+            // Indicatore arancione a sinistra
+            doc.setFillColor(...primaryColor);
+            doc.rect(20, yPos - 2, 2, taskBoxHeight, 'F');
+            
+            // Nome esame in grassetto
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(...textColor);
+            const examName = task.examName.length > 25 ? task.examName.substring(0, 22) + '...' : task.examName;
+            doc.text(examName, 25, yPos + 2.5);
+            
+            // Tipo task
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(...textSecondary);
+            const taskLabel = task.label.length > 30 ? task.label.substring(0, 27) + '...' : task.label;
+            doc.text(taskLabel, 25, yPos + 6);
+            
+            // Durata a destra in arancione
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(...primaryColor);
+            doc.text(`${task.minutes}m`, 185, yPos + 4, { align: 'right' });
+            
+            yPos += taskBoxHeight + 3;
+          }
+          yPos += 3;
+        }
+      } else {
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'italic');
+        doc.setTextColor(...textSecondary);
+        doc.text('Nessun task pianificato per questo giorno', 20, yPos);
+        yPos += 6;
+      }
+      
+      // Aggiusta altezza box giorno
+      const actualDayHeight = yPos - (day.dateISO ? 47 : 45);
+      // Non possiamo modificare il box già disegnato, ma va bene così
+      
+      yPos += 5;
+    }
+  }
+
+  // Footer migliorato con tema scuro
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    
+    // Linea arancione sopra footer
+    doc.setDrawColor(...primaryColor);
+    doc.line(10, 280, 200, 280);
+    
+    // Box footer scuro
+    doc.setFillColor(...bgCard);
+    doc.rect(10, 281, 190, 10, 'F');
+    
+    doc.setFontSize(8);
+    doc.setTextColor(...textSecondary);
+    doc.text(
+      `Methodo - Piano di Studio | Pagina ${i} di ${pageCount} | ${new Date().toLocaleDateString('it-IT')}`,
+      105,
+      287,
+      { align: 'center' }
+    );
+  }
+
+  // Salva PDF
+  const filename = `piano-studio-${plan.weekStart}.pdf`;
+  doc.save(filename);
+}
+
+/**
+ * Condividi il piano di studio come immagine
+ */
+async function sharePlan(plan, exams, profile, weekStartISO) {
+  // Verifica se html2canvas è disponibile
+  if (typeof html2canvas === "undefined") {
+    sharePlanAsText(plan, exams);
+    return;
+  }
+
+  // Crea un contenitore temporaneo per l'immagine
+  const shareContainer = document.createElement("div");
+  shareContainer.style.position = "absolute";
+  shareContainer.style.left = "-9999px";
+  shareContainer.style.width = "800px";
+  shareContainer.style.padding = "32px";
+  shareContainer.style.background = "linear-gradient(180deg, #070a12, #0b0f1a)";
+  shareContainer.style.color = "rgba(255,255,255,.93)";
+  shareContainer.style.fontFamily = "system-ui, -apple-system, sans-serif";
+  shareContainer.style.borderRadius = "12px";
+
+  // Header
+  const header = document.createElement("div");
+  header.style.marginBottom = "24px";
+  header.style.textAlign = "center";
+  header.innerHTML = `
+    <h2 style="margin:0 0 8px 0; font-size:28px; font-weight:900;">Piano di Studio Settimanale</h2>
+    <p style="margin:0; font-size:16px; color:rgba(255,255,255,.6);">Settimana: ${plan.weekStart}</p>
+    <p style="margin:4px 0 0 0; font-size:14px; color:rgba(255,255,255,.5);">Budget: ${Math.round(plan.weeklyBudgetMin / 60)}h · Task: ${plan.taskMinutes}m</p>
+  `;
+  shareContainer.appendChild(header);
+
+  // Allocazioni
+  if (plan.allocations && plan.allocations.length > 0) {
+    const allocDiv = document.createElement("div");
+    allocDiv.style.marginBottom = "24px";
+    allocDiv.style.padding = "20px";
+    allocDiv.style.background = "rgba(255,255,255,.05)";
+    allocDiv.style.borderRadius = "8px";
+    allocDiv.innerHTML = `
+      <h3 style="margin:0 0 12px 0; font-size:18px; font-weight:700;">Distribuzione Tempo</h3>
+      ${plan.allocations.map(a => {
+        const hours = Math.round(a.targetMin / 60);
+        const minutes = a.targetMin % 60;
+        return `<div style="margin-bottom:8px; font-size:14px;">
+          <strong>${escapeHtml(a.name)}</strong>: ${hours}h ${minutes > 0 ? minutes + 'm' : ''}
+        </div>`;
+      }).join('')}
+    `;
+    shareContainer.appendChild(allocDiv);
+  }
+
+  // Task per giorno
+  const daysDiv = document.createElement("div");
+  daysDiv.style.display = "grid";
+  daysDiv.style.gridTemplateColumns = "repeat(2, 1fr)";
+  daysDiv.style.gap = "16px";
+  
+  for (const day of plan.days || []) {
+    const dayCard = document.createElement("div");
+    dayCard.style.padding = "16px";
+    dayCard.style.background = "rgba(255,255,255,.03)";
+    dayCard.style.borderRadius = "8px";
+    dayCard.style.border = "1px solid rgba(255,255,255,.1)";
+    
+    const dayTotal = (day.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
+    
+    dayCard.innerHTML = `
+      <h4 style="margin:0 0 8px 0; font-size:16px; font-weight:700;">${day.label} - ${day.dateISO}</h4>
+      <p style="margin:0 0 12px 0; font-size:12px; color:rgba(255,255,255,.6);">Totale: ${Math.round(dayTotal)}m</p>
+      <div style="font-size:12px; line-height:1.6;">
+        ${(day.tasks || []).length > 0 ? 
+          day.tasks.map(t => `
+            <div style="margin-bottom:6px;">
+              <span style="color:rgba(249,115,22,1);">•</span> 
+              <strong>${escapeHtml(t.examName)}</strong> - ${escapeHtml(t.label)} (${t.minutes}m)
+            </div>
+          `).join('') :
+          '<div style="color:rgba(255,255,255,.4); font-style:italic;">Nessun task</div>'
+        }
+      </div>
+    `;
+    daysDiv.appendChild(dayCard);
+  }
+  
+  shareContainer.appendChild(daysDiv);
+
+  // Footer
+  const footer = document.createElement("div");
+  footer.style.marginTop = "24px";
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "12px";
+  footer.style.color = "rgba(255,255,255,.5)";
+  footer.textContent = "Generato con Methodo";
+  shareContainer.appendChild(footer);
+
+  document.body.appendChild(shareContainer);
+
+  try {
+    // Genera immagine
+    const shareCanvas = await html2canvas(shareContainer, {
+      backgroundColor: null,
+      scale: 2,
+      logging: false,
+      useCORS: true,
+    });
+
+    // Rimuovi contenitore temporaneo
+    document.body.removeChild(shareContainer);
+
+    // Converti canvas in blob
+    shareCanvas.toBlob(async (blob) => {
+      if (!blob) {
+        throw new Error("Errore nella generazione dell'immagine");
+      }
+
+      const file = new File([blob], `piano-studio-${plan.weekStart}.png`, { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+
+      // Prova Web Share API
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Piano di Studio - ${plan.weekStart}`,
+            text: "Guarda il mio piano di studio settimanale!",
+            files: [file],
+          });
+          URL.revokeObjectURL(url);
+          return;
+        } catch (shareErr) {
+          if (shareErr.name !== "AbortError") {
+            console.error("Errore Web Share:", shareErr);
+          }
+        }
+      }
+
+      // Fallback: download + link WhatsApp
+      downloadImage(url, `piano-studio-${plan.weekStart}.png`);
+      
+      // Mostra opzioni di condivisione
+      showShareOptions(url);
+    }, "image/png");
+  } catch (err) {
+    document.body.removeChild(shareContainer);
+    throw err;
+  }
+}
+
+/**
+ * Condivisione piano come testo (fallback)
+ */
+function sharePlanAsText(plan, exams) {
+  let text = `Piano di Studio Settimanale - ${plan.weekStart}\n\n`;
+  text += `Budget: ${Math.round(plan.weeklyBudgetMin / 60)}h\n`;
+  text += `Durata task: ${plan.taskMinutes}m\n\n`;
+
+  if (plan.allocations && plan.allocations.length > 0) {
+    text += "Distribuzione:\n";
+    for (const alloc of plan.allocations) {
+      const hours = Math.round(alloc.targetMin / 60);
+      text += `• ${alloc.name}: ${hours}h\n`;
+    }
+    text += "\n";
+  }
+
+  if (plan.days && plan.days.length > 0) {
+    text += "Task per giorno:\n";
+    for (const day of plan.days) {
+      const dayTotal = (day.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
+      text += `\n${day.label} (${day.dateISO}) - ${Math.round(dayTotal)}m:\n`;
+      for (const task of day.tasks || []) {
+        text += `  • ${task.examName} - ${task.label} (${task.minutes}m)\n`;
+      }
+    }
+  }
+
+  text += "\nGenerato con Methodo";
+
+  // Prova Web Share API per testo
+  if (navigator.share) {
+    navigator.share({
+      title: `Piano di Studio - ${plan.weekStart}`,
+      text: text,
+    }).catch(() => {
+      copyToClipboard(text);
+      showWhatsAppLink(text);
+    });
+  } else {
+    copyToClipboard(text);
+    showWhatsAppLink(text);
+  }
+}
+
 // ----------------- MENU -----------------
 function setupMenu() {
   const btn = document.getElementById("menu-btn");
@@ -7189,6 +7857,9 @@ function mountApp() {
       renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
+      
+      // Setup bottoni esporta e condividi piano
+      setupPlanExportButtons(plan, normalizedExams, profile, user, weekStartISO);
 
       // Listener per aggiornare la dashboard quando un task viene modificato
       // Solo se siamo nella pagina app.html
@@ -8194,6 +8865,54 @@ function bindAddTaskButton(plan, exams, profile, user, weekStartISO) {
     // Apri una finestra di dialogo personalizzata per la creazione del task.
     openAddTaskModal(plan, exams, profile, user, weekStartISO);
   });
+}
+
+/**
+ * Setup bottoni per esportare PDF e condividere il piano
+ */
+function setupPlanExportButtons(plan, exams, profile, user, weekStartISO) {
+  // Bottoni esporta e condividi piano rimossi dalla dashboard
+  // Funzione mantenuta per compatibilità ma non fa nulla
+  /*
+  const exportPdfBtn = document.getElementById("export-plan-pdf-btn");
+  if (exportPdfBtn && !exportPdfBtn.dataset.bound) {
+    exportPdfBtn.dataset.bound = "1";
+    exportPdfBtn.addEventListener("click", async () => {
+      try {
+        exportPdfBtn.disabled = true;
+        exportPdfBtn.textContent = "⏳ Generazione...";
+        await exportPlanToPDF(plan, exams, profile, weekStartISO);
+        exportPdfBtn.disabled = false;
+        exportPdfBtn.textContent = "📄 Esporta PDF";
+        showToast("PDF generato con successo!", 2000);
+      } catch (err) {
+        console.error("Errore esportazione PDF:", err);
+        exportPdfBtn.disabled = false;
+        exportPdfBtn.textContent = "📄 Esporta PDF";
+        alert("Errore durante l'esportazione del PDF: " + (err?.message || err));
+      }
+    });
+  }
+
+  const sharePlanBtn = document.getElementById("share-plan-btn");
+  if (sharePlanBtn && !sharePlanBtn.dataset.bound) {
+    sharePlanBtn.dataset.bound = "1";
+    sharePlanBtn.addEventListener("click", async () => {
+      try {
+        sharePlanBtn.disabled = true;
+        sharePlanBtn.textContent = "Generazione...";
+        await sharePlan(plan, exams, profile, weekStartISO);
+        sharePlanBtn.disabled = false;
+        sharePlanBtn.textContent = "Condividi piano";
+      } catch (err) {
+        console.error("Errore condivisione piano:", err);
+        sharePlanBtn.disabled = false;
+        sharePlanBtn.textContent = "Condividi piano";
+        alert("Errore durante la condivisione: " + (err?.message || err));
+      }
+    });
+  }
+  */
 }
 
 /**

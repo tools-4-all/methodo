@@ -198,7 +198,12 @@
           <p class="error" id="strategy-error"></p>
           <p class="meta ok" id="strategy-saved"></p>
 
-          <div class="toolbar" style="justify-content:flex-end; margin-top:20px;">
+          <div class="toolbar" style="justify-content:flex-end; margin-top:20px; gap:8px; flex-wrap:wrap;">
+            <!-- Bottone Esporta PDF temporaneamente disabilitato -->
+            <!--
+            <button class="btn" id="export-plan-pdf-btn" type="button">📄 Esporta PDF</button>
+            -->
+            <button class="btn primary" id="share-plan-btn" type="button">📤 Condividi piano</button>
             <button class="btn primary" id="save-strategies" type="button">Salva impostazioni</button>
           </div>
         </div>
@@ -425,6 +430,9 @@
     </main>
   </div>
 
+  <!-- Librerie per esportazione e condivisione -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script type="module" src="./app.js"></script>
   <script>
     // ===== MENU TOGGLE =====
