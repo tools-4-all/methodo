@@ -2827,9 +2827,9 @@ function mountOnboarding() {
           const readiness = estimateReadinessPercent(virtualExam, profile, allocThisWeek);
           
           // Fattore di convenienza (più alto = più conveniente)
-          // Considera: giorni rimanenti, readiness, tipo (esonero = bonus)
+          // Considera: giorni rimanenti, preparazione, tipo (esonero = bonus)
           const daysScore = Math.min(daysLeft / 30, 1) * 40; // Max 40 punti per tempo
-          const readinessScore = readiness * 0.4; // 40 punti per readiness
+          const readinessScore = readiness * 0.4; // 40 punti per preparazione
           const typeBonus = 0; // Nessun bonus tipo
           const capacityScore = Math.min(capacity / required, 1) * 20; // Max 20 punti per capacità
           
@@ -2886,7 +2886,7 @@ function mountOnboarding() {
           </div>
           <div class="simulationStat">
             <div class="simulationStatValue">${avgReadiness}%</div>
-            <div class="simulationStatLabel">Readiness media</div>
+            <div class="simulationStatLabel">Preparazione media</div>
           </div>
         </div>
         <div style="margin-top:20px; padding:14px; background:rgba(99,102,241,0.1); border-radius:10px; border-left:3px solid rgba(99,102,241,0.6);">
@@ -2922,7 +2922,7 @@ function mountOnboarding() {
           recommendationNote = `Preparazione stimata: ${bestReadiness}% - Preparazione sufficiente per tentare`;
           
           if (alternativeAppello) {
-            recommendationNote += `. Considera anche ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% readiness) per una preparazione migliore`;
+            recommendationNote += `. Considera anche ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% preparazione) per una preparazione migliore`;
           }
         } else {
           recommendation = `❌ Preparazione insufficiente`;
@@ -2930,11 +2930,11 @@ function mountOnboarding() {
           recommendationNote = `Preparazione stimata: ${bestReadiness}% - Rischi di non passare`;
           
           if (alternativeAppello) {
-            recommendationNote += `. Suggerito: ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% readiness)`;
+            recommendationNote += `. Suggerito: ${alternativeAppello.appello.date} (${alternativeAppello.readiness}% preparazione)`;
           } else if (comparisons.length > 1) {
             const bestAlternative = comparisons.find(c => c.readiness > best.readiness);
             if (bestAlternative) {
-              recommendationNote += `. Alternativa migliore: ${bestAlternative.appello.date} (${bestAlternative.readiness}% readiness)`;
+              recommendationNote += `. Alternativa migliore: ${bestAlternative.appello.date} (${bestAlternative.readiness}% preparazione)`;
             }
           }
         }
@@ -2953,7 +2953,7 @@ function mountOnboarding() {
             <div class="simulationRecommendationDetails" style="margin-top:12px;">
         `;
         
-        // Ordina per readiness (dal migliore al peggiore) per mostrare le opzioni migliori prima
+        // Ordina per preparazione (dal migliore al peggiore) per mostrare le opzioni migliori prima
         const sortedComparisons = [...comparisons].sort((a, b) => b.readiness - a.readiness);
         
         sortedComparisons.forEach((comp, idx) => {
@@ -2995,7 +2995,7 @@ function mountOnboarding() {
                 ${comp.avgOtherReadiness !== undefined ? `
                 <div class="simulationAppelloStat">
                   <span class="simulationAppelloStatLabel">Impatto altri esami</span>
-                  <span class="simulationAppelloStatValue" style="font-size:11px;">${Math.round(comp.avgOtherReadiness)}% readiness</span>
+                  <span class="simulationAppelloStatValue" style="font-size:11px;">${Math.round(comp.avgOtherReadiness)}% preparazione</span>
                 </div>
                 ` : ''}
               </div>
@@ -9438,7 +9438,7 @@ function mountTask() {
           };
         }
         
-        // Calcola readiness attuale
+        // Calcola preparazione attuale
         // Trova l'allocazione per questo esame nel piano
         const allocThisWeek = plan.allocations?.find(a => {
           // Gestisci ID virtuali per appelli
@@ -9460,14 +9460,14 @@ function mountTask() {
         const currentAlloc = allocThisWeek?.targetMin || 0;
         const currentReadiness = estimateReadinessPercent(exam, profile, currentAlloc);
         
-        // Calcola readiness dopo aver saltato (riduci allocazione di questo task)
+        // Calcola preparazione dopo aver saltato (riduci allocazione di questo task)
         const taskMinutes = task?.minutes || (taskState?.plannedSec / 60) || 0;
         const newAlloc = Math.max(0, currentAlloc - taskMinutes);
         const newReadiness = estimateReadinessPercent(exam, profile, newAlloc);
         
         const readinessLoss = currentReadiness - newReadiness;
         
-        // Determina impatto basato sulla perdita di readiness e sulla percentuale
+        // Determina impatto basato sulla perdita di preparazione e sulla percentuale
         let impact = "minimo";
         let impactMessage = "";
         if (readinessLoss > 5 || (readinessLoss > 0 && currentReadiness < 70)) {
@@ -9634,7 +9634,7 @@ function mountTask() {
             <div style="padding: 12px; background: rgba(99,102,241,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(99,102,241,0.3);">
               <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Preparazione attuale</div>
               <div style="font-size: 28px; font-weight: 900; color: rgba(99,102,241,1); margin-bottom: 4px;">${consequences.currentReadiness}%</div>
-              <div style="font-size: 10px; color: rgba(255,255,255,0.5);">Readiness stimata</div>
+              <div style="font-size: 10px; color: rgba(255,255,255,0.5);">Preparazione stimata</div>
             </div>
             <div style="padding: 12px; background: rgba(239,68,68,0.1); border-radius: 8px; text-align: center; border: 1px solid rgba(239,68,68,0.3);">
               <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Dopo aver saltato</div>

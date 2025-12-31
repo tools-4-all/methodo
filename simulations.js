@@ -509,7 +509,7 @@ function applyExamOverrides(exams, overrides){
 }
 
 // ---------------- Simulation ----------------
-// readiness in [0,100]; daily update: decay + study_gain - urgency_penalty_if_not_studied + noise
+// preparazione in [0,100]; daily update: decay + study_gain - urgency_penalty_if_not_studied + noise
 function simulate(profile, exams, params, seed = 1, overrides = null){
   const horizon = clamp(Number(params.horizonDays||60), 7, 365);
   const decay = clamp(Number(params.decay||0.006), 0, 0.03);
