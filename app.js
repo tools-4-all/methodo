@@ -1231,20 +1231,8 @@ async function showPassedAppelloModal(uid, exam, appello, appelloDate) {
     // Handler: Esame superato
     qs("passed-yes-btn")?.addEventListener("click", async () => {
       try {
-        await addPassedExam(uid, {
-          originalExamId: exam.id,
-          examId: exam.id,
-          examName: exam.name,
-          appelloDate: appelloDate,
-          date: appelloDate,
-          cfu: exam.cfu,
-          level: exam.level,
-          difficulty: exam.difficulty,
-          category: exam.category,
-          type: appello.type || "esame",
-        });
-        
-        // Deseleziona questo appello
+        // NON aggiungere allo storico - l'utente non vuole tracciare gli esami superati
+        // Deseleziona questo appello e rimuovi l'esame dalla lista attiva
         const updatedAppelli = exam.appelli.map(a => 
           a.date === appelloDate ? { ...a, selected: false, passed: true } : a
         );
@@ -1253,7 +1241,7 @@ async function showPassedAppelloModal(uid, exam, appello, appelloDate) {
         // Invalida il piano
         await invalidateWeeklyPlan(uid);
         
-        showToast("Esame registrato come superato!", 3000);
+        showToast("Esame rimosso dal piano!", 3000);
         await closeModal();
         
         // Emetti evento per aggiornare la dashboard
@@ -1268,8 +1256,8 @@ async function showPassedAppelloModal(uid, exam, appello, appelloDate) {
           }
         }, 500);
       } catch (err) {
-        console.error("Errore registrazione esame superato:", err);
-        showErrorModal("Errore durante la registrazione: " + (err?.message || err), "Errore");
+        console.error("Errore rimozione esame:", err);
+        showErrorModal("Errore durante la rimozione: " + (err?.message || err), "Errore");
       }
     });
     
