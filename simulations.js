@@ -222,12 +222,94 @@ function showUpgradeModal() {
   });
 }
 
-async function listExams(uid){
-  const colref = collection(db, "users", uid, "exams");
+async function listPassedExams(uid){
+  const colref = collection(db, "users", uid, "passedExams");
   const snap = await getDocs(colref);
   const exams = [];
-  snap.forEach(d => exams.push({ id:d.id, ...d.data() }));
-  exams.sort((a,b)=> String(a.date).localeCompare(String(b.date)));
+  snap.forEach((d) => exams.push({ id: d.id, ...d.data() }));
+  exams.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))); // più recenti prima
+  return exams;
+}
+
+function detectExamCategory(examName) {
+  if (!examName) return "mixed";
+  const name = examName.toLowerCase();
+  const scientific = ["matematica", "fisica", "chimica", "ingegneria", "analisi", "algebra", "geometria", "calcolo", "statistica", "informatica", "programmazione", "elettronica", "meccanica"];
+  const humanistic = ["letteratura", "storia", "filosofia", "lettere", "lingua", "arte", "musica", "teatro", "sociologia", "antropologia", "psicologia", "pedagogia"];
+  
+  if (scientific.some(term => name.includes(term))) return "scientific";
+  if (humanistic.some(term => name.includes(term))) return "humanistic";
+  return "mixed";
+}
+
+async function listExams(uid){
+  const col = collection(db, "users", uid, "exams");
+  const snap = await getDocs(col);
+  const exams = [];
+  
+  // Carica esami superati per filtrarli
+  const passedExams = await listPassedExams(uid);
+  const passedExamIds = new Set(passedExams.map(e => e.originalExamId || e.examId || e.id));
+  
+  snap.forEach((d) => {
+    const examData = d.data();
+    
+    // Salta se l'esame è stato superato
+    if (passedExamIds.has(d.id)) {
+      return;
+    }
+    
+    // Assicura che ogni esame abbia una category (per compatibilità con esami vecchi)
+    if (!examData.category || examData.category === "auto") {
+      examData.category = detectExamCategory(examData.name || "");
+    }
+    
+    // Migrazione: se l'esame ha solo 'date' (vecchio formato), convertilo in appelli
+    if (examData.date && !examData.appelli) {
+      examData.appelli = [{
+        date: examData.date,
+        type: "esame", // default
+        selected: true
+      }];
+      // Mantieni anche date per compatibilità
+    } else if (!examData.appelli && !examData.date) {
+      // Se non ha né appelli né date, crea un array vuoto
+      examData.appelli = [];
+    }
+    
+    // Filtra appelli superati
+    if (examData.appelli && Array.isArray(examData.appelli)) {
+      const passedAppelloDates = new Set(
+        passedExams
+          .filter(e => (e.originalExamId || e.examId) === d.id)
+          .map(e => e.appelloDate || e.date)
+      );
+      
+      examData.appelli = examData.appelli.map(appello => {
+        // Se l'appello è stato superato, deselezionalo
+        if (passedAppelloDates.has(appello.date)) {
+          return { ...appello, selected: false, passed: true };
+        }
+        return appello;
+      });
+      
+      // Se tutti gli appelli sono stati superati, salta l'esame
+      const hasSelectedAppelli = examData.appelli.some(a => a.selected !== false && !a.passed);
+      if (!hasSelectedAppelli && examData.appelli.length > 0) {
+        return; // Salta questo esame
+      }
+    }
+    
+    exams.push({ id: d.id, ...examData });
+  });
+  
+  // Ordina per la prima data disponibile (da appelli o date legacy)
+  exams.sort((a, b) => {
+    const dateA = a.appelli?.[0]?.date || a.date || "";
+    const dateB = b.appelli?.[0]?.date || b.date || "";
+    return String(dateA).localeCompare(String(dateB));
+  });
+  
   return exams;
 }
 
