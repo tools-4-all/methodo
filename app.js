@@ -845,8 +845,19 @@ async function listExams(uid) {
   const col = collection(db, "users", uid, "exams");
   const snap = await getDocs(col);
   const exams = [];
+  
+  // Carica esami superati per filtrarli
+  const passedExams = await listPassedExams(uid);
+  const passedExamIds = new Set(passedExams.map(e => e.originalExamId || e.examId || e.id));
+  
   snap.forEach((d) => {
     const examData = d.data();
+    
+    // Salta se l'esame è stato superato
+    if (passedExamIds.has(d.id)) {
+      return;
+    }
+    
     // Assicura che ogni esame abbia una category (per compatibilità con esami vecchi)
     if (!examData.category || examData.category === "auto") {
       examData.category = detectExamCategory(examData.name || "");
@@ -863,6 +874,29 @@ async function listExams(uid) {
     } else if (!examData.appelli && !examData.date) {
       // Se non ha né appelli né date, crea un array vuoto
       examData.appelli = [];
+    }
+    
+    // Filtra appelli superati
+    if (examData.appelli && Array.isArray(examData.appelli)) {
+      const passedAppelloDates = new Set(
+        passedExams
+          .filter(e => (e.originalExamId || e.examId) === d.id)
+          .map(e => e.appelloDate || e.date)
+      );
+      
+      examData.appelli = examData.appelli.map(appello => {
+        // Se l'appello è stato superato, deselezionalo
+        if (passedAppelloDates.has(appello.date)) {
+          return { ...appello, selected: false, passed: true };
+        }
+        return appello;
+      });
+      
+      // Se tutti gli appelli sono stati superati, salta l'esame
+      const hasSelectedAppelli = examData.appelli.some(a => a.selected !== false && !a.passed);
+      if (!hasSelectedAppelli && examData.appelli.length > 0) {
+        return; // Salta questo esame
+      }
     }
     
     exams.push({ id: d.id, ...examData });
@@ -1049,6 +1083,265 @@ async function listPassedExams(uid) {
 async function removePassedExam(uid, examId) {
   const ref = doc(db, "users", uid, "passedExams", examId);
   await deleteDoc(ref);
+}
+
+// ----------------- Check and Handle Passed Appelli -----------------
+/**
+ * Controlla se ci sono appelli passati (ieri o oggi) e mostra un popup per gestirli
+ */
+async function checkAndHandlePassedAppelli(uid, exams) {
+  const today = getCurrentDate();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const passedAppelli = [];
+  
+  // Trova tutti gli appelli passati (ieri o oggi)
+  for (const exam of exams) {
+    const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true }] : []);
+    const selectedAppelli = appelli.filter(a => a.selected !== false);
+    
+    for (const appello of selectedAppelli) {
+      const appelloDate = new Date(appello.date);
+      appelloDate.setHours(0, 0, 0, 0);
+      
+      // Controlla se l'appello è ieri o oggi
+      if (appelloDate.getTime() === yesterday.getTime() || appelloDate.getTime() === today.getTime()) {
+        // Verifica se non è già stato gestito (non è in passedExams)
+        const passedExams = await listPassedExams(uid);
+        const alreadyHandled = passedExams.some(
+          pe => (pe.originalExamId || pe.examId) === exam.id && 
+                (pe.appelloDate || pe.date) === appello.date
+        );
+        
+        if (!alreadyHandled) {
+          passedAppelli.push({
+            exam,
+            appello,
+            appelloDate: appello.date
+          });
+        }
+      }
+    }
+  }
+  
+  // Se ci sono appelli passati non gestiti, mostra popup
+  if (passedAppelli.length > 0) {
+    for (const { exam, appello, appelloDate } of passedAppelli) {
+      await showPassedAppelloModal(uid, exam, appello, appelloDate);
+    }
+  }
+}
+
+/**
+ * Mostra un popup per gestire un appello passato
+ */
+async function showPassedAppelloModal(uid, exam, appello, appelloDate) {
+  // Evita popup multipli
+  if (document.getElementById("passed-appello-modal")) return;
+  
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.id = "passed-appello-modal";
+    Object.assign(overlay.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0,0,0,0.75)",
+      zIndex: "10000",
+      padding: "20px",
+    });
+    
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.maxWidth = "450px";
+    card.style.width = "95%";
+    card.style.padding = "24px";
+    
+    const dateStr = new Date(appelloDate).toLocaleDateString("it-IT", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+    
+    // Trova appelli successivi disponibili
+    const allAppelli = exam.appelli || [];
+    const futureAppelli = allAppelli
+      .filter(a => {
+        const aDate = new Date(a.date);
+        aDate.setHours(0, 0, 0, 0);
+        return aDate > new Date(appelloDate) && a.selected !== false;
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    card.innerHTML = `
+      <h2 style="margin: 0 0 16px 0; font-size: 20px;">Appello passato</h2>
+      <p style="margin: 0 0 20px 0; color: rgba(255,255,255,0.8); line-height: 1.5;">
+        L'appello di <strong>${escapeHtml(exam.name)}</strong> era previsto per il <strong>${dateStr}</strong>.
+      </p>
+      <p style="margin: 0 0 20px 0; color: rgba(255,255,255,0.7); font-size: 14px;">
+        Hai sostenuto questo appello?
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button id="passed-yes-btn" class="btn primary" style="width: 100%;">
+          ✓ Sì, l'ho sostenuto
+        </button>
+        ${futureAppelli.length > 0 ? `
+          <button id="passed-no-next-btn" class="btn" style="width: 100%;">
+            ✗ No, preparo l'appello successivo (${futureAppelli[0].date})
+          </button>
+        ` : ''}
+        <button id="passed-no-btn" class="btn ghost" style="width: 100%;">
+          ✗ No, rimuovo questo appello
+        </button>
+      </div>
+    `;
+    
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    
+    const closeModal = async () => {
+      try {
+        document.body.removeChild(overlay);
+      } catch {}
+      resolve();
+    };
+    
+    // Handler: Esame superato
+    qs("passed-yes-btn")?.addEventListener("click", async () => {
+      try {
+        await addPassedExam(uid, {
+          originalExamId: exam.id,
+          examId: exam.id,
+          examName: exam.name,
+          appelloDate: appelloDate,
+          date: appelloDate,
+          cfu: exam.cfu,
+          level: exam.level,
+          difficulty: exam.difficulty,
+          category: exam.category,
+          type: appello.type || "esame",
+        });
+        
+        // Deseleziona questo appello
+        const updatedAppelli = exam.appelli.map(a => 
+          a.date === appelloDate ? { ...a, selected: false, passed: true } : a
+        );
+        await updateExam(uid, exam.id, { appelli: updatedAppelli });
+        
+        // Invalida il piano
+        await invalidateWeeklyPlan(uid);
+        
+        showToast("Esame registrato come superato!", 3000);
+        await closeModal();
+        
+        // Emetti evento per aggiornare la dashboard
+        window.dispatchEvent(new CustomEvent('examStatusChanged', {
+          detail: { type: 'passed', examId: exam.id, appelloDate }
+        }));
+        
+        // Ricarica la pagina per aggiornare tutto (fallback)
+        setTimeout(() => {
+          if (window.location.pathname.includes('app.html')) {
+            window.location.reload();
+          }
+        }, 500);
+      } catch (err) {
+        console.error("Errore registrazione esame superato:", err);
+        showErrorModal("Errore durante la registrazione: " + (err?.message || err), "Errore");
+      }
+    });
+    
+    // Handler: Preparare appello successivo
+    if (futureAppelli.length > 0) {
+      qs("passed-no-next-btn")?.addEventListener("click", async () => {
+        try {
+          // Deseleziona questo appello
+          const updatedAppelli = exam.appelli.map(a => 
+            a.date === appelloDate ? { ...a, selected: false } : a
+          );
+          
+          // Seleziona l'appello successivo come primary
+          const nextAppello = futureAppelli[0];
+          const finalAppelli = updatedAppelli.map(a => 
+            a.date === nextAppello.date ? { ...a, selected: true, primary: true } : 
+            a.primary ? { ...a, primary: false } : a
+          );
+          
+          await updateExam(uid, exam.id, { appelli: finalAppelli });
+          
+          // Invalida il piano
+          await invalidateWeeklyPlan(uid);
+          
+          showToast(`Appello successivo (${nextAppello.date}) selezionato!`, 3000);
+          await closeModal();
+          
+          // Emetti evento per aggiornare la dashboard
+          window.dispatchEvent(new CustomEvent('examStatusChanged', {
+            detail: { type: 'appelloChanged', examId: exam.id, nextAppelloDate: nextAppello.date }
+          }));
+          
+          // Ricarica la pagina per aggiornare tutto (fallback)
+          setTimeout(() => {
+            if (window.location.pathname.includes('app.html')) {
+              window.location.reload();
+            }
+          }, 500);
+        } catch (err) {
+          console.error("Errore aggiornamento appello:", err);
+          showErrorModal("Errore durante l'aggiornamento: " + (err?.message || err), "Errore");
+        }
+      });
+    }
+    
+    // Handler: Rimuovi appello
+    qs("passed-no-btn")?.addEventListener("click", async () => {
+      try {
+        // Deseleziona questo appello
+        const updatedAppelli = exam.appelli.map(a => 
+          a.date === appelloDate ? { ...a, selected: false } : a
+        );
+        await updateExam(uid, exam.id, { appelli: updatedAppelli });
+        
+        // Invalida il piano
+        await invalidateWeeklyPlan(uid);
+        
+        showToast("Appello rimosso dal piano", 2000);
+        await closeModal();
+        
+        // Emetti evento per aggiornare la dashboard
+        window.dispatchEvent(new CustomEvent('examStatusChanged', {
+          detail: { type: 'appelloRemoved', examId: exam.id, appelloDate }
+        }));
+        
+        // Ricarica la pagina per aggiornare tutto (fallback)
+        setTimeout(() => {
+          if (window.location.pathname.includes('app.html')) {
+            window.location.reload();
+          }
+        }, 500);
+      } catch (err) {
+        console.error("Errore rimozione appello:", err);
+        showErrorModal("Errore durante la rimozione: " + (err?.message || err), "Errore");
+      }
+    });
+    
+    // Chiudi con ESC
+    const escHandler = (e) => {
+      if (e.key === "Escape" && document.getElementById("passed-appello-modal")) {
+        closeModal();
+        document.removeEventListener("keydown", escHandler);
+      }
+    };
+    document.addEventListener("keydown", escHandler);
+  });
 }
 
 async function saveWeeklyPlan(uid, weekStartISO, plan) {
@@ -7877,7 +8170,14 @@ function mountApp() {
         }
       }
 
-      const exams = await listExams(user.uid);
+      let exams = await listExams(user.uid);
+      
+      // Controlla appelli passati e mostra popup se necessario
+      await checkAndHandlePassedAppelli(user.uid, exams);
+      
+      // Ricarica esami dopo eventuali modifiche dal popup
+      exams = await listExams(user.uid);
+      
       if (exams.length === 0) {
         console.log("[App] Nessun esame trovato, redirect a settings. Esami:", exams);
         window.location.assign("./settings.html");
@@ -8036,37 +8336,52 @@ function mountApp() {
 
         const refreshDashboard = async () => {
           try {
-            console.log("[Dashboard] Piano modificato, ricarico dal server...");
-            // Forza il refresh dal server per evitare problemi di cache
+            console.log("[Dashboard] Aggiornamento dashboard richiesto...");
+            
+            // Ricarica esami (potrebbero essere cambiati se un esame è stato superato)
+            const updatedExams = await listExams(user.uid);
+            
+            if (updatedExams.length === 0) {
+              console.log("[Dashboard] Nessun esame disponibile dopo aggiornamento, redirect a settings");
+              window.location.assign("./settings.html");
+              return;
+            }
+            
+            // Normalizza esami aggiornati
+            const updatedNormalizedExams = updatedExams.map(e => ({
+              ...e,
+              category: e.category || detectExamCategory(e.name || "") || "mixed"
+            }));
+            
+            // Forza il refresh del piano dal server
             const updatedPlan = await loadWeeklyPlan(user.uid, weekStartISO, true);
+            
             if (updatedPlan) {
               const todayISO = isoToday();
               const todayDay = updatedPlan.days?.find((d) => d.dateISO === todayISO) || updatedPlan.days?.[0] || null;
               
-              console.log("[Dashboard] Piano ricaricato:", {
+              console.log("[Dashboard] Piano e esami ricaricati:", {
                 weekStart: updatedPlan.weekStart,
                 daysCount: updatedPlan.days?.length,
                 totalTasks: updatedPlan.days?.reduce((sum, d) => sum + (d.tasks?.length || 0), 0),
+                examsCount: updatedNormalizedExams.length,
                 todayISO,
-                todayTasks: todayDay?.tasks?.length || 0,
-                todayTasksDetails: todayDay?.tasks?.map(t => ({
-                  id: t.id,
-                  label: t.label,
-                  type: t.type,
-                  minutes: t.minutes
-                })) || []
+                todayTasks: todayDay?.tasks?.length || 0
               });
               
-              // Usa gli esami e il profilo già caricati (non serve ricaricarli)
-              console.log("[Dashboard] Chiamando renderDashboard con piano aggiornato...");
-              renderDashboard(updatedPlan, normalizedExams, profile, user, weekStartISO);
-              bindAddTaskButton(updatedPlan, normalizedExams, profile, user, weekStartISO);
+              // Ri-renderizza la dashboard completa con esami aggiornati
+              renderDashboard(updatedPlan, updatedNormalizedExams, profile, user, weekStartISO);
+              bindAddTaskButton(updatedPlan, updatedNormalizedExams, profile, user, weekStartISO);
+              updateTodayProgress(updatedPlan, todayDay);
+              
               console.log("[Dashboard] Dashboard aggiornata con successo");
             } else {
-              console.warn("[Dashboard] Piano non trovato dopo aggiornamento");
+              console.warn("[Dashboard] Piano non trovato dopo aggiornamento, potrebbe essere stato invalidato");
+              // Se il piano non esiste, potrebbe essere stato invalidato, ricarica la pagina
+              window.location.reload();
             }
           } catch (err) {
-            console.error("[Dashboard] Errore ricaricamento piano:", err);
+            console.error("[Dashboard] Errore ricaricamento dashboard:", err);
           }
         };
 
@@ -8140,6 +8455,13 @@ function mountApp() {
         } catch (e) {
           console.warn("[Dashboard] Errore verifica aggiornamento pendente:", e);
         }
+        
+        // Listener per quando cambia lo stato di un esame (superato, appello cambiato, ecc.)
+        const handleExamStatusChanged = async (e) => {
+          console.log("[Dashboard] Evento examStatusChanged ricevuto:", e.detail);
+          await refreshDashboard();
+        };
+        window.addEventListener('examStatusChanged', handleExamStatusChanged);
         
         // Listener per quando la pagina diventa visibile (utente torna sulla scheda)
         const handleVisibilityChange = async () => {
@@ -8886,57 +9208,46 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
 
   const allocMap = new Map((plan.allocations || []).map((a) => [a.examId, a.targetMin]));
   
-  // Raggruppa esami per ID originale per evitare duplicati quando ci sono più appelli
-  // Gli esami in `exams` sono originali, mentre `plan.allocations` contiene esami virtuali
-  const examGroups = new Map();
-  
-  // Prima, crea una mappa degli esami originali
+  // Crea una mappa degli esami originali
   const originalExamsMap = new Map();
   for (const e of exams || []) {
     originalExamsMap.set(e.id, e);
   }
   
-  // Poi, raggruppa le allocazioni per esame originale
-  for (const alloc of plan.allocations || []) {
-    // Estrai l'ID originale dall'examId virtuale (formato: originalId_date)
-    const examIdParts = alloc.examId.split('_');
-    const originalId = examIdParts.length > 1 
-      ? examIdParts.slice(0, -1).join('_') 
-      : alloc.examId;
+  // Costruisci gli esami da mostrare usando sempre l'appello primary corrente dagli esami aggiornati
+  // Non usare quelli dal piano perché potrebbero essere obsoleti
+  const uniqueExams = [];
+  
+  for (const exam of exams || []) {
+    // Trova l'appello primary o il più prossimo
+    const appelli = exam.appelli || (exam.date ? [{ date: exam.date, type: "esame", selected: true, primary: true }] : []);
+    const selectedAppelli = appelli.filter(a => a.selected !== false);
     
-    const originalExam = originalExamsMap.get(originalId);
-    if (!originalExam) continue;
+    if (selectedAppelli.length === 0) continue; // Salta se nessun appello selezionato
     
-    if (!examGroups.has(originalId)) {
-      examGroups.set(originalId, {
-        originalExam: originalExam,
-        virtualAllocs: []
+    // Cerca l'appello marcato come "primary"
+    let primaryAppello = selectedAppelli.find(a => a.primary === true);
+    
+    // Se nessuno è marcato come primary, usa il più prossimo
+    if (!primaryAppello) {
+      const sortedAppelli = [...selectedAppelli].sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateA - dateB;
       });
+      primaryAppello = sortedAppelli[0];
     }
     
-    // Crea un esame virtuale per questa allocazione
+    // Crea un esame virtuale per l'appello primary corrente
+    const virtualExamId = `${exam.id}_${primaryAppello.date}`;
     const virtualExam = {
-      ...originalExam,
-      id: alloc.examId,
-      date: alloc.date || originalExam.date
+      ...exam,
+      id: virtualExamId,
+      date: primaryAppello.date,
+      appelloType: primaryAppello.type
     };
     
-    examGroups.get(originalId).virtualAllocs.push({
-      exam: virtualExam,
-      alloc: alloc
-    });
-  }
-  
-  // Per ogni gruppo, usa l'esame virtuale con la data più prossima (quello considerato nel piano)
-  const uniqueExams = [];
-  for (const [originalId, group] of examGroups) {
-    // Ordina per data e prendi il primo (più prossimo)
-    const sorted = group.virtualAllocs.sort((a, b) => {
-      const dateA = new Date(a.exam.date);
-      const dateB = new Date(b.exam.date);
-      return dateA - dateB;
-    });
-    uniqueExams.push(sorted[0].exam);
+    uniqueExams.push(virtualExam);
   }
   
   const sortedExams = uniqueExams.sort((a, b) =>
@@ -8952,7 +9263,18 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
     const originalExam = originalExamsMap.get(originalId);
     
     const dleft = daysTo(e.date);
-    const allocThisWeek = Number(allocMap.get(e.id) || 0);
+    // Cerca l'allocazione usando l'ID virtuale (potrebbe non esistere se il piano non è stato rigenerato)
+    // Se non esiste, cerca usando l'ID originale come fallback
+    let allocThisWeek = Number(allocMap.get(e.id) || 0);
+    if (allocThisWeek === 0 && originalId !== e.id) {
+      // Fallback: cerca allocazioni per questo esame originale (potrebbe essere un altro appello)
+      for (const [allocExamId, allocMin] of allocMap.entries()) {
+        if (allocExamId.startsWith(originalId + '_')) {
+          allocThisWeek = Number(allocMin);
+          break;
+        }
+      }
+    }
 
     const pct = estimateReadinessPercent(e, profile, allocThisWeek);
     const badge = readinessBadge(pct);
