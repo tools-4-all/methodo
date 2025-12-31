@@ -73,13 +73,57 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+// ----------------- Debug Date System (LOCALHOST ONLY) -----------------
+function isLocalhost() {
+  return window.location.hostname === "localhost" || 
+         window.location.hostname === "127.0.0.1" ||
+         window.location.hostname === "";
+}
+
+function getVirtualDate() {
+  if (!isLocalhost()) return null;
+  try {
+    const saved = localStorage.getItem("debug_virtual_date");
+    if (saved) {
+      const date = new Date(saved);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+  } catch (e) {
+    console.warn("[Debug] Errore lettura data virtuale:", e);
+  }
+  return null;
+}
+
+function setVirtualDate(date) {
+  if (!isLocalhost()) return;
+  try {
+    if (date) {
+      localStorage.setItem("debug_virtual_date", date.toISOString());
+    } else {
+      localStorage.removeItem("debug_virtual_date");
+    }
+    // Emetti evento per aggiornare l'app
+    window.dispatchEvent(new CustomEvent("virtualDateChanged"));
+  } catch (e) {
+    console.warn("[Debug] Errore salvataggio data virtuale:", e);
+  }
+}
+
+function getCurrentDate() {
+  const virtual = getVirtualDate();
+  return virtual || new Date();
+}
+
 function isoToday() {
-  const d = new Date();
+  const d = getCurrentDate();
   const z = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 function daysTo(dateISO) {
-  const now = new Date();
+  const now = getCurrentDate();
   const d = new Date(dateISO);
   const ms = 24 * 60 * 60 * 1000;
   const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1050,7 +1094,7 @@ async function loadWeeklyPlan(uid, weekStartISO, forceRefresh = false) {
  */
 async function invalidateWeeklyPlan(uid) {
   try {
-    const weekStart = startOfWeekISO(new Date());
+    const weekStart = startOfWeekISO(getCurrentDate());
     const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
     const ref = doc(db, "users", uid, "plans", weekStartISO);
     await deleteDoc(ref);
@@ -2121,7 +2165,7 @@ function getAppelliFromForm() {
 // Verifica se una data è quella odierna (confronta solo giorno/mese/anno)
 function isToday(dateString) {
   if (!dateString) return false;
-  const today = new Date();
+  const today = getCurrentDate();
   const date = new Date(dateString);
   
   return date.getFullYear() === today.getFullYear() &&
@@ -2132,7 +2176,7 @@ function isToday(dateString) {
 // Verifica se una data è passata (prima di oggi)
 function isPastDate(dateString) {
   if (!dateString) return false;
-  const today = new Date();
+  const today = getCurrentDate();
   today.setHours(0, 0, 0, 0); // Imposta a mezzanotte per confronto corretto
   
   const date = new Date(dateString);
@@ -2796,7 +2840,7 @@ function mountOnboarding() {
     
     // Analizza TUTTI gli appelli per TUTTI gli esami, considerando l'impatto globale
     const appelliAnalysis = [];
-    const weekStart = startOfWeekISO(new Date());
+    const weekStart = startOfWeekISO(getCurrentDate());
     
     // Genera il piano settimanale per ottenere le allocazioni
     const normalizedExams = exams.map(e => ({
@@ -3057,7 +3101,7 @@ function mountOnboarding() {
     // Genera un piano di esempio per vedere le allocazioni
     let planInfo = null;
     try {
-      const weekStart = startOfWeekISO(new Date());
+      const weekStart = startOfWeekISO(getCurrentDate());
       const tempProfile = {
         ...profile,
         goalMode: goalMode || profile?.goalMode || "good",
@@ -4178,7 +4222,7 @@ function mountOnboarding() {
           }
           
           // Genera o carica il piano
-          const weekStart = startOfWeekISO(new Date());
+          const weekStart = startOfWeekISO(getCurrentDate());
           const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
           
           let plan = await loadWeeklyPlan(user.uid, weekStartISO);
@@ -4290,7 +4334,7 @@ function mountOnboarding() {
           // Callback quando l'utente conferma
           try {
             // Verifica se ci sono modifiche che richiedono rigenerazione del piano
-            const weekStart = startOfWeekISO(new Date());
+            const weekStart = startOfWeekISO(getCurrentDate());
             const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
             
             const savedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
@@ -7467,6 +7511,85 @@ function setupMenu() {
   });
 }
 
+// ----------------- Debug Date Panel (LOCALHOST ONLY) -----------------
+function setupDebugDatePanel() {
+  if (!isLocalhost()) return;
+  
+  const panel = qs("debug-date-panel");
+  if (!panel) return;
+  
+  const dateInput = qs("debug-date-input");
+  const prevBtn = qs("debug-date-prev");
+  const nextBtn = qs("debug-date-next");
+  const resetBtn = qs("debug-date-reset");
+  const closeBtn = qs("debug-close-btn");
+  const realDateSpan = qs("debug-real-date");
+  const virtualDateSpan = qs("debug-virtual-date");
+  
+  if (!dateInput || !prevBtn || !nextBtn || !resetBtn) return;
+  
+  function updateDisplay() {
+    const realDate = new Date();
+    const virtual = getVirtualDate();
+    const current = virtual || realDate;
+    
+    if (realDateSpan) {
+      realDateSpan.textContent = realDate.toLocaleDateString("it-IT");
+    }
+    if (virtualDateSpan) {
+      virtualDateSpan.textContent = virtual 
+        ? virtual.toLocaleDateString("it-IT") + " (virtuale)"
+        : "Nessuna (reale)";
+      virtualDateSpan.style.color = virtual ? "var(--orange)" : "rgba(255,255,255,0.5)";
+    }
+    if (dateInput) {
+      const z = (n) => String(n).padStart(2, "0");
+      dateInput.value = `${current.getFullYear()}-${z(current.getMonth() + 1)}-${z(current.getDate())}`;
+    }
+  }
+  
+  function changeDate(days) {
+    const current = getVirtualDate() || new Date();
+    const newDate = new Date(current);
+    newDate.setDate(newDate.getDate() + days);
+    setVirtualDate(newDate);
+    updateDisplay();
+    // Ricarica la dashboard
+    window.dispatchEvent(new CustomEvent("virtualDateChanged"));
+  }
+  
+  prevBtn.addEventListener("click", () => changeDate(-1));
+  nextBtn.addEventListener("click", () => changeDate(1));
+  
+  resetBtn.addEventListener("click", () => {
+    setVirtualDate(null);
+    updateDisplay();
+    window.dispatchEvent(new CustomEvent("virtualDateChanged"));
+  });
+  
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      panel.style.display = "none";
+    });
+  }
+  
+  dateInput.addEventListener("change", (e) => {
+    const date = new Date(e.target.value);
+    if (!isNaN(date.getTime())) {
+      setVirtualDate(date);
+      updateDisplay();
+      window.dispatchEvent(new CustomEvent("virtualDateChanged"));
+    }
+  });
+  
+  // Mostra il pannello
+  panel.style.display = "block";
+  updateDisplay();
+  
+  // Aggiorna quando cambia la data virtuale
+  window.addEventListener("virtualDateChanged", updateDisplay);
+}
+
 // ----------------- DASHBOARD -----------------
 function updateTodayProgress(plan, todayDay) {
   const $ = (id) => document.getElementById(id);
@@ -7553,6 +7676,18 @@ function mountApp() {
   };
 
   setupMenu();
+  setupDebugDatePanel(); // Setup debug date panel (localhost only)
+
+  // Listener per aggiornare quando cambia la data virtuale
+  window.addEventListener("virtualDateChanged", async () => {
+    // Ricarica la dashboard se l'utente è autenticato
+    const currentUser = auth.currentUser;
+    if (currentUser && window.location.pathname.includes('app.html')) {
+      console.log("[Debug] Data virtuale cambiata, ricarico dashboard...");
+      // Forza il reload della pagina per aggiornare tutto
+      window.location.reload();
+    }
+  });
 
   document.getElementById("logout-btn")?.addEventListener("click", async () => {
     await logout();
@@ -7751,7 +7886,7 @@ function mountApp() {
       
       console.log("[App] Tutto ok, carico dashboard. Esami:", exams.length);
 
-      const weekStart = startOfWeekISO(new Date());
+      const weekStart = startOfWeekISO(getCurrentDate());
       const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(
         weekStart.getDate()
       )}`;
@@ -10105,7 +10240,7 @@ function mountTask() {
         }
         if (!weekStartISOStr) {
           // Fallback: usa la settimana corrente
-          const weekStart = startOfWeekISO(new Date());
+          const weekStart = startOfWeekISO(getCurrentDate());
           const z = (n) => String(n).padStart(2, "0");
           weekStartISOStr = `${weekStart.getFullYear()}-${z(weekStart.getMonth() + 1)}-${z(weekStart.getDate())}`;
         }

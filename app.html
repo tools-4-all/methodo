@@ -121,6 +121,29 @@
     </main>
   </div>
 
+  <!-- Debug Panel (LOCALHOST ONLY) -->
+  <div id="debug-date-panel" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 10000; background: rgba(0, 0, 0, 0.9); border: 2px solid var(--orange); border-radius: 12px; padding: 16px; max-width: 300px; font-size: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <strong style="color: var(--orange);">🐛 Debug Date (Localhost)</strong>
+      <button id="debug-close-btn" style="background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 18px;">×</button>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <div style="color: rgba(255,255,255,0.8); margin-bottom: 8px;">Data virtuale:</div>
+      <input type="date" id="debug-date-input" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 12px;" />
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <button id="debug-date-prev" class="btn tiny" style="flex: 1;">← Giorno</button>
+      <button id="debug-date-next" class="btn tiny" style="flex: 1;">Giorno →</button>
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <button id="debug-date-reset" class="btn tiny" style="flex: 1; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4);">Reset</button>
+    </div>
+    <div style="color: rgba(255,255,255,0.5); font-size: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+      Data reale: <span id="debug-real-date"></span><br/>
+      Data virtuale: <span id="debug-virtual-date"></span>
+    </div>
+  </div>
+
   <!-- Librerie per esportazione e condivisione -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

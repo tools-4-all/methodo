@@ -29,6 +29,34 @@ function z2(n) {
   return String(n).padStart(2, "0");
 }
 
+// ----------------- Debug Date System (LOCALHOST ONLY) -----------------
+function isLocalhost() {
+  return window.location.hostname === "localhost" || 
+         window.location.hostname === "127.0.0.1" ||
+         window.location.hostname === "";
+}
+
+function getVirtualDate() {
+  if (!isLocalhost()) return null;
+  try {
+    const saved = localStorage.getItem("debug_virtual_date");
+    if (saved) {
+      const date = new Date(saved);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+    }
+  } catch (e) {
+    console.warn("[Debug] Errore lettura data virtuale:", e);
+  }
+  return null;
+}
+
+function getCurrentDate() {
+  const virtual = getVirtualDate();
+  return virtual || new Date();
+}
+
 function toISODate(date) {
   return `${date.getFullYear()}-${z2(date.getMonth() + 1)}-${z2(date.getDate())}`;
 }
@@ -39,6 +67,7 @@ function parseISODate(iso) {
 }
 
 function makeTaskId({ weekStartISO, dateISO, t, index }) {
+  // DEVE corrispondere esattamente alla funzione in app.js
   const raw = [
     weekStartISO || "",
     dateISO || "",
@@ -48,7 +77,13 @@ function makeTaskId({ weekStartISO, dateISO, t, index }) {
     String(t?.minutes || 0),
     String(index || 0),
   ].join("|");
-  return raw;
+  // Genera hash come in app.js
+  let h = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return "t_" + (h >>> 0).toString(16);
 }
 
 // ----------------- Menu Setup -----------------
@@ -117,6 +152,33 @@ async function loadAllPlans(uid) {
 function calculateDailyHours(plans) {
   const dailyData = new Map(); // dateISO -> { hours, tasks }
   
+  // Prima, crea una mappa di tutti i task done in localStorage per accesso rapido
+  const doneTasksMap = new Map();
+  const sampleTaskIds = []; // Per debug
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sp_task_done_") && localStorage.getItem(key) === "1") {
+        const taskId = key.replace("sp_task_done_", "");
+        doneTasksMap.set(taskId, true);
+        if (sampleTaskIds.length < 3) {
+          sampleTaskIds.push(taskId);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Statistiche] Errore scansionando localStorage:", e);
+  }
+  
+  console.log("[Statistiche] Task completati in localStorage:", doneTasksMap.size);
+  if (sampleTaskIds.length > 0) {
+    console.log("[Statistiche] Esempio taskId da localStorage:", sampleTaskIds[0].substring(0, 100));
+  }
+  console.log("[Statistiche] Piani da analizzare:", plans.length);
+  
+  let totalTasksChecked = 0;
+  let totalTasksFound = 0;
+  
   for (const plan of plans) {
     if (!plan.days) continue;
     
@@ -128,6 +190,8 @@ function calculateDailyHours(plans) {
       
       for (let i = 0; i < day.tasks.length; i++) {
         const task = day.tasks[i];
+        totalTasksChecked++;
+        
         const taskId = makeTaskId({
           weekStartISO: plan.weekStart,
           dateISO: day.dateISO,
@@ -137,12 +201,39 @@ function calculateDailyHours(plans) {
         
         try {
           const doneKey = `sp_task_done_${taskId}`;
-          if (localStorage.getItem(doneKey) === "1") {
+          const isDone = doneTasksMap.has(taskId) || localStorage.getItem(doneKey) === "1";
+          
+          // Debug per i primi task per vedere il formato
+          if (totalTasksChecked <= 3) {
+            console.log("[Statistiche] Task controllato:", {
+              dateISO: day.dateISO,
+              taskId: taskId.substring(0, 100),
+              foundInMap: doneTasksMap.has(taskId),
+              foundInStorage: localStorage.getItem(doneKey) === "1",
+              examId: task.examId,
+              label: task.label
+            });
+          }
+          
+          if (isDone) {
+            totalTasksFound++;
             completedTasks++;
-            completedMinutes += Number(task.minutes || 0);
+            const taskMinutes = Number(task.minutes || 0);
+            completedMinutes += taskMinutes;
+            
+            // Debug per i primi task
+            if (totalTasksFound <= 5) {
+              console.log("[Statistiche] ✓ Task completato trovato:", {
+                dateISO: day.dateISO,
+                taskId: taskId.substring(0, 80),
+                minutes: taskMinutes,
+                examId: task.examId,
+                label: task.label
+              });
+            }
           }
         } catch (e) {
-          // Ignora errori localStorage
+          console.warn("[Statistiche] Errore controllo task:", e);
         }
       }
       
@@ -162,6 +253,12 @@ function calculateDailyHours(plans) {
       }
     }
   }
+  
+  console.log("[Statistiche] Task controllati:", totalTasksChecked);
+  console.log("[Statistiche] Task completati trovati:", totalTasksFound);
+  console.log("[Statistiche] Giorni con ore calcolate:", dailyData.size);
+  const totalHours = Array.from(dailyData.values()).reduce((sum, d) => sum + d.hours, 0);
+  console.log("[Statistiche] Totale ore:", totalHours.toFixed(2));
   
   return dailyData;
 }
@@ -195,7 +292,7 @@ function calculateStats(dailyData) {
   );
   
   // Calcola streak
-  const today = new Date();
+  const today = getCurrentDate();
   today.setHours(0, 0, 0, 0);
   
   // Current streak (giorni consecutivi fino a oggi)
@@ -261,10 +358,14 @@ function renderHeatmap(dailyData) {
   });
   
   // Calcola range di date (ultimi 365 giorni)
-  const today = new Date();
+  const today = getCurrentDate();
   today.setHours(0, 0, 0, 0);
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - 365);
+  startDate.setHours(0, 0, 0, 0);
+  
+  console.log("[Statistiche Heatmap] Data virtuale oggi:", today.toISOString().split('T')[0]);
+  console.log("[Statistiche Heatmap] Range:", startDate.toISOString().split('T')[0], "->", today.toISOString().split('T')[0]);
   
   // Raggruppa per settimana (lunedì-domenica)
   const weeks = [];
@@ -275,8 +376,13 @@ function renderHeatmap(dailyData) {
   const dayOfWeek = weekStart.getDay();
   const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   weekStart.setDate(weekStart.getDate() - daysToMonday);
+  weekStart.setHours(0, 0, 0, 0);
   
-  for (let d = new Date(weekStart); d <= today; d.setDate(d.getDate() + 1)) {
+  // Crea una copia della data per il loop per evitare problemi di mutazione
+  const todayTime = today.getTime();
+  let dayCount = 0;
+  for (let d = new Date(weekStart); d.getTime() <= todayTime; d = new Date(d.getTime() + 24 * 60 * 60 * 1000)) {
+    dayCount++;
     const dateISO = toISODate(d);
     const hours = hoursMap.get(dateISO) || 0;
     const dayOfWeek = d.getDay(); // 0 = domenica, 1 = lunedì
@@ -306,6 +412,12 @@ function renderHeatmap(dailyData) {
   if (currentWeek && currentWeek.days.length > 0) {
     weeks.push(currentWeek);
   }
+  
+  console.log("[Statistiche Heatmap] Giorni processati:", dayCount);
+  console.log("[Statistiche Heatmap] Settimane create:", weeks.length);
+  
+  console.log("[Statistiche Heatmap] Giorni processati:", dayCount);
+  console.log("[Statistiche Heatmap] Settimane create:", weeks.length);
   
   // Raggruppa settimane per mese
   const months = [];
@@ -654,6 +766,14 @@ function mountStatistics() {
   document.addEventListener("visibilitychange", async () => {
     if (!document.hidden && currentUser) {
       console.log("[Statistiche] Pagina visibile, aggiorno statistiche...");
+      await loadAndRenderStatistics(currentUser);
+    }
+  });
+  
+  // Aggiorna quando cambia la data virtuale (solo in localhost)
+  window.addEventListener("virtualDateChanged", async () => {
+    if (currentUser) {
+      console.log("[Statistiche] Data virtuale cambiata, aggiorno statistiche...");
       await loadAndRenderStatistics(currentUser);
     }
   });
