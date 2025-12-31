@@ -306,7 +306,9 @@ async function getProfile(uid) {
 
 // ----------------- Premium helpers -----------------
 /**
- * Controlla se l'utente può aggiungere un esame (limite free: 3 esami)
+ * Controlla se l'utente può aggiungere un esame
+ * Limite free: 2 esami
+ * Limite premium: illimitati
  */
 async function canAddExam(uid) {
   const isPremiumUser = await isPremium(uid);
@@ -319,10 +321,10 @@ async function canAddExam(uid) {
     };
   }
   
-  // Utenti free: limite di 3 esami
+  // Utenti free: limite di 2 esami
   const exams = await listExams(uid);
   const currentCount = exams?.length || 0;
-  const limit = 3;
+  const limit = 2;
   
   if (currentCount >= limit) {
     return {
@@ -3140,7 +3142,7 @@ function mountOnboarding() {
     // Mostra limite esami se non premium
     const examLimitNotice = qs("exam-limit-notice");
     if (examLimitNotice && !isPremiumUser) {
-      const remaining = Math.max(0, 3 - exams.length);
+      const remaining = Math.max(0, 2 - exams.length);
       if (remaining > 0) {
         examLimitNotice.textContent = `${remaining} esami rimasti nella versione gratuita`;
         examLimitNotice.style.display = "block";
