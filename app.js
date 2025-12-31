@@ -7805,6 +7805,9 @@ function mountApp() {
             }
           }
           
+          // Salva i task aggiunti manualmente prima della rigenerazione
+          const manualTasks = plan.manualTasks || [];
+          
           // Rigenera il piano
           const newPlan = generateWeeklyPlan(profile, normalizedExams, weekStart);
           
@@ -7832,6 +7835,29 @@ function mountApp() {
                 }
               }
             }
+          }
+          
+          // Ripristina i task aggiunti manualmente
+          if (manualTasks.length > 0) {
+            console.log("[App] Ripristino task aggiunti manualmente:", manualTasks.length);
+            for (const manualTask of manualTasks) {
+              const day = newPlan.days?.find(d => d.dateISO === manualTask.dateISO);
+              if (day) {
+                // Verifica che il task non esista già (per evitare duplicati)
+                const exists = day.tasks?.some(t => t.id === manualTask.task.id);
+                if (!exists) {
+                  if (!day.tasks) day.tasks = [];
+                  day.tasks.push({ ...manualTask.task });
+                  console.log("[App] Task manuale ripristinato:", {
+                    dateISO: manualTask.dateISO,
+                    taskId: manualTask.task.id,
+                    label: manualTask.task.label
+                  });
+                }
+              }
+            }
+            // Ripristina anche l'array manualTasks nel nuovo piano
+            newPlan.manualTasks = manualTasks;
           }
           
           plan = newPlan;
@@ -9129,6 +9155,14 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       const currentUsed = (day.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
       newTask.period = (currentUsed + minutesVal) <= halfCap ? "morning" : "afternoon";
       day.tasks = [...(day.tasks || []), newTask];
+      
+      // Marca il task come aggiunto manualmente per preservarlo durante la rigenerazione
+      if (!plan.manualTasks) plan.manualTasks = [];
+      plan.manualTasks.push({
+        dateISO: day.dateISO,
+        task: newTask,
+      });
+      
       // Aggiorna l'allocazione per l'esame in base ai minuti aggiunti
       if (!plan.allocations) plan.allocations = [];
       const alloc = plan.allocations.find((a) => a.examId === exam.id);

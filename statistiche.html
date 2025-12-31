@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Study Planner — Statistiche</title>
+  <link rel="stylesheet" href="./styles.css?v=11" />
+  <style>
+    .statsGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .statCard {
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      text-align: center;
+    }
+
+    .statValue {
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--orange);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .statLabel {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .heatmapContainer {
+      margin: 24px 0;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      overflow-x: auto;
+    }
+
+    .heatmapHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .heatmapTitle {
+      font-size: 18px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .heatmapLegend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .heatmapLegendItem {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .heatmapLegendBox {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .heatmap {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .heatmapMonth {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .heatmapMonthLabel {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 8px;
+      font-weight: 600;
+      min-width: 80px;
+    }
+
+    .heatmapMonthContent {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+    }
+
+    .heatmapWeek {
+      display: flex;
+      gap: 3px;
+      flex-direction: column;
+    }
+
+    .heatmapDay {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    .heatmapDay:hover {
+      transform: scale(1.2);
+      z-index: 10;
+    }
+
+    .heatmapDay[data-level="0"] {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .heatmapDay[data-level="1"] {
+      background: rgba(249, 115, 22, 0.3);
+    }
+
+    .heatmapDay[data-level="2"] {
+      background: rgba(249, 115, 22, 0.5);
+    }
+
+    .heatmapDay[data-level="3"] {
+      background: rgba(249, 115, 22, 0.7);
+    }
+
+    .heatmapDay[data-level="4"] {
+      background: rgba(249, 115, 22, 0.9);
+    }
+
+    .heatmapDay[data-level="5"] {
+      background: var(--orange);
+    }
+
+    .heatmapTooltip {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 8px;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 1000;
+    }
+
+    .heatmapDay:hover .heatmapTooltip {
+      opacity: 1;
+    }
+
+    .insightsSection {
+      margin-top: 32px;
+    }
+
+    .insightCard {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .insightTitle {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+    }
+
+    .insightContent {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.5;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="title">
+        <h1>Statistiche</h1>
+        <p id="user-line">—</p>
+      </div>
+      <div class="toolbar">
+        <div class="menu" id="menu">
+          <button class="btn ghost menuBtn" id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="menuIcon">☰</span>
+            <span class="menuText">Menu</span>
+          </button>
+      
+          <div class="menuPanel hidden" id="menu-panel" role="menu" aria-label="Menu">
+            <a class="menuItem" role="menuitem" href="./app.html">
+              <span>Dashboard</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./simulations.html">
+              <span>Simulazioni</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./consigli.html">
+              <span>Consigli</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./statistiche.html">
+              <span>Statistiche</span>
+            </a>
+
+            <a class="menuItem" role="menuitem" href="./contact.html">
+              <span>Contattaci</span>
+            </a>
+
+            <div class="menuSep"></div>
+
+            <a class="menuItem" role="menuitem" href="./settings.html">
+              <span>Impostazioni</span>
+            </a>
+      
+            <button class="menuItem danger" role="menuitem" id="logout-btn" type="button">
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="loading" class="loading">Caricamento statistiche...</div>
+      
+      <div id="stats-content" style="display: none;">
+        <!-- Statistiche riassuntive -->
+        <div class="statsGrid">
+          <div class="statCard">
+            <div class="statValue" id="total-hours">—</div>
+            <div class="statLabel">Ore totali</div>
+          </div>
+          <div class="statCard">
+            <div class="statValue" id="avg-daily">—</div>
+            <div class="statLabel">Media giornaliera</div>
+          </div>
+          <div class="statCard">
+            <div class="statValue" id="total-days">—</div>
+            <div class="statLabel">Giorni attivi</div>
+          </div>
+          <div class="statCard">
+            <div class="statValue" id="current-streak">—</div>
+            <div class="statLabel">Serie corrente</div>
+          </div>
+          <div class="statCard">
+            <div class="statValue" id="longest-streak">—</div>
+            <div class="statLabel">Serie più lunga</div>
+          </div>
+          <div class="statCard">
+            <div class="statValue" id="best-day">—</div>
+            <div class="statLabel">Miglior giorno</div>
+          </div>
+        </div>
+
+        <!-- Heatmap -->
+        <section class="card">
+          <div class="heatmapContainer">
+            <div class="heatmapHeader">
+              <div class="heatmapTitle">Ore di studio giornaliere</div>
+              <div class="heatmapLegend">
+                <span>Meno</span>
+                <div class="heatmapLegendItem">
+                  <div class="heatmapLegendBox" style="background: rgba(255, 255, 255, 0.1);"></div>
+                  <div class="heatmapLegendBox" style="background: rgba(249, 115, 22, 0.3);"></div>
+                  <div class="heatmapLegendBox" style="background: rgba(249, 115, 22, 0.5);"></div>
+                  <div class="heatmapLegendBox" style="background: rgba(249, 115, 22, 0.7);"></div>
+                  <div class="heatmapLegendBox" style="background: rgba(249, 115, 22, 0.9);"></div>
+                  <div class="heatmapLegendBox" style="background: var(--orange);"></div>
+                </div>
+                <span>Più</span>
+              </div>
+            </div>
+            <div id="heatmap" class="heatmap"></div>
+          </div>
+        </section>
+
+        <!-- Insight -->
+        <section class="card insightsSection">
+          <div class="cardHeader">
+            <h2>Insight</h2>
+          </div>
+          <div id="insights"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./statistiche.js"></script>
+</body>
+</html>
+
