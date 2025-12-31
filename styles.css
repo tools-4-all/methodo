@@ -296,11 +296,7 @@ body{
   color: var(--text);
   font-weight: 400;
   letter-spacing: -0.01em;
-  background:
-    radial-gradient(1200px 700px at 15% 10%, rgba(249,115,22,.12), transparent 58%),
-    radial-gradient(900px 600px at 80% 15%, rgba(249,115,22,.08), transparent 58%),
-    radial-gradient(900px 700px at 50% 95%, rgba(249,115,22,.06), transparent 62%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+  background: linear-gradient(180deg, var(--bg0), var(--bg1));
 }
 
 a{ color:inherit; text-decoration:none; }
