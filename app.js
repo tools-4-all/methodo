@@ -1023,27 +1023,39 @@ async function updateExamLevelAutomatically(uid, exam) {
     daysSinceStart = Math.floor((new Date() - estimatedStart) / (1000 * 60 * 60 * 24));
   }
   
+  // Determina il livello iniziale (quando l'esame è stato creato)
+  // Se non è salvato, usa il livello corrente come base
+  const initialLevel = clamp(Number(exam.initialLevel ?? currentLevel), 0, 5);
+  
   // Calcola nuovo livello basato su:
-  // 1. Task completate (ogni 5 task = +0.5 livello, max +2.5)
-  // 2. Giorni passati (ogni 7 giorni = +0.2 livello, max +1.0)
-  // 3. Minuti totali (ogni 300 minuti = +0.1 livello, max +0.5)
-  // Formula migliorata: più coerente e graduale
-  const taskProgress = Math.min(completedTasks / 5 * 0.5, 2.5); // Max +2.5
-  const daysProgress = Math.min(daysSinceStart / 7 * 0.2, 1.0); // Max +1.0
-  const minutesProgress = Math.min(totalMinutes / 300 * 0.1, 0.5); // Max +0.5
+  // 1. Task completate (ogni 3 task = +0.5 livello, max +3.0) - più veloce
+  // 2. Minuti totali (ogni 200 minuti = +0.2 livello, max +1.0) - più veloce
+  // 3. Giorni passati (ogni 10 giorni = +0.2 livello, max +1.0) - meno importante
+  // Formula migliorata: più responsiva alle task completate
+  const taskProgress = Math.min(completedTasks / 3 * 0.5, 3.0); // Max +3.0 (più veloce)
+  const minutesProgress = Math.min(totalMinutes / 200 * 0.2, 1.0); // Max +1.0 (più veloce)
+  const daysProgress = Math.min(daysSinceStart / 10 * 0.2, 1.0); // Max +1.0 (meno importante)
   
   // Il nuovo livello è calcolato dal livello iniziale + progresso
   // Questo evita accumuli e rende il calcolo più coerente
   const calculatedLevel = Math.min(
-    Math.round((initialLevel + taskProgress + daysProgress + minutesProgress) * 10) / 10,
+    Math.round((initialLevel + taskProgress + minutesProgress + daysProgress) * 10) / 10,
     5
   );
   
-  const newLevel = clamp(Math.floor(calculatedLevel), 0, 5);
+  const newLevel = clamp(Math.round(calculatedLevel * 2) / 2, 0, 5); // Arrotonda a 0.5
   
-  // Aggiorna solo se il livello è aumentato di almeno 0.5 rispetto al livello corrente
-  // E assicurati che non scenda mai sotto il livello iniziale
-  if (newLevel > currentLevel + 0.4 && newLevel >= initialLevel) {
+  // Aggiorna se il livello è aumentato di almeno 0.5 rispetto al livello corrente
+  // O se ci sono state task completate (per aggiornare più frequentemente)
+  // Permetti aggiornamenti più frequenti quando ci sono task completate
+  const hasProgress = completedTasks > 0 || totalMinutes > 0;
+  const levelIncreased = newLevel > currentLevel;
+  const significantIncrease = newLevel > currentLevel + 0.4;
+  
+  // Aggiorna se:
+  // 1. Aumento significativo (>= 0.5) O
+  // 2. C'è progresso (task/minuti) e il livello è aumentato (anche di poco)
+  if ((significantIncrease || (hasProgress && levelIncreased)) && newLevel >= initialLevel) {
     try {
       // Salva anche il livello iniziale se non presente
       const updateData = { level: newLevel };
@@ -1614,15 +1626,144 @@ function estimateCapacityUntilExamMinutes(exam, profile) {
   return Math.round(daysLeft * dailyAvgMin * realism);
 }
 
+/**
+ * Ottiene il numero di task completate e i minuti totali per un esame
+ * @param {object} exam - Oggetto esame con id, name, appelli
+ * @returns {object} {completedTasks: number, totalMinutes: number}
+ */
+function getCompletedTasksForExam(exam) {
+  let completedTasks = 0;
+  let totalMinutes = 0;
+  
+  if (!exam || !exam.id) {
+    return { completedTasks: 0, totalMinutes: 0 };
+  }
+  
+  const examId = exam.id;
+  const examName = exam.name;
+  
+  // Trova gli ID da controllare (può essere l'ID originale o un ID virtuale con appello)
+  const examIdsToCheck = [examId];
+  if (exam.appelli && Array.isArray(exam.appelli) && exam.appelli.length > 0) {
+    const selectedAppelli = exam.appelli.filter(a => a.selected !== false);
+    for (const appello of selectedAppelli) {
+      examIdsToCheck.push(`${examId}_${appello.date}`);
+    }
+  }
+  
+  try {
+    // Scansiona localStorage per task completate
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sp_task_done_") && localStorage.getItem(key) === "1") {
+        try {
+          const taskId = key.replace("sp_task_done_", "");
+          // Prova a recuperare il payload della task
+          const payloadKey = `sp_task_${taskId}`;
+          const payloadStr = localStorage.getItem(payloadKey) || sessionStorage.getItem(payloadKey);
+          if (payloadStr) {
+            const payload = JSON.parse(payloadStr);
+            const task = payload?.task;
+            if (task && (examIdsToCheck.includes(task.examId) || task.examName === examName)) {
+              completedTasks++;
+              totalMinutes += Number(task.minutes || 0);
+            }
+          }
+        } catch (e) {
+          // Ignora errori di parsing
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Errore scansionando localStorage:", e);
+  }
+  
+  return { completedTasks, totalMinutes };
+}
+
+/**
+ * Stima la percentuale di preparazione per un esame
+ * Considera: livello attuale, task completate, difficoltà, tempo rimanente, capacità disponibile
+ * @param {object} exam - Oggetto esame con id, name, level, difficulty, date, cfu
+ * @param {object} profile - Profilo utente con weeklyHours, goalMode
+ * @param {number} allocatedThisWeekMin - Minuti allocati questa settimana
+ * @returns {number} Percentuale di preparazione (0-100)
+ */
 function estimateReadinessPercent(exam, profile, allocatedThisWeekMin) {
+  const level = clamp(Number(exam.level || 0), 0, 5);
+  const difficulty = clamp(Number(exam.difficulty || 2), 1, 3);
+  const cfu = clamp(Number(exam.cfu || 6), 1, 30);
+  
+  // Ottieni task completate
+  const { completedTasks, totalMinutes } = getCompletedTasksForExam(exam);
+  
+  // 1. BASE: Livello attuale dell'esame (0-5) -> 0-40% della preparazione
+  // Se level è 0, la preparazione base è molto bassa (max 10%)
+  // Se level è 5, la preparazione base è alta (40%)
+  const levelBase = level === 0 ? 0.10 : (level / 5) * 0.4;
+  
+  // 2. TASK COMPLETATE: Bonus basato su task completate (più importante!)
+  // Ogni 3 task = +4% (max +30%) - più veloce e più peso
+  // Ogni 200 minuti = +4% (max +25%) - più veloce e più peso
+  const taskBonus = Math.min(completedTasks / 3 * 0.04, 0.30);
+  const minutesBonus = Math.min(totalMinutes / 200 * 0.04, 0.25);
+  const completedBonus = taskBonus + minutesBonus;
+  
+  // 3. DIFFICOLTÀ: Fattore moltiplicativo
+  // Difficoltà alta (3) richiede più preparazione, quindi riduce la % percepita
+  // Difficoltà bassa (1) è più facile, quindi aumenta la % percepita
+  const difficultyFactor = 1.0 - (difficulty - 1) * 0.1; // 1.0 per diff=1, 0.9 per diff=2, 0.8 per diff=3
+  
+  // 4. CAPACITÀ FUTURA: Considera se c'è tempo sufficiente per prepararsi
   const required = estimateRequiredMinutes(exam, profile);
   const capacity = estimateCapacityUntilExamMinutes(exam, profile);
-
-  const capScore = capacity / Math.max(1, required);
-  const planScore = (allocatedThisWeekMin || 0) / Math.max(1, required * 0.35);
-
-  const blended = 0.7 * capScore + 0.3 * planScore;
-  return clamp(Math.round(blended * 100), 0, 100);
+  const daysLeft = Math.max(0, daysTo(exam.date));
+  
+  // Se non c'è tempo sufficiente, riduci la preparazione
+  // Se c'è molto tempo, aumenta leggermente la preparazione (perché c'è tempo per migliorare)
+  let capacityFactor = 1.0;
+  if (daysLeft > 0) {
+    const capacityRatio = capacity / Math.max(1, required);
+    // Se la capacità è molto maggiore della richiesta, bonus del 10%
+    // Se la capacità è molto minore della richiesta, penalità del 20%
+    if (capacityRatio > 1.5) {
+      capacityFactor = 1.1;
+    } else if (capacityRatio < 0.7) {
+      capacityFactor = 0.8;
+    }
+  } else {
+    // Esame già passato o oggi, usa solo la preparazione attuale
+    capacityFactor = 1.0;
+  }
+  
+  // 5. PIANO SETTIMANALE: Bonus se c'è un piano attivo
+  const planBonus = allocatedThisWeekMin > 0 ? Math.min(allocatedThisWeekMin / Math.max(1, required * 0.35) * 0.1, 0.1) : 0;
+  
+  // Calcola la preparazione totale
+  // Formula: (base + bonus completate) * fattore difficoltà * fattore capacità + bonus piano
+  // Le task completate hanno più peso perché rappresentano lavoro reale fatto
+  let readiness = (levelBase + completedBonus) * difficultyFactor * capacityFactor + planBonus;
+  
+  // Se il livello è 0 e non ci sono task completate, la preparazione non può superare il 20%
+  // Questo evita stime irrealistiche quando non si sa nulla dell'esame
+  if (level === 0 && completedTasks === 0 && totalMinutes === 0) {
+    readiness = Math.min(readiness, 0.20);
+  }
+  
+  // Se ci sono molte task completate, la preparazione può essere alta anche con livello basso
+  // Questo riflette il lavoro reale fatto, non solo il livello iniziale
+  if (completedTasks >= 10 || totalMinutes >= 1000) {
+    // Con molte task completate, la preparazione può essere significativa
+    readiness = Math.max(readiness, 0.30); // Minimo 30% se hai fatto molto lavoro
+  }
+  
+  // Se il livello è molto basso (0-1) e ci sono pochi giorni, la preparazione è limitata
+  // Ma solo se non ci sono molte task completate
+  if (level <= 1 && daysLeft < 7 && completedTasks < 5 && totalMinutes < 500) {
+    readiness = Math.min(readiness, 0.40);
+  }
+  
+  return clamp(Math.round(readiness * 100), 0, 100);
 }
 
 function readinessBadge(pct) {
