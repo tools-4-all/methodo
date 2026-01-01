@@ -939,18 +939,17 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // SICUREZZA: Verifica che il codice referral non sia già stato usato
-    // Controlla se esiste già un referral con questo codice
-    const existingReferral = await db.collection('referrals')
+    // SICUREZZA: Verifica che il codice referral non abbia raggiunto il limite (max 2 utenti)
+    // Controlla quanti referral sono stati fatti con questo codice
+    const existingReferrals = await db.collection('referrals')
         .where('referralCode', '==', referralCode)
-        .limit(1)
         .get();
 
-    if (!existingReferral.empty) {
-      console.error(`[Referral] ❌ Codice referral già utilizzato: ${referralCode}`);
+    if (existingReferrals.size >= 2) {
+      console.error(`[Referral] ❌ Codice referral ha raggiunto il limite (2 utenti): ${referralCode}`);
       throw new functions.https.HttpsError(
-          'already-exists',
-          'Questo codice referral è già stato utilizzato. Ogni codice può essere usato solo una volta.',
+          'resource-exhausted',
+          'Questo codice referral ha raggiunto il limite massimo di utilizzi (2 utenti).',
       );
     }
 
@@ -1040,14 +1039,8 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
         }
 
         // SICUREZZA: Verifica che il referrer non abbia già troppi referral
-        // Limita a 10 referral per utente per prevenire abusi
-        const referralsCount = referrerData.referralsCount || 0;
-        if (referralsCount >= 10) {
-          throw new functions.https.HttpsError(
-              'resource-exhausted',
-              'Questo utente ha raggiunto il limite di referral',
-          );
-        }
+        // Limita a 2 referral per codice (già verificato sopra)
+        // Non limitiamo il numero totale di referral per utente, ma solo per codice
 
         // Calcola le date per Premium (7 giorni)
         const premiumStartDate = new Date();
@@ -1057,21 +1050,31 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
         // Aggiorna il nuovo utente con Premium
         const newUserData = newUserDoc.exists ? newUserDoc.data() : null;
         const newUserSubscription = newUserData?.subscription;
-        let newUserEndDate = premiumEndDate;
-
-        // Se ha già Premium, estendi la data di scadenza
+        
+        // REGOLA: Il nuovo utente riceve sempre 7 giorni (non accumulabile)
+        // Se ha già Premium attivo, mantieni quella data
+        // Altrimenti, dai 7 giorni da ora
+        let newUserEndDate;
         if (newUserSubscription && newUserSubscription.endDate) {
           const existingEndDate = newUserSubscription.endDate.toDate ?
                                 newUserSubscription.endDate.toDate() :
                                 new Date(newUserSubscription.endDate);
-
-          if (existingEndDate > premiumEndDate) {
+          
+          const now = new Date();
+          
+          // Se ha già Premium attivo (endDate nel futuro), mantieni quella data
+          // NON accumulare giorni
+          if (existingEndDate > now) {
             newUserEndDate = existingEndDate;
           } else {
-          // Estendi di 7 giorni dalla data esistente
-            newUserEndDate = new Date(existingEndDate);
+            // Se non ha Premium o è scaduto, dai 7 giorni da ora
+            newUserEndDate = new Date();
             newUserEndDate.setDate(newUserEndDate.getDate() + 7);
           }
+        } else {
+          // Non ha Premium, dai 7 giorni da ora
+          newUserEndDate = new Date();
+          newUserEndDate.setDate(newUserEndDate.getDate() + 7);
         }
 
         // Usa set se il documento non esiste, update se esiste
@@ -1107,21 +1110,31 @@ exports.processReferral = functions.https.onCall(async (data, context) => {
         // Aggiorna il referrer con Premium e incrementa il contatore
         const referrerRef = db.collection('users').doc(referrerUid);
         const referrerSubscription = referrerData.subscription;
-        let referrerEndDate = premiumEndDate;
-
-        // Se ha già Premium, estendi la data di scadenza
+        
+        // REGOLA: Chi invia il referral riceve sempre 1 settimana gratuita (non accumulabile)
+        // Se ha già Premium e la data di scadenza è nel futuro, mantieni quella
+        // Altrimenti, dai 7 giorni dalla data corrente
+        let referrerEndDate;
         if (referrerSubscription && referrerSubscription.endDate) {
           const existingEndDate = referrerSubscription.endDate.toDate ?
                                 referrerSubscription.endDate.toDate() :
                                 new Date(referrerSubscription.endDate);
-
-          if (existingEndDate > premiumEndDate) {
+          
+          const now = new Date();
+          
+          // Se ha già Premium attivo (endDate nel futuro), mantieni quella data
+          // NON accumulare giorni
+          if (existingEndDate > now) {
             referrerEndDate = existingEndDate;
           } else {
-          // Estendi di 7 giorni dalla data esistente
-            referrerEndDate = new Date(existingEndDate);
+            // Se non ha Premium o è scaduto, dai 7 giorni da ora
+            referrerEndDate = new Date();
             referrerEndDate.setDate(referrerEndDate.getDate() + 7);
           }
+        } else {
+          // Non ha Premium, dai 7 giorni da ora
+          referrerEndDate = new Date();
+          referrerEndDate.setDate(referrerEndDate.getDate() + 7);
         }
 
       transaction.update(referrerRef, {
