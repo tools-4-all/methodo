@@ -10115,9 +10115,12 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
   minutesInput.type = "number";
   minutesInput.id = "nt-minutes";
   minutesInput.min = "15";
-  minutesInput.max = "100";
+  // Imposta il massimo in base a taskMinutes del profilo
+  const maxTaskMinutes = profile?.taskMinutes || 100;
+  minutesInput.max = String(maxTaskMinutes);
   minutesInput.step = "5";
-  minutesInput.value = "30";
+  // Imposta il valore predefinito a taskMinutes se disponibile, altrimenti 30
+  minutesInput.value = String(profile?.taskMinutes || 30);
   minutesInput.required = true;
   minutesLabel.appendChild(minutesInput);
 
@@ -10193,8 +10196,10 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       showErrorModal("La durata deve essere almeno 15 minuti", "Errore di validazione");
       return;
     }
-    if (minutesVal > 100) {
-      showErrorModal("La durata non può superare 100 minuti", "Errore di validazione");
+    // Verifica che la durata non superi taskMinutes del profilo
+    const maxTaskMinutes = profile?.taskMinutes || 100;
+    if (minutesVal > maxTaskMinutes) {
+      showErrorModal(`La durata non può superare ${maxTaskMinutes} minuti (durata task impostata)`, "Errore di validazione");
       return;
     }
     try {

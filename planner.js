@@ -231,7 +231,8 @@ function cryptoId() {
  * Calcola una durata personalizzata per i task di un esame.  Il valore è
  * proporzionale alla difficoltà e all'ignoranza (quanto manca da
  * preparare): esami più difficili o con livello più basso riceveranno
- * sessioni più lunghe.  Il risultato è clampato a [15,120] minuti.
+ * sessioni più lunghe.  Il risultato è clampato a [15, baseMin] minuti
+ * per rispettare la durata massima impostata dall'utente.
  *
  * @param {number} baseMin - Durata base dei task (profile.taskMinutes)
  * @param {object} exam - Oggetto esame con proprietà difficulty e level
@@ -244,7 +245,8 @@ function computeExamTaskMinutes(baseMin, exam) {
   // Fattore di ignoranza: se il livello è basso (0) → 1.2; se alto (5) → 1.0
   const ignFactor = 1.0 + ((5 - level) / 5) * 0.2;
   const minutes = Math.round(baseMin * diffFactor * ignFactor);
-  return clamp(minutes, 15, 120);
+  // Clamp tra 15 minuti e baseMin (durata massima impostata dall'utente)
+  return clamp(minutes, 15, baseMin);
 }
 
 /**
