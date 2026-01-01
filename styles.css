@@ -2521,25 +2521,27 @@ color: rgba(255,255,255,.92);
 .appelliContainer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .appelloItem {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   transition: all 0.2s ease;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .appelloItem:hover {
@@ -2549,35 +2551,45 @@ color: rgba(255,255,255,.92);
 
 .appelloInputRow {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: flex-start;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
 
-.appelloInputRow > div:first-child {
+.appelloDateWrapper {
   grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
 }
 
-.appelloInputRow > button {
+.appelloPrimaryContainer {
   grid-column: 2;
+}
+
+.appelloInputRow > button {
+  grid-column: 3;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .appelloDate {
   width: 100%;
+  min-width: 0;
   max-width: 100%;
-  padding: 10px 12px;
+  padding: 6px 8px;
   background: rgba(255, 255, 255, 0.08);
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   font-family: inherit;
   transition: all 0.2s ease;
@@ -2631,7 +2643,10 @@ color: rgba(255,255,255,.92);
 .appelloItem .remove-appello {
   flex-shrink: 0;
   align-self: flex-end;
-  margin-top: 24px;
+  margin-top: 20px;
+  font-size: 10px;
+  padding: 5px 8px;
+  white-space: nowrap;
 }
 
 .appelloItem:only-child .remove-appello {
@@ -2640,13 +2655,44 @@ color: rgba(255,255,255,.92);
 
 /* Etichetta per campo data (se necessario) */
 .appelloDateLabel {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: block;
+}
+
+/* Container per radio button "Appello principale" */
+.appelloPrimaryContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  justify-content: flex-start;
+  padding-top: 20px;
+  width: auto;
+  max-width: 70px;
+}
+
+.appelloPrimaryLabel {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.primary-appello-radio {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Responsive per schermi piccoli */
@@ -2656,7 +2702,7 @@ color: rgba(255,255,255,.92);
     gap: 10px;
   }
   
-  .appelloInputRow > div:first-child {
+  .appelloDateWrapper {
     grid-column: 1;
     width: 100%;
   }
@@ -2668,9 +2714,61 @@ color: rgba(255,255,255,.92);
     margin-bottom: 0 !important;
   }
   
+  .appelloPrimaryContainer {
+    grid-column: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-top: 0;
+  }
+  
+  .appelloPrimaryLabel {
+    font-size: 12px;
+    margin: 0;
+  }
+  
   .simulationSummaryStats,
   .simulationAppelloComparisonStats {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Responsive per tablet (iPad) */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .appelloItem {
+    padding: 6px;
+    gap: 4px;
+  }
+  
+  .appelloInputRow {
+    gap: 4px;
+  }
+  
+  .appelloPrimaryContainer {
+    gap: 3px;
+    padding-top: 18px;
+    max-width: 60px;
+  }
+  
+  .appelloPrimaryLabel {
+    font-size: 8px;
+  }
+  
+  .primary-appello-radio {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .appelloDate {
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+  
+  .appelloItem .remove-appello {
+    font-size: 9px;
+    padding: 4px 6px;
+    margin-top: 18px;
   }
 }
 

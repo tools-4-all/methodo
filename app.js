@@ -2535,14 +2535,14 @@ function addAppelloItem(container) {
   
   item.innerHTML = `
     <div class="appelloInputRow">
-      <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+      <div class="appelloDateWrapper">
         <label class="appelloDateLabel" for="appello-date-${index}">Data</label>
         <input type="date" id="appello-date-${index}" class="appelloDate" />
       </div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
-            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
-            <input type="radio" name="primary-appello" value="${index}" class="primary-appello-radio" ${isFirst ? 'checked' : ''} style="cursor: pointer;" />
-          </div>
+      <div class="appelloPrimaryContainer">
+        <label class="appelloPrimaryLabel" for="appello-primary-${index}">Appello principale</label>
+        <input type="radio" name="primary-appello" value="${index}" id="appello-primary-${index}" class="primary-appello-radio" ${isFirst ? 'checked' : ''} style="cursor: pointer;" />
+      </div>
       <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
     </div>
   `;
@@ -2628,13 +2628,13 @@ function populateAppelliForm(appelli) {
       item.className = "appelloItem";
       item.innerHTML = `
         <div class="appelloInputRow">
-          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <div class="appelloDateWrapper">
             <label class="appelloDateLabel" for="appello-date-${idx}">Data</label>
             <input type="date" id="appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
           </div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
-            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
-            <input type="radio" name="primary-appello" value="${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
+          <div class="appelloPrimaryContainer">
+            <label class="appelloPrimaryLabel" for="appello-primary-${idx}">Appello principale</label>
+            <input type="radio" name="primary-appello" value="${idx}" id="appello-primary-${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
           </div>
           <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
         </div>
@@ -5147,13 +5147,13 @@ async function openEditExamModal(uid, exam, onSuccess) {
     item.className = "appelloItem";
     item.innerHTML = `
       <div class="appelloInputRow">
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+        <div class="appelloDateWrapper">
           <label class="appelloDateLabel" for="ee-appello-date-0">Data</label>
           <input type="date" id="ee-appello-date-0" class="appelloDate" />
         </div>
-        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
-          <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
-          <input type="radio" name="ee-primary-appello" value="0" class="primary-appello-radio" checked style="cursor: pointer;" />
+        <div class="appelloPrimaryContainer">
+          <label class="appelloPrimaryLabel" for="ee-appello-primary-0">Appello principale</label>
+          <input type="radio" name="ee-primary-appello" value="0" id="ee-appello-primary-0" class="primary-appello-radio" checked style="cursor: pointer;" />
         </div>
         <button type="button" class="btn tiny remove-appello" style="display:none; align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
       </div>
@@ -5165,13 +5165,13 @@ async function openEditExamModal(uid, exam, onSuccess) {
       item.className = "appelloItem";
       item.innerHTML = `
         <div class="appelloInputRow">
-          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <div class="appelloDateWrapper">
             <label class="appelloDateLabel" for="ee-appello-date-${idx}">Data</label>
             <input type="date" id="ee-appello-date-${idx}" class="appelloDate" value="${appello.date || ""}" />
           </div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-right: 8px;">
-            <label style="font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap;">Appello principale</label>
-            <input type="radio" name="ee-primary-appello" value="${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
+          <div class="appelloPrimaryContainer">
+            <label class="appelloPrimaryLabel" for="ee-appello-primary-${idx}">Appello principale</label>
+            <input type="radio" name="ee-primary-appello" value="${idx}" id="ee-appello-primary-${idx}" class="primary-appello-radio" ${appello.primary === true ? 'checked' : ''} style="cursor: pointer;" />
           </div>
           <button type="button" class="btn tiny remove-appello" style="align-self:flex-end; margin-bottom:24px;">Rimuovi</button>
         </div>
