@@ -786,6 +786,33 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
       }
     }
   }
+  
+  // Validazione: verifica che la somma delle durate dei task generati rispetti il budget allocato
+  // (prima della distribuzione, quindi considerando anche i task non piazzati)
+  let totalTaskMinutes = 0;
+  for (const [exId, queue] of taskQueues.entries()) {
+    for (const task of queue) {
+      totalTaskMinutes += task.minutes || 0;
+    }
+  }
+  
+  // Aggiungi anche i task già piazzati nei giorni
+  for (const day of days) {
+    for (const task of day.tasks) {
+      totalTaskMinutes += task.minutes || 0;
+    }
+  }
+  
+  // Verifica coerenza: la somma totale dei task generati dovrebbe essere vicina al budget
+  // (con una tolleranza per arrotondamenti e task micro)
+  const budgetUsed = allocations.reduce((sum, a) => sum + a.targetMin, 0);
+  const diff = Math.abs(totalTaskMinutes - budgetUsed);
+  const tolerance = Math.max(30, budgetUsed * 0.05); // 5% o almeno 30 minuti di tolleranza
+  
+  if (diff > tolerance) {
+    console.warn(`[Planner] Discrepanza tra budget allocato (${budgetUsed} min) e task generati (${totalTaskMinutes} min). Differenza: ${diff} min`);
+  }
+  
   return {
     weekStart: toISODate(weekStartDate),
     weeklyBudgetMin: weeklyBudget,
@@ -793,5 +820,12 @@ export function generateWeeklyPlan(profile, exams, weekStartDate = startOfWeekIS
     allocations,
     days,
     cut: unplaced.map((t) => ({ examName: t.examName, label: t.label, minutes: t.minutes })),
+    // Aggiungi informazioni di debug per validazione
+    _validation: {
+      budgetAllocated: budgetUsed,
+      tasksGenerated: totalTaskMinutes,
+      difference: diff,
+      withinTolerance: diff <= tolerance
+    }
   };
 }

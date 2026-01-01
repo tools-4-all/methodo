@@ -4039,14 +4039,26 @@ function mountOnboarding() {
     if (profile?.weeklyHours) qs("weekly-hours").value = profile.weeklyHours;
     if (profile?.taskMinutes) qs("task-minutes").value = String(profile.taskMinutes);
     
-    // Carica dati allenatore (solo se premium)
+    // Per utenti non premium: se non ci sono ore settimanali ma ci sono ore attuali, usa quelle
+    if (!isPremiumUser && profile?.currentHours && profile.currentHours > 0) {
+      const weeklyHoursInput = qs("weekly-hours");
+      if (weeklyHoursInput && (!profile?.weeklyHours || profile.weeklyHours < 1)) {
+        weeklyHoursInput.value = profile.currentHours.toFixed(1);
+      }
+    }
+    
+    // Carica dati allenatore
     const currentHoursInput = qs("current-hours");
     const targetHoursInput = qs("target-hours");
     const coachSection = currentHoursInput?.closest(".formSection");
     
+    // Carica "ore attuali" per tutti gli utenti (premium e non premium)
+    if (profile?.currentHours && currentHoursInput) {
+      currentHoursInput.value = profile.currentHours;
+    }
+    
     if (isPremiumUser) {
-      // Utente premium: abilita la sezione
-      if (profile?.currentHours && currentHoursInput) currentHoursInput.value = profile.currentHours;
+      // Utente premium: abilita la sezione completa
       if (profile?.targetHours && targetHoursInput) targetHoursInput.value = profile.targetHours;
       
       // Rimuovi overlay premium se presente
@@ -4099,7 +4111,8 @@ function mountOnboarding() {
           
           // Verifica se il profilo è nuovo (prima settimana o coachStartDate non esiste)
           const coachStartDate = await getCoachStartDate(profile);
-          const now = new Date();
+          // Usa getCurrentDate() per supportare date virtuali in localhost
+          const now = getCurrentDate();
           now.setHours(0, 0, 0, 0);
           
           let isNewProfile = false;
@@ -4114,6 +4127,17 @@ function mountOnboarding() {
             isNewProfile = weeksSinceStart === 0;
           }
           
+          // Recupera coachStartDate dal profilo o localStorage
+          let coachStartDateValue = null;
+          if (profile.coachStartDate) {
+            coachStartDateValue = new Date(profile.coachStartDate);
+          } else {
+            try {
+              const saved = localStorage.getItem('coach_start_date');
+              if (saved) coachStartDateValue = new Date(saved);
+            } catch {}
+          }
+          
           // Se il profilo è nuovo e previsto dalla strategia, usa le ore attuali
           // Altrimenti usa le ore suggerite dall'allenatore
           let hoursToUse;
@@ -4122,11 +4146,13 @@ function mountOnboarding() {
             hoursToUse = profile.currentHours;
           } else {
             // Profilo esistente: usa le ore suggerite dall'allenatore
-            const coachStartDateValue = profile.coachStartDate ? new Date(profile.coachStartDate) : null;
             hoursToUse = calculateSuggestedWeeklyHours(profile.currentHours, profile.targetHours, exams, coachStartDateValue);
           }
           
           weeklyHoursInput.value = hoursToUse.toFixed(1);
+          
+          // Aggiungi indicatore di progressione (usa coachStartDateValue anche se isNewProfile)
+          updateWeeklyHoursProgressionIndicator(weeklyHoursInput, profile, exams, coachStartDateValue);
         } else if (weeklyHoursInput) {
           // Se l'allenatore non è attivo, abilita il campo
           weeklyHoursInput.disabled = false;
@@ -4141,28 +4167,66 @@ function mountOnboarding() {
         }
       })();
     } else {
-      // Utente non premium: disabilita la sezione
+      // Utente non premium: permette di inserire "ore attuali" ma nasconde "obiettivo ore a settimana"
       if (currentHoursInput) {
-        currentHoursInput.disabled = true;
-        currentHoursInput.style.opacity = "0.5";
-        currentHoursInput.style.cursor = "not-allowed";
-        currentHoursInput.value = "";
+        // Abilita il campo "ore attuali" per utenti non premium
+        currentHoursInput.disabled = false;
+        currentHoursInput.style.opacity = "1";
+        currentHoursInput.style.cursor = "text";
+        if (profile?.currentHours) {
+          currentHoursInput.value = profile.currentHours;
+        }
+        
+        // Sincronizza le ore attuali con le ore settimanali suggerite
+        const weeklyHoursInput = qs("weekly-hours");
+        const syncWeeklyHours = () => {
+          const currentHours = Number(currentHoursInput.value || 0);
+          if (currentHours > 0 && weeklyHoursInput) {
+            weeklyHoursInput.value = currentHours.toFixed(1);
+          }
+        };
+        
+        // Sincronizza al caricamento se ci sono ore attuali
+        if (profile?.currentHours && profile.currentHours > 0) {
+          syncWeeklyHours();
+        }
+        
+        // Sincronizza quando l'utente modifica le ore attuali
+        currentHoursInput.addEventListener("input", syncWeeklyHours);
+        currentHoursInput.addEventListener("change", syncWeeklyHours);
       }
-      if (targetHoursInput) {
-        targetHoursInput.disabled = true;
-        targetHoursInput.style.opacity = "0.5";
-        targetHoursInput.style.cursor = "not-allowed";
-        targetHoursInput.value = "";
+      
+      // Aggiorna la descrizione della sezione "Ore settimanali suggerite" per utenti non premium
+      const weeklyHoursSection = qs("weekly-hours")?.closest(".formSection");
+      if (weeklyHoursSection) {
+        const sectionTitle = weeklyHoursSection.querySelector(".sectionTitle");
+        if (sectionTitle) {
+          const meta = sectionTitle.querySelector(".meta");
+          if (meta) {
+            meta.textContent = "Basate sulle tue ore attuali inserite sopra (puoi modificarle manualmente)";
+          }
+        }
+      }
+      
+      // Nascondi completamente il campo "obiettivo ore a settimana" per utenti non premium
+      const targetHoursRow = targetHoursInput?.closest(".formRow");
+      if (targetHoursRow) {
+        targetHoursRow.style.display = "none";
       }
       
       // Nascondi progress bar
       const coachProgress = qs("coach-progress");
       if (coachProgress) coachProgress.style.display = "none";
       
-      // Aggiungi overlay premium se non presente
-      if (coachSection && !coachSection.querySelector(".premium-overlay")) {
+      // Aggiungi overlay premium sulla sezione allenatore di studio
+      if (coachSection && !coachSection.querySelector(".premium-overlay-modal")) {
+        const currentPosition = window.getComputedStyle(coachSection).position;
+        if (currentPosition === "static") {
+          coachSection.style.position = "relative";
+        }
+        
         const overlay = document.createElement("div");
-        overlay.className = "premium-overlay";
+        overlay.className = "premium-overlay-modal";
         overlay.style.cssText = `
           position: absolute;
           top: 0;
@@ -4182,27 +4246,18 @@ function mountOnboarding() {
         `;
         overlay.innerHTML = `
           <div style="text-align: center;">
-            <div style="font-size: 32px; margin-bottom: 12px;">⭐</div>
-            <div style="font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.95); margin-bottom: 8px;">
+            <div style="font-size: 24px; margin-bottom: 8px;">⭐</div>
+            <div style="font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.95); margin-bottom: 6px;">
               Funzionalità Premium
             </div>
-            <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px; line-height: 1.5;">
-              L'Allenatore di Studio è disponibile solo per gli utenti Premium.<br>
-              Passa a Premium per creare un piano progressivo personalizzato.
+            <div style="font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.4; margin-bottom: 12px;">
+              L'Allenatore di Studio è disponibile solo per utenti Premium
             </div>
-            <button class="btn primary" style="margin-top: 8px;">
-              Passa a Premium
-            </button>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.6); line-height: 1.4;">
+              Puoi comunque inserire le tue ore attuali, che verranno usate come ore settimanali suggerite
+            </div>
           </div>
         `;
-        
-        // Posiziona il formSection come relative se non lo è già
-        if (coachSection) {
-          const currentPosition = window.getComputedStyle(coachSection).position;
-          if (currentPosition === "static") {
-            coachSection.style.position = "relative";
-          }
-        }
         
         overlay.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -4210,38 +4265,13 @@ function mountOnboarding() {
         });
         
         coachSection.appendChild(overlay);
-      }
-      
-      // Disabilita anche gli event listener sugli input
-      if (currentHoursInput) {
-        currentHoursInput.addEventListener("focus", (e) => {
-          if (!isPremiumUser) {
-            e.preventDefault();
-            e.target.blur();
-            showUpgradeModal();
-          }
-        });
-        currentHoursInput.addEventListener("click", (e) => {
-          if (!isPremiumUser) {
-            e.preventDefault();
-            showUpgradeModal();
-          }
-        });
-      }
-      if (targetHoursInput) {
-        targetHoursInput.addEventListener("focus", (e) => {
-          if (!isPremiumUser) {
-            e.preventDefault();
-            e.target.blur();
-            showUpgradeModal();
-          }
-        });
-        targetHoursInput.addEventListener("click", (e) => {
-          if (!isPremiumUser) {
-            e.preventDefault();
-            showUpgradeModal();
-          }
-        });
+        
+        // Disabilita i campi target-hours se presenti
+        if (targetHoursInput) {
+          targetHoursInput.disabled = true;
+          targetHoursInput.style.opacity = "0.5";
+          targetHoursInput.style.cursor = "not-allowed";
+        }
       }
     }
 
@@ -4257,20 +4287,35 @@ function mountOnboarding() {
 
       try {
         const goalMode = qs("goal-mode")?.value;
-        const weeklyHours = Number(qs("weekly-hours")?.value || 0);
+        let weeklyHours = Number(qs("weekly-hours")?.value || 0);
         const taskMinutes = Number(qs("task-minutes")?.value || 35);
         const dayMinutes = readDayInputs();
         const currentHours = Number(qs("current-hours")?.value || 0);
-        const targetHours = Number(qs("target-hours")?.value || 0);
+        let targetHours = Number(qs("target-hours")?.value || 0);
 
         if (!goalMode) throw new Error("Seleziona un obiettivo di studio.");
         
         const totalMin = Object.values(dayMinutes).reduce((a, b) => a + Number(b || 0), 0);
         if (totalMin < 60) throw new Error("Disponibilità settimanale troppo bassa (< 60 min).");
         if (weeklyHours < 1) throw new Error("Ore settimanali non valide.");
+        
+        // Validazione coerenza: verifica che le ore settimanali siano coerenti con la disponibilità giornaliera
+        const weeklyMinutesFromDays = totalMin;
+        const weeklyHoursFromDays = weeklyMinutesFromDays / 60;
+        const weeklyHoursFromInput = weeklyHours;
+        
+        // Permetti una discrepanza massima del 20% o 2 ore (la maggiore)
+        const maxDiff = Math.max(weeklyHoursFromInput * 0.2, 2);
+        const diff = Math.abs(weeklyHoursFromInput - weeklyHoursFromDays);
+        
+        if (diff > maxDiff) {
+          console.warn(`[Settings] Discrepanza tra ore settimanali inserite (${weeklyHoursFromInput}h) e somma disponibilità giornaliera (${weeklyHoursFromDays.toFixed(1)}h). Differenza: ${diff.toFixed(1)}h`);
+          // Non blocchiamo il salvataggio, ma avvisiamo l'utente
+        }
 
-        // Validazione allenatore (solo se premium)
+        // Validazione allenatore
         if (isPremiumUser) {
+          // Premium: valida entrambi i campi se compilati
           if (currentHours > 0 && targetHours > 0) {
             if (targetHours <= currentHours) {
               throw new Error("L'obiettivo deve essere maggiore delle ore attuali.");
@@ -4278,37 +4323,163 @@ function mountOnboarding() {
             if (targetHours - currentHours > 15) {
               throw new Error("L'incremento è troppo grande (max 15h). Sii realistico.");
             }
+            
+            // Verifica coerenza ore settimanali con quelle suggerite dall'allenatore
+            const isCoachActive = currentHours > 0 && targetHours > 0 && targetHours > currentHours;
+            if (isCoachActive) {
+              // Carica gli esami per calcolare le ore suggerite
+              let exams = [];
+              try {
+                exams = await listExams(user.uid);
+              } catch (err) {
+                console.error("Errore caricamento esami per validazione:", err);
+              }
+              
+              // Recupera coachStartDate per calcolare le ore suggerite corrette
+              const existingCoachStartDate = await getCoachStartDate(profile);
+              const suggestedHours = calculateSuggestedWeeklyHours(
+                currentHours, 
+                targetHours, 
+                exams, 
+                existingCoachStartDate
+              );
+              
+              // Verifica che le ore settimanali inserite siano coerenti con quelle suggerite
+              // Permetti una tolleranza di ±0.5h per arrotondamenti
+              const diff = Math.abs(weeklyHours - suggestedHours);
+              if (diff > 0.5) {
+                throw new Error(
+                  `Le ore settimanali (${weeklyHours}h) non corrispondono a quelle suggerite dall'allenatore (${suggestedHours.toFixed(1)}h). ` +
+                  `Il campo è stato aggiornato automaticamente.`
+                );
+              }
+            }
           }
         } else {
-          // Utente non premium: forza currentHours e targetHours a null
-          currentHours = 0;
+          // Utente non premium: può inserire solo "ore attuali", forza targetHours a null
+          // currentHours può essere salvato se inserito
           targetHours = 0;
+          
+          // Se l'utente non premium ha inserito le ore attuali ma non le ore settimanali,
+          // usa le ore attuali come ore settimanali suggerite (solo se weeklyHours è vuoto o 0)
+          if (currentHours > 0 && weeklyHours < 1) {
+            weeklyHours = currentHours;
+            // Aggiorna anche il campo nel form
+            const weeklyHoursInput = qs("weekly-hours");
+            if (weeklyHoursInput) {
+              weeklyHoursInput.value = currentHours.toFixed(1);
+            }
+          }
+          // Nota: se l'utente ha modificato manualmente le ore settimanali, le rispettiamo
+          // e non forziamo la sincronizzazione con le ore attuali
         }
 
         // Recupera coachStartDate se necessario (solo se premium e allenatore attivo)
         let coachStartDateValue = null;
+        let finalWeeklyHours = weeklyHours;
+        
         if (isPremiumUser && currentHours > 0 && targetHours > 0 && targetHours > currentHours) {
           const existingCoachStartDate = await getCoachStartDate(profile);
-          if (existingCoachStartDate) {
+          
+          // Verifica se currentHours o targetHours sono cambiati rispetto al profilo salvato
+          const hasCurrentHoursChanged = profile?.currentHours !== currentHours;
+          const hasTargetHoursChanged = profile?.targetHours !== targetHours;
+          
+          // Se le ore attuali o l'obiettivo sono cambiati, resetta la data di inizio
+          // per far ripartire la progressione da capo
+          if (hasCurrentHoursChanged || hasTargetHoursChanged) {
+            // Resetta la data di inizio per far ripartire la progressione
+            coachStartDateValue = getCurrentDate().toISOString();
+            // Rimuovi anche dal localStorage se presente
+            try {
+              localStorage.removeItem('coach_start_date');
+            } catch {}
+          } else if (existingCoachStartDate) {
+            // Se non sono cambiati, mantieni la data esistente
             coachStartDateValue = existingCoachStartDate.toISOString();
           } else {
             // Se non esiste, usa la data corrente
-            coachStartDateValue = new Date().toISOString();
+            coachStartDateValue = getCurrentDate().toISOString();
+          }
+          
+          // Se l'allenatore è attivo, calcola e salva le ore progressive corrette
+          const isCoachActive = currentHours > 0 && targetHours > 0 && targetHours > currentHours;
+          if (isCoachActive) {
+            // Carica gli esami per calcolare le ore suggerite
+            let exams = [];
+            try {
+              exams = await listExams(user.uid);
+            } catch (err) {
+              console.error("Errore caricamento esami per calcolo ore progressive:", err);
+            }
+            
+            // Calcola le ore progressive corrette
+            const coachStartDateForCalc = coachStartDateValue ? new Date(coachStartDateValue) : null;
+            const suggestedHours = calculateSuggestedWeeklyHours(
+              currentHours, 
+              targetHours, 
+              exams, 
+              coachStartDateForCalc
+            );
+            
+            // Usa le ore progressive calcolate invece di quelle inserite manualmente
+            finalWeeklyHours = suggestedHours;
+            console.log("[Settings] Allenatore attivo: salvo ore progressive", {
+              currentHours,
+              targetHours,
+              suggestedHours,
+              weeklyHoursInput: weeklyHours
+            });
           }
         }
         
         await setProfile(user.uid, { 
           goalMode, 
-          weeklyHours, 
+          weeklyHours: finalWeeklyHours, 
           taskMinutes, 
           dayMinutes,
-          currentHours: isPremiumUser && currentHours > 0 ? currentHours : null,
+          // Permetti a tutti (premium e non premium) di salvare currentHours se inserito
+          currentHours: currentHours > 0 ? currentHours : null,
+          // Solo premium può salvare targetHours
           targetHours: isPremiumUser && targetHours > 0 ? targetHours : null,
           coachStartDate: coachStartDateValue
         });
         
         // Invalida il piano per forzare la rigenerazione automatica
         await invalidateWeeklyPlan(user.uid);
+        
+        // Ricarica il profilo aggiornato per aggiornare la visualizzazione dell'allenatore
+        const updatedProfile = await getProfile(user.uid);
+        
+        // Se l'utente è premium e l'allenatore è attivo, aggiorna le ore settimanali suggerite
+        if (isPremiumUser && updatedProfile?.currentHours > 0 && updatedProfile?.targetHours > 0 && 
+            updatedProfile.targetHours > updatedProfile.currentHours) {
+          const weeklyHoursInput = qs("weekly-hours");
+          if (weeklyHoursInput) {
+            // Carica gli esami per calcolare le ore suggerite
+            let exams = [];
+            try {
+              exams = await listExams(user.uid);
+            } catch (err) {
+              console.error("Errore caricamento esami:", err);
+            }
+            
+            // Calcola le ore suggerite con la nuova coachStartDate
+            const coachStartDateValue = updatedProfile.coachStartDate ? new Date(updatedProfile.coachStartDate) : null;
+            const suggestedHours = calculateSuggestedWeeklyHours(
+              updatedProfile.currentHours, 
+              updatedProfile.targetHours, 
+              exams, 
+              coachStartDateValue
+            );
+            
+            // Aggiorna il campo con le ore suggerite
+            weeklyHoursInput.value = suggestedHours.toFixed(1);
+            
+            // Aggiorna anche la visualizzazione dell'allenatore
+            updateCoachDisplay(updatedProfile, true, exams);
+          }
+        }
         
         if (savedEl) {
           setText(savedEl, "Impostazioni salvate con successo!");
@@ -4465,6 +4636,17 @@ function mountOnboarding() {
           label.appendChild(badge);
         }
         
+        // Recupera coachStartDate dal profilo o localStorage
+        let coachStartDateValue = null;
+        if (profile.coachStartDate) {
+          coachStartDateValue = new Date(profile.coachStartDate);
+        } else {
+          try {
+            const saved = localStorage.getItem('coach_start_date');
+            if (saved) coachStartDateValue = new Date(saved);
+          } catch {}
+        }
+        
         // Verifica se il profilo è nuovo (prima settimana o coachStartDate non esiste)
         const coachStartDate = await getCoachStartDate(profile);
         const now = new Date();
@@ -4490,20 +4672,13 @@ function mountOnboarding() {
           hoursToUse = profile.currentHours;
         } else {
           // Profilo esistente: usa le ore suggerite dall'allenatore
-          // Recupera coachStartDate dal profilo o localStorage
-          let coachStartDateValue = null;
-          if (profile.coachStartDate) {
-            coachStartDateValue = new Date(profile.coachStartDate);
-          } else {
-            try {
-              const saved = localStorage.getItem('coach_start_date');
-              if (saved) coachStartDateValue = new Date(saved);
-            } catch {}
-          }
           hoursToUse = calculateSuggestedWeeklyHours(profile.currentHours, profile.targetHours, exams, coachStartDateValue);
         }
         
         weeklyHoursInput.value = hoursToUse.toFixed(1);
+        
+        // Aggiungi indicatore di progressione (usa coachStartDateValue anche se isNewProfile)
+        updateWeeklyHoursProgressionIndicator(weeklyHoursInput, profile, exams, coachStartDateValue);
       } else if (weeklyHoursInput) {
         // Se l'allenatore non è attivo, abilita il campo
         weeklyHoursInput.disabled = false;
@@ -4515,6 +4690,9 @@ function mountOnboarding() {
         const label = weeklyHoursInput.closest(".formRow")?.querySelector("label");
         const badge = label?.querySelector(".coach-suggested-badge");
         if (badge) badge.remove();
+        
+        // Rimuovi indicatore di progressione se presente
+        removeWeeklyHoursProgressionIndicator(weeklyHoursInput);
       }
     };
     
@@ -4757,6 +4935,63 @@ function mountOnboarding() {
         }, async () => {
           // Callback quando l'utente conferma
           try {
+            // Aggiorna il profilo con le ore progressive corrette se l'allenatore è attivo
+            if (isPremiumUser && currentCurrentHours > 0 && currentTargetHours > 0 && 
+                currentTargetHours > currentCurrentHours) {
+              // Carica gli esami per calcolare le ore suggerite
+              let exams = [];
+              try {
+                exams = await listExams(user.uid);
+              } catch (err) {
+                console.error("Errore caricamento esami:", err);
+              }
+              
+              // Recupera coachStartDate
+              let coachStartDateValue = null;
+              if (profile2?.coachStartDate) {
+                coachStartDateValue = new Date(profile2.coachStartDate);
+              } else {
+                try {
+                  const saved = localStorage.getItem('coach_start_date');
+                  if (saved) coachStartDateValue = new Date(saved);
+                } catch {}
+              }
+              
+              // Se non c'è una data di inizio, creala
+              if (!coachStartDateValue) {
+                coachStartDateValue = getCurrentDate();
+                try {
+                  localStorage.setItem('coach_start_date', coachStartDateValue.toISOString());
+                } catch {}
+              }
+              
+              // Calcola le ore progressive corrette
+              const suggestedHours = calculateSuggestedWeeklyHours(
+                currentCurrentHours,
+                currentTargetHours,
+                exams,
+                coachStartDateValue
+              );
+              
+              // Aggiorna il profilo con le ore progressive corrette
+              await setProfile(user.uid, {
+                ...profile2,
+                weeklyHours: suggestedHours,
+                currentHours: currentCurrentHours,
+                targetHours: currentTargetHours,
+                coachStartDate: coachStartDateValue.toISOString()
+              });
+              
+              // Ricarica il profilo aggiornato
+              profile2 = await getProfile(user.uid);
+              
+              console.log("[handleGoToDashboard] Profilo aggiornato con ore progressive:", {
+                suggestedHours,
+                currentHours: currentCurrentHours,
+                targetHours: currentTargetHours
+              });
+            }
+            
             // Verifica se ci sono modifiche che richiedono rigenerazione del piano
             const weekStart = startOfWeekISO(getCurrentDate());
             const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
@@ -4806,7 +5041,8 @@ function calculateSuggestedWeeklyHours(currentHours, targetHours, exams = [], co
   }
   
   // Trova l'esame più vicino per calcolare quante settimane abbiamo
-  const now = new Date();
+  // Usa getCurrentDate() per supportare date virtuali in localhost
+  const now = getCurrentDate();
   now.setHours(0, 0, 0, 0);
   
   // Usa la data di inizio del piano come riferimento (se disponibile)
@@ -4840,16 +5076,20 @@ function calculateSuggestedWeeklyHours(currentHours, targetHours, exams = [], co
   const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
   
   // Calcola incremento settimanale
+  // Usa totalWeeks come numero di settimane per la progressione
+  // La prima settimana (currentWeek = 0) usa currentHours
+  // L'ultima settimana (currentWeek = totalWeeks - 1) dovrebbe raggiungere targetHours
   const totalIncrease = targetHours - currentHours;
-  const incrementPerWeek = totalIncrease / Math.max(1, totalWeeks - 1);
+  const incrementPerWeek = totalIncrease / Math.max(1, totalWeeks);
   
   // Calcola ore per questa settimana (progressivo)
-  const hoursThisWeek = Math.min(
-    currentHours + (incrementPerWeek * currentWeek),
-    targetHours
-  );
+  // currentWeek va da 0 a totalWeeks-1
+  // Se currentWeek = 0: hoursThisWeek = currentHours
+  // Se currentWeek = totalWeeks-1: hoursThisWeek ≈ targetHours
+  const hoursThisWeek = currentHours + (incrementPerWeek * currentWeek);
   
-  const result = Math.max(currentHours, hoursThisWeek);
+  // Assicurati che il risultato sia almeno currentHours e non superi targetHours
+  const result = Math.max(currentHours, Math.min(hoursThisWeek, targetHours));
   
   // Debug log per verificare il calcolo
   console.log('[Coach] Calcolo ore suggerite:', {
@@ -4901,6 +5141,136 @@ function calculateProgressionWeeks(currentHours, targetHours) {
   return Math.ceil(totalIncrease / incrementPerWeek);
 }
 
+// Aggiorna l'indicatore di progressione delle ore settimanali nella pagina strategie
+function updateWeeklyHoursProgressionIndicator(weeklyHoursInput, profile, exams = [], coachStartDateValue = null) {
+  if (!weeklyHoursInput || !profile || !profile.currentHours || !profile.targetHours || profile.targetHours <= profile.currentHours) {
+    return;
+  }
+  
+  // Rimuovi indicatore esistente se presente
+  removeWeeklyHoursProgressionIndicator(weeklyHoursInput);
+  
+  // Calcola informazioni sulla progressione
+  // Usa getCurrentDate() per supportare date virtuali in localhost
+  const now = getCurrentDate();
+  now.setHours(0, 0, 0, 0);
+  let weekStart;
+  if (coachStartDateValue) {
+    weekStart = new Date(coachStartDateValue);
+    weekStart.setHours(0, 0, 0, 0);
+  } else {
+    weekStart = new Date(now);
+    weekStart.setHours(0, 0, 0, 0);
+  }
+  
+  const weeksSinceStart = Math.floor((now - weekStart) / (7 * 24 * 60 * 60 * 1000));
+  const currentWeek = Math.max(0, weeksSinceStart);
+  
+  // Trova l'esame più vicino per calcolare quante settimane totali abbiamo
+  let minWeeksToExam = Infinity;
+  for (const exam of exams) {
+    if (!exam.date) continue;
+    const examDate = new Date(exam.date);
+    examDate.setHours(0, 0, 0, 0);
+    const weeksToExam = Math.ceil((examDate - weekStart) / (7 * 24 * 60 * 60 * 1000));
+    if (weeksToExam > 0 && weeksToExam < minWeeksToExam) {
+      minWeeksToExam = weeksToExam;
+    }
+  }
+  const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
+  
+  const suggestedHours = calculateSuggestedWeeklyHours(profile.currentHours, profile.targetHours, exams, coachStartDateValue);
+  const progressPct = Math.round(((suggestedHours - profile.currentHours) / (profile.targetHours - profile.currentHours)) * 100);
+  
+  // Crea l'indicatore
+  const indicator = document.createElement("div");
+  indicator.className = "weekly-hours-progression-indicator";
+  indicator.style.cssText = `
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.5;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  `;
+  
+  indicator.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <strong style="color: rgba(99, 102, 241, 1); font-size: 13px;">Progressione allenatore</strong>
+      <span style="color: rgba(255, 255, 255, 0.9); font-weight: 600; font-size: 13px;">Settimana ${currentWeek + 1}/${totalWeeks}</span>
+    </div>
+    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
+      Ore attuali: <strong>${profile.currentHours.toFixed(1)}h</strong> → 
+      Questa settimana: <strong style="color: rgba(99, 102, 241, 1);">${suggestedHours.toFixed(1)}h</strong> → 
+      Obiettivo: <strong>${profile.targetHours.toFixed(1)}h</strong>
+    </div>
+    <div style="margin-top: 8px;">
+      <div style="background: rgba(255, 255, 255, 0.1); border-radius: 4px; height: 8px; overflow: hidden;">
+        <div style="background: rgba(99, 102, 241, 1); height: 100%; width: ${progressPct}%; transition: width 0.3s ease;"></div>
+      </div>
+      <div style="margin-top: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.6);">
+        Progresso: ${progressPct}% verso l'obiettivo
+      </div>
+    </div>
+  `;
+  
+  // Inserisci l'indicatore dopo la formSection per renderla più larga
+  const formSection = weeklyHoursInput.closest(".formSection");
+  if (formSection) {
+    // Rimuovi l'indicatore esistente se presente (potrebbe essere in un formRow)
+    const existingIndicator = formSection.querySelector(".weekly-hours-progression-indicator");
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+    // Inserisci dopo la formSection
+    formSection.parentNode.insertBefore(indicator, formSection.nextSibling);
+  } else {
+    // Fallback: inserisci dopo il formRow se non troviamo la formSection
+    const formRow = weeklyHoursInput.closest(".formRow");
+    if (formRow) {
+      formRow.appendChild(indicator);
+    }
+  }
+}
+
+// Rimuove l'indicatore di progressione delle ore settimanali
+function removeWeeklyHoursProgressionIndicator(weeklyHoursInput) {
+  if (!weeklyHoursInput) return;
+  
+  // Cerca nella formSection (dove viene inserito ora)
+  const formSection = weeklyHoursInput.closest(".formSection");
+  if (formSection) {
+    // Cerca dopo la formSection
+    let nextSibling = formSection.nextSibling;
+    while (nextSibling) {
+      if (nextSibling.classList && nextSibling.classList.contains("weekly-hours-progression-indicator")) {
+        nextSibling.remove();
+        return;
+      }
+      nextSibling = nextSibling.nextSibling;
+    }
+    // Cerca anche dentro la formSection (fallback per vecchie versioni)
+    const indicator = formSection.querySelector(".weekly-hours-progression-indicator");
+    if (indicator) {
+      indicator.remove();
+    }
+  } else {
+    // Fallback: cerca nel formRow
+    const formRow = weeklyHoursInput.closest(".formRow");
+    if (formRow) {
+      const indicator = formRow.querySelector(".weekly-hours-progression-indicator");
+      if (indicator) {
+        indicator.remove();
+      }
+    }
+  }
+}
+
 function updateCoachDisplay(profile, isPremium = true, exams = []) {
   // Se non è premium, non mostrare nulla
   if (!isPremium) {
@@ -4930,16 +5300,42 @@ function updateCoachDisplay(profile, isPremium = true, exams = []) {
     currentText.textContent = `${current.toFixed(1)}h attuali`;
     targetText.textContent = `Obiettivo: ${target.toFixed(1)}h`;
     
-    const weeks = calculateProgressionWeeks(current, target);
     // Recupera coachStartDate dal profilo se disponibile
     const coachStartDateValue = profile?.coachStartDate ? new Date(profile.coachStartDate) : null;
     const suggested = calculateSuggestedWeeklyHours(current, target, exams, coachStartDateValue);
+    
+    // Calcola totalWeeks nello stesso modo di calculateSuggestedWeeklyHours per coerenza
+    // Usa getCurrentDate() per supportare date virtuali in localhost
+    const now = getCurrentDate();
+    now.setHours(0, 0, 0, 0);
+    let weekStart;
+    if (coachStartDateValue) {
+      weekStart = new Date(coachStartDateValue);
+      weekStart.setHours(0, 0, 0, 0);
+    } else {
+      weekStart = new Date(now);
+      weekStart.setHours(0, 0, 0, 0);
+    }
+    
+    // Trova l'esame più vicino per calcolare quante settimane totali abbiamo
+    let minWeeksToExam = Infinity;
+    for (const exam of exams) {
+      if (!exam.date) continue;
+      const examDate = new Date(exam.date);
+      examDate.setHours(0, 0, 0, 0);
+      const weeksToExam = Math.ceil((examDate - weekStart) / (7 * 24 * 60 * 60 * 1000));
+      if (weeksToExam > 0 && weeksToExam < minWeeksToExam) {
+        minWeeksToExam = weeksToExam;
+      }
+    }
+    // Se non ci sono esami o sono troppo lontani, usa un default di 8 settimane
+    const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
     
     coachInfo.innerHTML = `
       <div style="font-size:12px; color:rgba(255,255,255,.7); margin-top:8px; line-height:1.5;">
         <strong style="color:rgba(255,255,255,.9);">Piano progressivo:</strong><br>
         Questa settimana: <strong>${suggested.toFixed(1)}h</strong> suggerite<br>
-        Tempo stimato per raggiungere l'obiettivo: <strong>${weeks} settimane</strong>
+        Tempo stimato per raggiungere l'obiettivo: <strong>${totalWeeks} settimane</strong>
       </div>
     `;
   } else {
@@ -8650,10 +9046,83 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
 
   const todayISO = isoToday();
 
-  safeText(
-    "week-meta",
-    `dal ${plan.weekStart} · budget ${Math.round(plan.weeklyBudgetMin / 60)}h · task ${plan.taskMinutes}m`
-  );
+  // Calcola le ore settimanali progressive se l'allenatore è attivo
+  let weeklyHoursDisplay = Math.round(plan.weeklyBudgetMin / 60);
+  let weeklyHoursProgression = null;
+  
+  if (profile && profile.currentHours && profile.targetHours && profile.targetHours > profile.currentHours) {
+    // Allenatore attivo: calcola le ore progressive
+    // Usa coachStartDate dal profilo o localStorage (sincrono)
+    let coachStartDateValue = null;
+    if (profile.coachStartDate) {
+      try {
+        coachStartDateValue = new Date(profile.coachStartDate);
+      } catch {}
+    }
+    if (!coachStartDateValue) {
+      try {
+        const saved = localStorage.getItem('coach_start_date');
+        if (saved) coachStartDateValue = new Date(saved);
+      } catch {}
+    }
+    
+    const suggestedHours = calculateSuggestedWeeklyHours(
+      profile.currentHours,
+      profile.targetHours,
+      exams,
+      coachStartDateValue
+    );
+    
+    weeklyHoursDisplay = Math.round(suggestedHours * 10) / 10;
+    
+    // Calcola informazioni sulla progressione
+    // Usa getCurrentDate() per supportare date virtuali in localhost
+    const now = getCurrentDate();
+    now.setHours(0, 0, 0, 0);
+    let weekStart;
+    if (coachStartDateValue) {
+      weekStart = new Date(coachStartDateValue);
+      weekStart.setHours(0, 0, 0, 0);
+    } else {
+      weekStart = new Date(now);
+      weekStart.setHours(0, 0, 0, 0);
+    }
+    
+    const weeksSinceStart = Math.floor((now - weekStart) / (7 * 24 * 60 * 60 * 1000));
+    const currentWeek = Math.max(0, weeksSinceStart);
+    
+    // Trova l'esame più vicino per calcolare quante settimane totali abbiamo
+    let minWeeksToExam = Infinity;
+    for (const exam of exams) {
+      if (!exam.date) continue;
+      const examDate = new Date(exam.date);
+      examDate.setHours(0, 0, 0, 0);
+      const weeksToExam = Math.ceil((examDate - weekStart) / (7 * 24 * 60 * 60 * 1000));
+      if (weeksToExam > 0 && weeksToExam < minWeeksToExam) {
+        minWeeksToExam = weeksToExam;
+      }
+    }
+    const totalWeeks = minWeeksToExam === Infinity ? 8 : Math.min(minWeeksToExam, 12);
+    
+    weeklyHoursProgression = {
+      current: suggestedHours,
+      start: profile.currentHours,
+      target: profile.targetHours,
+      week: currentWeek + 1,
+      totalWeeks: totalWeeks
+    };
+  }
+  
+  // Aggiorna la visualizzazione
+  let metaText = `dal ${plan.weekStart} · budget ${weeklyHoursDisplay}h · task ${plan.taskMinutes}m`;
+  
+  if (weeklyHoursProgression) {
+    // Aggiungi indicatore di progressione
+    const progressPct = Math.round(((weeklyHoursProgression.current - weeklyHoursProgression.start) / (weeklyHoursProgression.target - weeklyHoursProgression.start)) * 100);
+    metaText += ` · settimana ${weeklyHoursProgression.week}/${weeklyHoursProgression.totalWeeks} (${progressPct}%)`;
+  }
+  
+  safeText("week-meta", metaText);
   safeText("today-meta", todayISO);
 
   const todayDay = plan.days?.find((d) => d.dateISO === todayISO) || plan.days?.[0] || null;
