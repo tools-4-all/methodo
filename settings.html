@@ -94,7 +94,10 @@
   </div>
 
   <script type="module" src="./app.js"></script>
-  <script>
+  <script type="module">
+    // Importa le funzioni necessarie
+    import { logout } from "./auth.js";
+
     // ===== MENU TOGGLE =====
     const menuBtn = document.getElementById("menu-btn");
     const menuPanel = document.getElementById("menu-panel");
@@ -137,6 +140,12 @@
     // ESC -> chiudi
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeMenu();
+    });
+
+    // Logout handler
+    document.getElementById("logout-btn")?.addEventListener("click", async () => {
+      await logout();
+      window.location.assign("./index.html");
     });
   </script>
 </body>
