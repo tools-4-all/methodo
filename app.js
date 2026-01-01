@@ -5751,7 +5751,7 @@ async function openEditExamModal(uid, exam, onSuccess) {
   
   // Campo distribuzione task (opzionale)
   const taskDistSection = document.createElement("div");
-  taskDistSection.style.cssText = "margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);";
+  taskDistSection.style.cssText = "margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1); position: relative;";
   
   const taskDistTitle = document.createElement("div");
   taskDistTitle.style.cssText = "margin-bottom: 16px;";
@@ -5812,13 +5812,23 @@ async function openEditExamModal(uid, exam, onSuccess) {
   
   // Controllo premium per distribuzione task
   if (!isPremiumUser) {
+    // Assicurati che la sezione abbia position relative per contenere l'overlay
+    taskDistSection.style.position = "relative";
+    
     taskDistToggleBtn.disabled = true;
     taskDistToggleBtn.style.opacity = "0.5";
     taskDistToggleBtn.style.cursor = "not-allowed";
     taskDistContainer.style.display = "none";
     
-    // Aggiungi overlay premium sulla sezione distribuzione task
-    if (taskDistSection && !taskDistSection.querySelector(".premium-overlay-modal")) {
+    // Aggiungi overlay premium sulla sezione distribuzione task DOPO che tutti gli elementi sono stati aggiunti
+    // Usa setTimeout per assicurarsi che il DOM sia completamente renderizzato
+    setTimeout(() => {
+      // Rimuovi overlay esistente se presente
+      const existingOverlay = taskDistSection.querySelector(".premium-overlay-modal");
+      if (existingOverlay) {
+        existingOverlay.remove();
+      }
+      
       const overlay = document.createElement("div");
       overlay.className = "premium-overlay-modal";
       overlay.style.cssText = `
@@ -5827,16 +5837,20 @@ async function openEditExamModal(uid, exam, onSuccess) {
         left: 0;
         right: 0;
         bottom: 0;
+        width: 100%;
+        min-height: 100%;
         background: rgba(10, 12, 20, 0.85);
         backdrop-filter: blur(4px);
-        border-radius: 12px;
+        border-radius: 8px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 20px;
-        z-index: 10;
+        z-index: 1000;
         cursor: pointer;
+        box-sizing: border-box;
+        pointer-events: auto;
       `;
       overlay.innerHTML = `
         <div style="text-align: center;">
@@ -5850,19 +5864,19 @@ async function openEditExamModal(uid, exam, onSuccess) {
         </div>
       `;
       
-      const currentPosition = window.getComputedStyle(taskDistSection).position;
-      if (currentPosition === "static") {
-        taskDistSection.style.position = "relative";
-      }
       overlay.addEventListener("click", (e) => {
         e.stopPropagation();
+        e.preventDefault();
         showUpgradeModal();
       });
+      
+      // Inserisci l'overlay come ultimo figlio della sezione per assicurarsi che copra tutto
       taskDistSection.appendChild(overlay);
-    }
+    }, 0);
     
     taskDistToggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       showUpgradeModal();
     });
     
@@ -6090,7 +6104,11 @@ async function openEditExamModal(uid, exam, onSuccess) {
       // Se l'utente ha cliccato su "Usa distribuzione automatica", salva null
       // altrimenti usa la distribuzione personalizzata o mantieni quella esistente
       let finalTaskDistribution;
-      if (window._taskDistributionWasReset && window._taskDistributionWasReset()) {
+      if (!isPremiumUser) {
+        // Utente non premium: non può modificare la distribuzione task
+        // Mantieni quella esistente se presente, altrimenti null (distribuzione automatica)
+        finalTaskDistribution = exam.taskDistribution || null;
+      } else if (window._taskDistributionWasReset && window._taskDistributionWasReset()) {
         // L'utente ha resettato, quindi usa distribuzione automatica (null)
         finalTaskDistribution = null;
         // Pulisci il flag
@@ -6118,20 +6136,39 @@ async function openEditExamModal(uid, exam, onSuccess) {
       };
       
       // Aggiungi taskDistribution solo se non è null (Firestore non accetta undefined)
-      // Se è null, usa deleteField() per rimuovere il campo, altrimenti salva il valore
-      if (finalTaskDistribution !== null) {
-        updateData.taskDistribution = finalTaskDistribution;
-      } else if (exam.taskDistribution) {
-        // Se è null e c'era un valore precedente, rimuovilo usando deleteField
-        updateData.taskDistribution = deleteField();
+      // Per utenti non premium: mantieni la distribuzione esistente se presente, altrimenti non includere il campo
+      // Per utenti premium: gestisci come prima
+      if (!isPremiumUser) {
+        // Utente non premium: mantieni la distribuzione esistente se presente
+        if (exam.taskDistribution) {
+          updateData.taskDistribution = exam.taskDistribution;
+        }
+        // Se non c'era una distribuzione, semplicemente non includiamo il campo
+      } else {
+        // Utente premium: gestisci normalmente
+        if (finalTaskDistribution !== null) {
+          updateData.taskDistribution = finalTaskDistribution;
+        } else if (exam.taskDistribution) {
+          // Se è null e c'era un valore precedente, rimuovilo usando deleteField
+          updateData.taskDistribution = deleteField();
+        }
+        // Se è null e non c'era un valore precedente, semplicemente non includiamo il campo
       }
-      // Se è null e non c'era un valore precedente, semplicemente non includiamo il campo
 
+      console.log("[EditExam] Salvataggio esame:", {
+        uid,
+        examId: exam.id,
+        isPremiumUser,
+        updateData,
+        hasTaskDistribution: !!updateData.taskDistribution
+      });
+      
       await updateExam(uid, exam.id, updateData);
+      console.log("[EditExam] Esame salvato con successo");
       closeModal();
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error(err);
+      console.error("[EditExam] Errore modifica esame:", err);
       alert("Errore modifica esame: " + (err?.message || err));
     }
   });
