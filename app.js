@@ -1231,15 +1231,8 @@ async function showPassedAppelloModal(uid, exam, appello, appelloDate) {
     // Handler: Esame superato
     qs("passed-yes-btn")?.addEventListener("click", async () => {
       try {
-        // NON aggiungere allo storico - l'utente non vuole tracciare gli esami superati
-        // Deseleziona questo appello e rimuovi l'esame dalla lista attiva
-        const updatedAppelli = exam.appelli.map(a => 
-          a.date === appelloDate ? { ...a, selected: false, passed: true } : a
-        );
-        await updateExam(uid, exam.id, { appelli: updatedAppelli });
-        
-        // Invalida il piano
-        await invalidateWeeklyPlan(uid);
+        // Rimuovi completamente l'esame quando l'utente conferma di averlo sostenuto
+        await removeExam(uid, exam.id);
         
         showToast("Esame rimosso dal piano!", 3000);
         await closeModal();
