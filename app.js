@@ -167,6 +167,116 @@ function showToast(msg, ms = 4500) {
 /**
  * Mostra un popup di errore/avviso con design coerente
  */
+function showVerificationEmailModal() {
+  // Evita di aprire più modali contemporaneamente
+  if (document.getElementById("verification-email-modal")) return;
+  
+  const overlay = document.createElement("div");
+  overlay.id = "verification-email-modal";
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.75)",
+    zIndex: "10000",
+    padding: "20px",
+    animation: "fadeIn 0.2s ease-out",
+    backdropFilter: "blur(4px)",
+  });
+  
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.maxWidth = "450px";
+  card.style.width = "95%";
+  card.style.padding = "32px";
+  card.style.position = "relative";
+  card.style.animation = "slideUp 0.3s ease-out";
+  card.style.background = "rgba(10, 12, 20, 0.95)";
+  card.style.backdropFilter = "blur(10px)";
+  card.style.border = "1px solid rgba(34, 197, 94, 0.3)";
+  
+  // Icona di successo
+  const icon = document.createElement("div");
+  icon.style.cssText = `
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(34, 197, 94, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 24px;
+    color: rgba(34, 197, 94, 1);
+  `;
+  icon.textContent = "✉";
+  
+  // Titolo
+  const titleEl = document.createElement("h2");
+  titleEl.textContent = "Email inviata!";
+  titleEl.style.cssText = `
+    font-size: 22px;
+    font-weight: 900;
+    margin: 0 0 12px 0;
+    color: rgba(255,255,255,0.95);
+    text-align: center;
+  `;
+  
+  // Messaggio
+  const messageEl = document.createElement("p");
+  messageEl.innerHTML = `
+    Ti ho inviato una email di verifica all'indirizzo che hai indicato.<br><br>
+    <strong>Controlla la tua casella di posta</strong> (anche la cartella spam) e clicca sul link per verificare il tuo account.<br><br>
+    Dopo la verifica, potrai effettuare il login.
+  `;
+  messageEl.style.cssText = `
+    color: rgba(255,255,255,0.8);
+    font-size: 15px;
+    margin: 0 0 24px 0;
+    text-align: center;
+    line-height: 1.5;
+  `;
+  
+  // Bottone OK
+  const okBtn = document.createElement("button");
+  okBtn.className = "btn primary";
+  okBtn.textContent = "Ho capito";
+  okBtn.style.cssText = "width: 100%; padding: 12px; font-size: 15px; font-weight: 600;";
+  
+  const closeModal = () => {
+    try {
+      document.body.removeChild(overlay);
+    } catch {}
+  };
+  
+  okBtn.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  
+  card.appendChild(icon);
+  card.appendChild(titleEl);
+  card.appendChild(messageEl);
+  card.appendChild(okBtn);
+  
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  
+  // Chiudi con ESC
+  const escHandler = (e) => {
+    if (e.key === "Escape" && document.getElementById("verification-email-modal")) {
+      closeModal();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
+}
+
 function showErrorModal(message, title = "Attenzione") {
   // Evita di aprire più modali contemporaneamente
   if (document.getElementById("error-modal")) return;
@@ -2359,11 +2469,11 @@ function mountIndex() {
       const pendingReferralCode = localStorage.getItem('pendingReferralCode');
       await sendVerificationOrThrow(cred.user, pendingReferralCode || referralCode);
 
-      // popup immediato
-      showToast("Ti ho inviato una mail di verifica. Controlla inbox e spam.");
-
       // logout: niente accesso finché non verifica
       await logout();
+
+      // Mostra modal informativo che l'email è stata inviata
+      showVerificationEmailModal();
 
       // fallback messaggio inline
       setText(signupErr, "Email inviata. Verifica e poi fai login.");
