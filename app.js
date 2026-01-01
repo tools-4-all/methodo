@@ -8842,7 +8842,7 @@ function mountApp() {
         }
       }
 
-      renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
+      await renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
       
@@ -8897,7 +8897,7 @@ function mountApp() {
               });
               
               // Ri-renderizza la dashboard completa con esami aggiornati
-              renderDashboard(updatedPlan, updatedNormalizedExams, profile, user, weekStartISO);
+              await renderDashboard(updatedPlan, updatedNormalizedExams, profile, user, weekStartISO);
               bindAddTaskButton(updatedPlan, updatedNormalizedExams, profile, user, weekStartISO);
               updateTodayProgress(updatedPlan, todayDay);
               
@@ -9031,7 +9031,7 @@ function mountApp() {
   });
 }
 
-function renderDashboard(plan, exams, profile, user = null, weekStartISO = null) {
+async function renderDashboard(plan, exams, profile, user = null, weekStartISO = null) {
   const $ = (id) => document.getElementById(id);
 
   const safeText = (id, txt) => {
@@ -9046,11 +9046,21 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
 
   const todayISO = isoToday();
 
-  // Calcola le ore settimanali progressive se l'allenatore è attivo
+  // Calcola le ore settimanali progressive se l'allenatore è attivo (solo per utenti premium)
   let weeklyHoursDisplay = Math.round(plan.weeklyBudgetMin / 60);
   let weeklyHoursProgression = null;
   
-  if (profile && profile.currentHours && profile.targetHours && profile.targetHours > profile.currentHours) {
+  // Verifica se l'utente è premium
+  let isPremiumUser = false;
+  if (user) {
+    try {
+      isPremiumUser = await isPremium(user.uid);
+    } catch (err) {
+      console.error("Errore verifica premium:", err);
+    }
+  }
+  
+  if (isPremiumUser && profile && profile.currentHours && profile.targetHours && profile.targetHours > profile.currentHours) {
     // Allenatore attivo: calcola le ore progressive
     // Usa coachStartDate dal profilo o localStorage (sincrono)
     let coachStartDateValue = null;
@@ -9549,7 +9559,7 @@ function renderDashboard(plan, exams, profile, user = null, weekStartISO = null)
         try {
           await saveWeeklyPlan(user.uid, weekStartISO, plan);
           // Ri-renderizza per aggiornare gli indici
-          renderDashboard(plan, exams, profile, user, weekStartISO);
+          await renderDashboard(plan, exams, profile, user, weekStartISO);
           bindAddTaskButton(plan, exams, profile, user, weekStartISO);
         } catch (err) {
           console.error("Errore salvataggio dopo drag:", err);
@@ -10234,7 +10244,7 @@ function openAddTaskModal(plan, exams, profile, user, weekStartISO) {
       }
       // Salva e ri-renderizza
       await saveWeeklyPlan(user.uid, weekStartISO, plan);
-      renderDashboard(plan, exams, profile, user, weekStartISO);
+      await renderDashboard(plan, exams, profile, user, weekStartISO);
       bindAddTaskButton(plan, exams, profile, user, weekStartISO);
       closeModal();
     } catch (err) {
