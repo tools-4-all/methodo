@@ -324,6 +324,55 @@ exports.activatePromoCode = functions.https.onCall(async (data, context) => {
     );
   }
 
+  // Supporto per date virtuali (solo in localhost/development)
+  // La data virtuale viene passata dal client per permettere test con date simulate
+  let virtualDate = null;
+  console.log('[PromoCode] ========== INIZIO PROCESSAMENTO ==========');
+  console.log('[PromoCode] Dati ricevuti (raw):', data);
+  console.log('[PromoCode] Dati ricevuti (JSON):', JSON.stringify(data, null, 2));
+  console.log('[PromoCode] data.virtualDate presente?', !!data.virtualDate);
+  console.log('[PromoCode] data.virtualDate valore:', data.virtualDate);
+  
+  if (data.virtualDate) {
+    try {
+      // Prova diversi formati di parsing
+      if (typeof data.virtualDate === 'string') {
+        virtualDate = new Date(data.virtualDate);
+      } else if (typeof data.virtualDate === 'number') {
+        virtualDate = new Date(data.virtualDate);
+      } else {
+        virtualDate = new Date(data.virtualDate);
+      }
+      
+      if (isNaN(virtualDate.getTime())) {
+        console.warn('[PromoCode] ❌ Data virtuale non valida dopo parsing, uso data reale');
+        console.warn('[PromoCode] Valore originale:', data.virtualDate);
+        console.warn('[PromoCode] Tipo:', typeof data.virtualDate);
+        virtualDate = null;
+      } else {
+        console.log(`[PromoCode] ✅ Data virtuale ricevuta e parsata correttamente`);
+        console.log(`[PromoCode] Data virtuale ISO: ${virtualDate.toISOString()}`);
+        console.log(`[PromoCode] Timestamp data virtuale: ${virtualDate.getTime()}`);
+        console.log(`[PromoCode] Data virtuale locale: ${virtualDate.toLocaleString()}`);
+      }
+    } catch (e) {
+      console.error('[PromoCode] ❌ Errore parsing data virtuale:', e);
+      console.error('[PromoCode] Stack:', e.stack);
+      virtualDate = null;
+    }
+  } else {
+    console.log('[PromoCode] ⚠️ Nessuna data virtuale ricevuta nei dati, uso data reale del server');
+  }
+
+  // Funzione helper per ottenere la data corrente (virtuale o reale)
+  const getCurrentDate = () => {
+    const current = virtualDate || new Date();
+    if (virtualDate) {
+      console.log(`[PromoCode] getCurrentDate() restituisce data virtuale: ${current.toISOString()}`);
+    }
+    return current;
+  };
+
   try {
     // Usa una transazione per evitare race conditions
     const promoCodeRef = db.collection('promoCodes').doc(code);
@@ -356,12 +405,30 @@ exports.activatePromoCode = functions.https.onCall(async (data, context) => {
         );
       }
 
-      // Verifica scadenza (se presente)
+      // Verifica scadenza del codice promozionale (se presente)
       if (promoCodeData.expiresAt) {
-        const expiresAt = promoCodeData.expiresAt.toDate ?
-                          promoCodeData.expiresAt.toDate() :
-                          new Date(promoCodeData.expiresAt);
-        if (expiresAt < new Date()) {
+        let expiresAt;
+        if (promoCodeData.expiresAt.toDate && typeof promoCodeData.expiresAt.toDate === 'function') {
+          expiresAt = promoCodeData.expiresAt.toDate();
+        } else if (promoCodeData.expiresAt instanceof admin.firestore.Timestamp) {
+          expiresAt = promoCodeData.expiresAt.toDate();
+        } else if (typeof promoCodeData.expiresAt === 'string') {
+          expiresAt = new Date(promoCodeData.expiresAt);
+        } else {
+          expiresAt = new Date(promoCodeData.expiresAt);
+        }
+        
+        // Verifica che la data di scadenza sia valida
+        if (isNaN(expiresAt.getTime())) {
+          throw new functions.https.HttpsError(
+              'invalid-argument',
+              'Data di scadenza del codice promozionale non valida',
+          );
+        }
+        
+        // Confronta con la data corrente (virtuale o reale)
+        const now = getCurrentDate();
+        if (expiresAt.getTime() < now.getTime()) {
           throw new functions.https.HttpsError(
               'deadline-exceeded',
               'Codice promozionale scaduto',
@@ -369,11 +436,40 @@ exports.activatePromoCode = functions.https.onCall(async (data, context) => {
         }
       }
 
+      // Recupera i dati dell'utente per verificare se ha già Premium
+      const userRef = db.collection('users').doc(uid);
+      const userDoc = await transaction.get(userRef);
+      const userData = userDoc.exists ? userDoc.data() : null;
+      const existingSubscription = userData?.subscription;
+
       // Calcola endDate (default: 30 giorni da ora, o usa durationDays se specificato)
       const durationDays = promoCodeData.durationDays || 30;
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + durationDays);
-      const startDate = new Date();
+      const now = getCurrentDate();
+      const startDate = new Date(now);
+      
+      // Calcola la data di scadenza in modo sicuro
+      let endDate = new Date(now);
+      endDate.setTime(endDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
+      
+      // Se l'utente ha già Premium attivo, estendi dalla data di scadenza esistente
+      if (existingSubscription && existingSubscription.endDate) {
+        let existingEndDate;
+        if (existingSubscription.endDate.toDate && typeof existingSubscription.endDate.toDate === 'function') {
+          existingEndDate = existingSubscription.endDate.toDate();
+        } else if (existingSubscription.endDate instanceof admin.firestore.Timestamp) {
+          existingEndDate = existingSubscription.endDate.toDate();
+        } else if (typeof existingSubscription.endDate === 'string') {
+          existingEndDate = new Date(existingSubscription.endDate);
+        } else {
+          existingEndDate = new Date(existingSubscription.endDate);
+        }
+        
+        // Se la data esistente è valida e nel futuro, estendi da quella
+        if (!isNaN(existingEndDate.getTime()) && existingEndDate.getTime() > now.getTime()) {
+          endDate = new Date(existingEndDate);
+          endDate.setTime(endDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
+        }
+      }
 
       // Marca il codice come usato
       transaction.update(promoCodeRef, {
@@ -382,8 +478,7 @@ exports.activatePromoCode = functions.https.onCall(async (data, context) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Attiva Premium per l'utente
-      const userRef = db.collection('users').doc(uid);
+      // Attiva Premium per l'utente (userRef già dichiarato sopra)
       transaction.update(userRef, {
         subscription: {
           status: 'active',
@@ -398,13 +493,29 @@ exports.activatePromoCode = functions.https.onCall(async (data, context) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log(`Promo code ${code} attivato per utente ${uid}`);
+      // Log dettagliato per verifica scadenza
+      const realNow = new Date();
+      console.log(`[PromoCode] ========== RIEPILOGO ATTIVAZIONE ==========`);
+      console.log(`[PromoCode] Codice: ${code}`);
+      console.log(`[PromoCode] Utente: ${uid}`);
+      console.log(`[PromoCode] Data virtuale usata: ${virtualDate ? virtualDate.toISOString() : 'NO (data reale)'}`);
+      console.log(`[PromoCode] Data reale server: ${realNow.toISOString()}`);
+      console.log(`[PromoCode] Data attivazione (startDate): ${startDate.toISOString()}`);
+      console.log(`[PromoCode] Data scadenza calcolata (endDate): ${endDate.toISOString()}`);
+      console.log(`[PromoCode] Durata: ${durationDays} giorni`);
+      console.log(`[PromoCode] Timestamp scadenza: ${endDate.getTime()}`);
+      console.log(`[PromoCode] Timestamp attuale (now): ${now.getTime()}`);
+      console.log(`[PromoCode] Timestamp reale server: ${realNow.getTime()}`);
+      console.log(`[PromoCode] Differenza scadenza-now (ms): ${endDate.getTime() - now.getTime()}`);
+      console.log(`[PromoCode] Differenza scadenza-now (giorni): ${(endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)}`);
+      console.log(`[PromoCode] ===========================================`);
 
       return {
         success: true,
         message: 'Premium attivato con successo!',
         endDate: endDate.toISOString(),
         days: durationDays,
+        startDate: startDate.toISOString(),
       };
     });
   } catch (error) {

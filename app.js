@@ -461,8 +461,15 @@ async function isPremium(uid) {
   if (!subscription) return false;
   
   // Accetta sia 'active' che 'cancelled'/'canceled' (se il periodo pagato non è scaduto)
+  // Non accetta 'expired' che indica abbonamento scaduto
   const isActive = subscription.status === 'active';
   const isCancelled = subscription.status === 'cancelled' || subscription.status === 'canceled';
+  const isExpired = subscription.status === 'expired';
+  
+  // Se è scaduto, ritorna false immediatamente
+  if (isExpired) {
+    return false;
+  }
   
   if (!isActive && !isCancelled) {
     return false;
@@ -516,7 +523,56 @@ async function isPremium(uid) {
     return false;
   }
   
-  return endDate > new Date();
+  // Usa getCurrentDate() per supportare date virtuali
+  const now = getCurrentDate();
+  const hasExpired = endDate.getTime() <= now.getTime();
+  
+  // Se l'abbonamento è scaduto, aggiorna lo status nel database (solo se non è Stripe)
+  // Per abbonamenti Stripe, lo status viene gestito dai webhook
+  if (hasExpired && !subscription?.stripeSubscriptionId) {
+    // Aggiorna lo status a 'expired' in background (non bloccare la risposta)
+    updateExpiredSubscription(uid).catch(err => {
+      console.error(`[isPremium] Errore aggiornamento subscription scaduta:`, err);
+    });
+  }
+  
+  return !hasExpired;
+}
+
+/**
+ * Aggiorna lo status dell'abbonamento quando scade (solo per abbonamenti non Stripe)
+ */
+async function updateExpiredSubscription(uid) {
+  try {
+    const profile = await getProfile(uid);
+    if (!profile?.subscription) return;
+    
+    const subscription = profile.subscription;
+    
+    // Non aggiornare abbonamenti Stripe (gestiti dai webhook)
+    if (subscription.stripeSubscriptionId) return;
+    
+    // Verifica se è effettivamente scaduto
+    let endDate = subscription?.endDate?.toDate ? 
+                  subscription.endDate.toDate() : 
+                  (subscription?.endDate ? new Date(subscription.endDate) : null);
+    
+    if (!endDate || isNaN(endDate.getTime())) return;
+    
+    const now = getCurrentDate();
+    if (endDate.getTime() > now.getTime()) return; // Non è ancora scaduto
+    
+    // Aggiorna lo status a 'expired'
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, {
+      'subscription.status': 'expired',
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log(`[isPremium] Abbonamento scaduto per utente ${uid}, status aggiornato a 'expired'`);
+  } catch (err) {
+    console.error(`[isPremium] Errore aggiornamento subscription scaduta:`, err);
+  }
 }
 
 /**
@@ -725,7 +781,25 @@ function showUpgradeModal(onClose = null) {
         promoCodeMessage.style.color = "rgba(255,255,255,0.7)";
       }
       
-      const result = await activatePromoCode({ code });
+      // Prepara i dati da inviare, includendo la data virtuale se presente (solo in localhost)
+      const requestData = { code };
+      if (isLocalhost()) {
+        const virtualDate = getVirtualDate();
+        if (virtualDate) {
+          requestData.virtualDate = virtualDate.toISOString();
+          console.log("[PromoCode] [CLIENT] Data virtuale trovata:", virtualDate.toISOString());
+          console.log("[PromoCode] [CLIENT] Timestamp data virtuale:", virtualDate.getTime());
+          console.log("[PromoCode] [CLIENT] Data reale:", new Date().toISOString());
+          console.log("[PromoCode] [CLIENT] Dati che verranno inviati:", JSON.stringify(requestData, null, 2));
+        } else {
+          console.log("[PromoCode] [CLIENT] Nessuna data virtuale trovata in localStorage");
+        }
+      } else {
+        console.log("[PromoCode] [CLIENT] Non siamo in localhost, non invio data virtuale");
+      }
+      
+      console.log("[PromoCode] [CLIENT] Chiamata activatePromoCode con:", JSON.stringify(requestData, null, 2));
+      const result = await activatePromoCode(requestData);
       
       if (result?.data?.success) {
         if (promoCodeMessage) {
@@ -734,11 +808,24 @@ function showUpgradeModal(onClose = null) {
         }
         showToast(result.data.message || "Premium attivato con successo!", 3000);
         
-        // Chiudi la modale e ricarica la pagina dopo un breve delay
-        setTimeout(() => {
-          closeModal();
-          setTimeout(() => window.location.reload(), 500);
-        }, 1500);
+        // Chiudi la modale
+        closeModal();
+        
+        // Aggiorna la subscription se siamo nella pagina profilo
+        if (window.location.pathname.includes('profile.html')) {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            // Piccolo delay per assicurarsi che il database sia aggiornato
+            setTimeout(async () => {
+              await renderSubscription(currentUser.uid);
+            }, 500);
+          }
+        } else {
+          // Altrimenti ricarica la pagina
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        }
       }
     } catch (error) {
       console.error("Errore attivazione promo code:", error);
@@ -6593,6 +6680,12 @@ function mountProfile() {
 
     // Mostra e gestisci abbonamento (renderReferralButton viene chiamato dentro renderSubscription)
     await renderSubscription(user.uid);
+    
+    // Aggiorna la subscription quando cambia la data virtuale (solo in localhost)
+    window.addEventListener("virtualDateChanged", async () => {
+      console.log("[Profile] Data virtuale cambiata, aggiorno subscription...");
+      await renderSubscription(user.uid);
+    });
 
     // Gestore modifica informazioni personali
     const editBtn = qs("edit-personal-info");
@@ -6704,7 +6797,9 @@ async function renderSubscription(uid) {
       startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default: 7 giorni fa
     }
     
-    const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+    // Usa getCurrentDate() per supportare date virtuali
+    const now = getCurrentDate();
+    const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
     const formattedEndDate = endDate.toLocaleDateString('it-IT', { 
       day: '2-digit', 
       month: 'long', 
