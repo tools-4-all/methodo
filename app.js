@@ -5125,15 +5125,21 @@ function mountOnboarding() {
         }, async () => {
           // Callback quando l'utente conferma
           try {
+            console.log("[handleGoToDashboard] Callback conferma chiamato");
+            
             // Aggiorna il profilo con le ore progressive corrette se l'allenatore è attivo
             if (isPremiumUser && currentCurrentHours > 0 && currentTargetHours > 0 && 
                 currentTargetHours > currentCurrentHours) {
+              console.log("[handleGoToDashboard] Aggiornamento ore progressive per premium user");
+              
               // Carica gli esami per calcolare le ore suggerite
               let exams = [];
               try {
+                console.log("[handleGoToDashboard] Caricamento esami...");
                 exams = await listExams(user.uid);
+                console.log("[handleGoToDashboard] Esami caricati:", exams.length);
               } catch (err) {
-                console.error("Errore caricamento esami:", err);
+                console.error("[handleGoToDashboard] Errore caricamento esami:", err);
               }
               
               // Recupera coachStartDate
@@ -5156,24 +5162,32 @@ function mountOnboarding() {
               }
               
               // Calcola le ore progressive corrette
+              console.log("[handleGoToDashboard] Calcolo ore suggerite...");
               const suggestedHours = calculateSuggestedWeeklyHours(
                 currentCurrentHours,
                 currentTargetHours,
                 exams,
                 coachStartDateValue
               );
+              console.log("[handleGoToDashboard] Ore suggerite calcolate:", suggestedHours);
               
               // Aggiorna il profilo con le ore progressive corrette
+              // Rimuovi subscription dai dati per evitare il blocco di sicurezza
+              const { subscription, ...profileWithoutSubscription } = profile2;
+              console.log("[handleGoToDashboard] Aggiornamento profilo...");
               await setProfile(user.uid, {
-                ...profile2,
+                ...profileWithoutSubscription,
                 weeklyHours: suggestedHours,
                 currentHours: currentCurrentHours,
                 targetHours: currentTargetHours,
                 coachStartDate: coachStartDateValue.toISOString()
               });
+              console.log("[handleGoToDashboard] Profilo aggiornato");
               
               // Ricarica il profilo aggiornato
+              console.log("[handleGoToDashboard] Ricaricamento profilo...");
               profile2 = await getProfile(user.uid);
+              console.log("[handleGoToDashboard] Profilo ricaricato");
               
               console.log("[handleGoToDashboard] Profilo aggiornato con ore progressive:", {
                 suggestedHours,
@@ -5183,11 +5197,17 @@ function mountOnboarding() {
             }
             
             // Verifica se ci sono modifiche che richiedono rigenerazione del piano
+            console.log("[handleGoToDashboard] Verifica modifiche piano...");
             const weekStart = startOfWeekISO(getCurrentDate());
             const weekStartISO = `${weekStart.getFullYear()}-${z2(weekStart.getMonth() + 1)}-${z2(weekStart.getDate())}`;
+            console.log("[handleGoToDashboard] WeekStartISO:", weekStartISO);
             
+            console.log("[handleGoToDashboard] Caricamento piano salvato...");
             const savedPlan = await loadWeeklyPlan(user.uid, weekStartISO);
+            console.log("[handleGoToDashboard] Piano caricato:", savedPlan ? "presente" : "non presente");
+            
             const needsRegeneration = hasPlanChanges(profile2, exams2, savedPlan);
+            console.log("[handleGoToDashboard] Necessita rigenerazione:", needsRegeneration);
             
             if (needsRegeneration) {
               console.log("[handleGoToDashboard] Rilevate modifiche, rigenero il piano...");
@@ -5196,16 +5216,36 @@ function mountOnboarding() {
                 category: e.category || detectExamCategory(e.name || "") || "mixed"
               }));
               
+              console.log("[handleGoToDashboard] Generazione nuovo piano...");
               const newPlan = generateWeeklyPlan(profile2, normalizedExams, weekStart);
+              console.log("[handleGoToDashboard] Piano generato");
+              
               addSnapshotToPlan(newPlan, profile2, normalizedExams);
+              console.log("[handleGoToDashboard] Salvataggio piano...");
               await saveWeeklyPlan(user.uid, weekStartISO, newPlan);
+              console.log("[handleGoToDashboard] Piano salvato");
             }
 
             // Vai alla dashboard
+            console.log("[handleGoToDashboard] Tutto ok, redirect a app.html");
             window.location.assign("./app.html");
           } catch (err) {
-            console.error("Errore verifica dashboard:", err);
-            alert("Errore durante la verifica. Riprova.");
+            console.error("[handleGoToDashboard] ERRORE nel callback:", err);
+            console.error("[handleGoToDashboard] Stack:", err?.stack);
+            console.error("[handleGoToDashboard] Dettagli:", {
+              message: err?.message,
+              code: err?.code,
+              name: err?.name
+            });
+            
+            // Mostra messaggio di errore più specifico
+            let errorMsg = "Errore durante la verifica. Riprova.";
+            if (err?.message) {
+              errorMsg = `Errore: ${err.message}`;
+            } else if (err?.code) {
+              errorMsg = `Errore (${err.code}). Riprova.`;
+            }
+            alert(errorMsg);
           }
         });
       } catch (err) {
