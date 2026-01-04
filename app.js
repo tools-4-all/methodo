@@ -11273,6 +11273,14 @@ function mountTask() {
       const progressElapsed = document.getElementById("progress-elapsed");
       if (progressPlanned) progressPlanned.textContent = fmtMMSS(st.plannedSec);
       if (progressElapsed) progressElapsed.textContent = fmtMMSS(elapsed);
+
+      // Controlla se il timer è finito: ferma il timer e completa la task
+      if (st.running && !st.done && st.plannedSec > 0 && elapsed >= st.plannedSec) {
+        // Ferma il timer
+        pause();
+        // Completa automaticamente la task
+        markDone();
+      }
     }
 
     function tick() {
