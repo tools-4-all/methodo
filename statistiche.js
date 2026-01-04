@@ -176,6 +176,13 @@ function calculateDailyHours(plans) {
   }
   console.log("[Statistiche] Piani da analizzare:", plans.length);
   
+  // Debug: mostra tutti i taskId completati per confronto
+  const allDoneTaskIds = Array.from(doneTasksMap.keys());
+  console.log("[Statistiche] Tutti i taskId completati:", allDoneTaskIds.slice(0, 10).map(id => id.substring(0, 50)));
+  
+  // Crea una copia dei taskId completati per tracciare quelli non trovati
+  const unmatchedTaskIds = new Set(allDoneTaskIds);
+  
   let totalTasksChecked = 0;
   let totalTasksFound = 0;
   
@@ -207,11 +214,13 @@ function calculateDailyHours(plans) {
           if (totalTasksChecked <= 3) {
             console.log("[Statistiche] Task controllato:", {
               dateISO: day.dateISO,
-              taskId: taskId.substring(0, 100),
+              weekStartISO: plan.weekStart,
+              taskId: taskId,
               foundInMap: doneTasksMap.has(taskId),
               foundInStorage: localStorage.getItem(doneKey) === "1",
               examId: task.examId,
-              label: task.label
+              label: task.label,
+              minutes: task.minutes
             });
           }
           
@@ -221,11 +230,14 @@ function calculateDailyHours(plans) {
             const taskMinutes = Number(task.minutes || 0);
             completedMinutes += taskMinutes;
             
+            // Rimuovi dalla lista dei non trovati se presente
+            unmatchedTaskIds.delete(taskId);
+            
             // Debug per i primi task
             if (totalTasksFound <= 5) {
               console.log("[Statistiche] ✓ Task completato trovato:", {
                 dateISO: day.dateISO,
-                taskId: taskId.substring(0, 80),
+                taskId: taskId,
                 minutes: taskMinutes,
                 examId: task.examId,
                 label: task.label
@@ -259,6 +271,23 @@ function calculateDailyHours(plans) {
   console.log("[Statistiche] Giorni con ore calcolate:", dailyData.size);
   const totalHours = Array.from(dailyData.values()).reduce((sum, d) => sum + d.hours, 0);
   console.log("[Statistiche] Totale ore:", totalHours.toFixed(2));
+  
+  // Debug: mostra taskId completati ma non trovati nei piani
+  if (unmatchedTaskIds.size > 0) {
+    const unmatchedArray = Array.from(unmatchedTaskIds).slice(0, 5);
+    console.warn("[Statistiche] ⚠️ TaskId completati ma non trovati nei piani:", unmatchedArray);
+    console.warn("[Statistiche] ⚠️ Questo potrebbe indicare che i task completati sono di settimane non più presenti nei piani salvati.");
+  }
+  
+  // Debug: mostra alcuni esempi di date con ore
+  if (dailyData.size > 0) {
+    const sampleDates = Array.from(dailyData.entries()).slice(0, 5);
+    console.log("[Statistiche] Esempi date con ore:", sampleDates.map(([date, data]) => ({
+      date,
+      hours: data.hours.toFixed(2),
+      tasks: data.tasks
+    })));
+  }
   
   return dailyData;
 }
