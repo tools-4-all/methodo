@@ -1573,6 +1573,163 @@ async function loadWeeklyPlan(uid, weekStartISO, forceRefresh = false) {
   return snap.exists() ? snap.data()?.plan : null;
 }
 
+// ----------------- Completed Tasks Management -----------------
+/**
+ * Salva un task completato nel database Firestore
+ */
+async function saveCompletedTask(uid, taskId, taskData) {
+  try {
+    const ref = doc(db, "users", uid, "completedTasks", taskId);
+    await setDoc(ref, {
+      taskId,
+      ...taskData,
+      completedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    
+    // Salva anche in localStorage come cache locale
+    try {
+      localStorage.setItem(`sp_task_done_${taskId}`, "1");
+    } catch (e) {
+      console.warn("[saveCompletedTask] Errore salvataggio localStorage:", e);
+    }
+    
+    console.log("[saveCompletedTask] Task completato salvato:", taskId);
+  } catch (error) {
+    console.error("[saveCompletedTask] Errore salvataggio task completato:", error);
+    throw error;
+  }
+}
+
+/**
+ * Rimuove un task completato dal database Firestore
+ */
+async function removeCompletedTask(uid, taskId) {
+  try {
+    const ref = doc(db, "users", uid, "completedTasks", taskId);
+    await deleteDoc(ref);
+    
+    // Rimuovi anche da localStorage
+    try {
+      localStorage.removeItem(`sp_task_done_${taskId}`);
+    } catch (e) {
+      console.warn("[removeCompletedTask] Errore rimozione localStorage:", e);
+    }
+    
+    console.log("[removeCompletedTask] Task completato rimosso:", taskId);
+  } catch (error) {
+    console.error("[removeCompletedTask] Errore rimozione task completato:", error);
+    throw error;
+  }
+}
+
+/**
+ * Salva un task saltato nel database Firestore
+ */
+async function saveSkippedTask(uid, taskId, taskData) {
+  try {
+    const ref = doc(db, "users", uid, "skippedTasks", taskId);
+    await setDoc(ref, {
+      taskId,
+      ...taskData,
+      skippedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    
+    // Salva anche in localStorage come cache locale
+    try {
+      localStorage.setItem(`sp_task_skipped_${taskId}`, "1");
+    } catch (e) {
+      console.warn("[saveSkippedTask] Errore salvataggio localStorage:", e);
+    }
+  } catch (error) {
+    console.error("[saveSkippedTask] Errore salvataggio task saltato:", error);
+    throw error;
+  }
+}
+
+/**
+ * Rimuove un task saltato dal database Firestore
+ */
+async function removeSkippedTask(uid, taskId) {
+  try {
+    const ref = doc(db, "users", uid, "skippedTasks", taskId);
+    await deleteDoc(ref);
+    
+    // Rimuovi anche da localStorage
+    try {
+      localStorage.removeItem(`sp_task_skipped_${taskId}`);
+    } catch (e) {
+      console.warn("[removeSkippedTask] Errore rimozione localStorage:", e);
+    }
+  } catch (error) {
+    console.error("[removeSkippedTask] Errore rimozione task saltato:", error);
+    throw error;
+  }
+}
+
+/**
+ * Carica tutti i task completati dal database Firestore
+ * Ritorna una Map con taskId -> true per i task completati
+ */
+async function loadCompletedTasks(uid) {
+  try {
+    const col = collection(db, "users", uid, "completedTasks");
+    const snapshot = await getDocs(col);
+    const completedTasks = new Map();
+    
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const taskId = data.taskId || docSnap.id;
+      completedTasks.set(taskId, true);
+      
+      // Aggiorna anche localStorage come cache locale
+      try {
+        localStorage.setItem(`sp_task_done_${taskId}`, "1");
+      } catch (e) {
+        // Ignora errori localStorage
+      }
+    });
+    
+    console.log("[loadCompletedTasks] Task completati caricati:", completedTasks.size);
+    return completedTasks;
+  } catch (error) {
+    console.error("[loadCompletedTasks] Errore caricamento task completati:", error);
+    return new Map();
+  }
+}
+
+/**
+ * Carica tutti i task saltati dal database Firestore
+ * Ritorna una Map con taskId -> true per i task saltati
+ */
+async function loadSkippedTasks(uid) {
+  try {
+    const col = collection(db, "users", uid, "skippedTasks");
+    const snapshot = await getDocs(col);
+    const skippedTasks = new Map();
+    
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const taskId = data.taskId || docSnap.id;
+      skippedTasks.set(taskId, true);
+      
+      // Aggiorna anche localStorage come cache locale
+      try {
+        localStorage.setItem(`sp_task_skipped_${taskId}`, "1");
+      } catch (e) {
+        // Ignora errori localStorage
+      }
+    });
+    
+    console.log("[loadSkippedTasks] Task saltati caricati:", skippedTasks.size);
+    return skippedTasks;
+  } catch (error) {
+    console.error("[loadSkippedTasks] Errore caricamento task saltati:", error);
+    return new Map();
+  }
+}
+
 /**
  * Invalida il piano settimanale corrente eliminandolo dal database.
  * Questo forza la rigenerazione automatica del piano alla prossima apertura della dashboard.
@@ -1969,28 +2126,6 @@ function makeTaskId({ weekStartISO, dateISO, t, index }) {
     h = Math.imul(h, 16777619);
   }
   return "t_" + (h >>> 0).toString(16);
-}
-
-/**
- * Genera una chiave stabile per un task (senza index e weekStartISO)
- * Usata per preservare lo stato di completamento durante la rigenerazione del piano
- * Include examId, examName, type, label e minutes per garantire un matching preciso
- */
-function makeStableTaskKey({ dateISO, t }) {
-  const raw = [
-    dateISO || "",
-    t?.examId || "",
-    t?.examName || "",
-    t?.type || "type",
-    t?.label || "label",
-    String(t?.minutes || 0),
-  ].join("|");
-  let h = 2166136261;
-  for (let i = 0; i < raw.length; i++) {
-    h ^= raw.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return "stable_" + (h >>> 0).toString(16);
 }
 
 function openTaskPage(payload) {
@@ -9064,76 +9199,6 @@ function mountApp() {
             }
           }
           
-          // Salva lo stato di completamento dei task prima di rigenerare
-          // Usa una chiave stabile (senza index e weekStartISO) per preservare lo stato
-          // IMPORTANTE: salva SOLO i task che erano effettivamente completati/saltati nel piano corrente
-          const completedTasksMap = new Map(); // stableKey -> { task details }
-          const skippedTasksMap = new Map(); // stableKey -> { task details }
-          if (plan.days) {
-            for (const day of plan.days) {
-              if (day.tasks) {
-                for (let i = 0; i < day.tasks.length; i++) {
-                  const task = day.tasks[i];
-                  const oldTaskId = makeTaskId({
-                    weekStartISO: plan.weekStart,
-                    dateISO: day.dateISO,
-                    t: task,
-                    index: i,
-                  });
-                  const stableKey = makeStableTaskKey({
-                    dateISO: day.dateISO,
-                    t: task,
-                  });
-                  
-                  // Controlla se il task era completato - SOLO se era effettivamente completato
-                  try {
-                    const doneKey = `sp_task_done_${oldTaskId}`;
-                    if (localStorage.getItem(doneKey) === "1") {
-                      // Salva anche i dettagli del task per un matching più preciso
-                      completedTasksMap.set(stableKey, {
-                        dateISO: day.dateISO,
-                        examId: task.examId,
-                        examName: task.examName,
-                        type: task.type,
-                        label: task.label,
-                        minutes: task.minutes
-                      });
-                      console.log("[App] Task completato salvato per ripristino:", {
-                        stableKey,
-                        dateISO: day.dateISO,
-                        examId: task.examId,
-                        examName: task.examName,
-                        label: task.label
-                      });
-                    }
-                  } catch (e) {
-                    console.warn("[App] Errore lettura stato completamento:", e);
-                  }
-                  
-                  // Controlla se il task era saltato - SOLO se era effettivamente saltato
-                  try {
-                    const skippedKey = `sp_task_skipped_${oldTaskId}`;
-                    if (localStorage.getItem(skippedKey) === "1") {
-                      skippedTasksMap.set(stableKey, {
-                        dateISO: day.dateISO,
-                        examId: task.examId,
-                        examName: task.examName,
-                        type: task.type,
-                        label: task.label,
-                        minutes: task.minutes
-                      });
-                    }
-                  } catch (e) {
-                    // Ignora errori
-                  }
-                }
-              }
-            }
-          }
-          
-          console.log("[App] Task completati da preservare:", completedTasksMap.size);
-          console.log("[App] Task saltati da preservare:", skippedTasksMap.size);
-          
           // Salva i task aggiunti manualmente prima della rigenerazione
           const manualTasks = plan.manualTasks || [];
           
@@ -9189,112 +9254,6 @@ function mountApp() {
             newPlan.manualTasks = manualTasks;
           }
           
-          // Ripristina lo stato di completamento dei task
-          // IMPORTANTE: ripristina SOLO se il task corrisponde esattamente e era effettivamente completato/saltato
-          if (completedTasksMap.size > 0 || skippedTasksMap.size > 0) {
-            console.log("[App] Ripristino stato completamento task...");
-            let restoredCount = 0;
-            let skippedRestoredCount = 0;
-            let skippedMismatch = 0;
-            
-            for (const day of newPlan.days || []) {
-              if (day.tasks) {
-                for (let i = 0; i < day.tasks.length; i++) {
-                  const task = day.tasks[i];
-                  const stableKey = makeStableTaskKey({
-                    dateISO: day.dateISO,
-                    t: task,
-                  });
-                  
-                  // Verifica che il task corrisponda esattamente prima di ripristinare
-                  const savedCompleted = completedTasksMap.get(stableKey);
-                  const savedSkipped = skippedTasksMap.get(stableKey);
-                  
-                  // Verifica aggiuntiva: controlla che i dettagli del task corrispondano esattamente
-                  const taskMatches = (saved) => {
-                    if (!saved) return false;
-                    return saved.dateISO === day.dateISO &&
-                           saved.examId === task.examId &&
-                           saved.examName === task.examName &&
-                           saved.type === task.type &&
-                           saved.label === task.label &&
-                           saved.minutes === task.minutes;
-                  };
-                  
-                  const newTaskId = makeTaskId({
-                    weekStartISO: newPlan.weekStart,
-                    dateISO: day.dateISO,
-                    t: task,
-                    index: i,
-                  });
-                  
-                  // Ripristina stato completato solo se corrisponde esattamente
-                  if (savedCompleted && taskMatches(savedCompleted)) {
-                    try {
-                      // Verifica che non sia già completato (evita duplicati)
-                      const existingDoneKey = `sp_task_done_${newTaskId}`;
-                      if (localStorage.getItem(existingDoneKey) !== "1") {
-                        localStorage.setItem(existingDoneKey, "1");
-                        restoredCount++;
-                        console.log("[App] ✓ Stato completato ripristinato:", {
-                          stableKey,
-                          newTaskId,
-                          dateISO: day.dateISO,
-                          examId: task.examId,
-                          examName: task.examName,
-                          label: task.label
-                        });
-                      } else {
-                        console.log("[App] Task già completato, skip ripristino:", {
-                          newTaskId,
-                          dateISO: day.dateISO
-                        });
-                      }
-                    } catch (e) {
-                      console.warn("[App] Errore ripristino stato completato:", e);
-                    }
-                  } else if (savedCompleted) {
-                    // Task con stessa chiave stabile ma dettagli diversi - non ripristinare
-                    skippedMismatch++;
-                    console.log("[App] ⚠️ Task con chiave stabile matchata ma dettagli diversi, skip:", {
-                      stableKey,
-                      saved: savedCompleted,
-                      current: {
-                        dateISO: day.dateISO,
-                        examId: task.examId,
-                        examName: task.examName,
-                        type: task.type,
-                        label: task.label,
-                        minutes: task.minutes
-                      }
-                    });
-                  }
-                  
-                  // Ripristina stato saltato solo se corrisponde esattamente
-                  if (savedSkipped && taskMatches(savedSkipped)) {
-                    try {
-                      const existingSkippedKey = `sp_task_skipped_${newTaskId}`;
-                      if (localStorage.getItem(existingSkippedKey) !== "1") {
-                        localStorage.setItem(existingSkippedKey, "1");
-                        skippedRestoredCount++;
-                      }
-                    } catch (e) {
-                      console.warn("[App] Errore ripristino stato saltato:", e);
-                    }
-                  }
-                }
-              }
-            }
-            
-            console.log("[App] Stato completamento ripristinato:", {
-              completati: restoredCount,
-              saltati: skippedRestoredCount,
-              mismatch: skippedMismatch,
-              totalCompletatiNelPiano: completedTasksMap.size,
-              totalSaltatiNelPiano: skippedTasksMap.size
-            });
-          }
-          
           plan = newPlan;
           addSnapshotToPlan(plan, profile, normalizedExams);
           await saveWeeklyPlan(user.uid, weekStartISO, plan);
@@ -9315,7 +9274,19 @@ function mountApp() {
         }
       }
 
-      await renderDashboard(plan, normalizedExams, profile, user, weekStartISO);
+      // Carica i task completati e saltati da Firestore prima di renderizzare
+      let completedTasksMap = new Map();
+      let skippedTasksMap = new Map();
+      if (user) {
+        try {
+          completedTasksMap = await loadCompletedTasks(user.uid);
+          skippedTasksMap = await loadSkippedTasks(user.uid);
+        } catch (err) {
+          console.error("[App] Errore caricamento task completati:", err);
+        }
+      }
+      
+      await renderDashboard(plan, normalizedExams, profile, user, weekStartISO, completedTasksMap, skippedTasksMap);
       // Associa il bottone per aggiungere task manuali dopo il primo render
       bindAddTaskButton(plan, normalizedExams, profile, user, weekStartISO);
       
@@ -9504,7 +9475,7 @@ function mountApp() {
   });
 }
 
-async function renderDashboard(plan, exams, profile, user = null, weekStartISO = null) {
+async function renderDashboard(plan, exams, profile, user = null, weekStartISO = null, completedTasksMap = null, skippedTasksMap = null) {
   const $ = (id) => document.getElementById(id);
 
   const safeText = (id, txt) => {
@@ -9632,7 +9603,10 @@ async function renderDashboard(plan, exams, profile, user = null, weekStartISO =
       });
       const doneKey = `sp_task_done_${taskId}`;
       try {
-        if (localStorage.getItem(doneKey) === "1") {
+        // Controlla prima in Firestore (se disponibile), poi in localStorage
+        const isDone = (completedTasksMap && completedTasksMap.has(taskId)) || 
+                       localStorage.getItem(doneKey) === "1";
+        if (isDone) {
           completedTasks++;
           completedMinutes += Number(t.minutes || 0);
         }
@@ -9730,8 +9704,14 @@ async function renderDashboard(plan, exams, profile, user = null, weekStartISO =
 
       const doneKey = `sp_task_done_${taskId}`;
       const skippedKey = `sp_task_skipped_${taskId}`;
+      // Controlla prima in Firestore (se disponibile), poi in localStorage come fallback
       const isDone = (() => {
         try {
+          // Prima controlla in Firestore
+          if (completedTasksMap && completedTasksMap.has(taskId)) {
+            return true;
+          }
+          // Fallback a localStorage
           return localStorage.getItem(doneKey) === "1";
         } catch {
           return false;
@@ -9739,6 +9719,11 @@ async function renderDashboard(plan, exams, profile, user = null, weekStartISO =
       })();
       const isSkipped = (() => {
         try {
+          // Prima controlla in Firestore
+          if (skippedTasksMap && skippedTasksMap.has(taskId)) {
+            return true;
+          }
+          // Fallback a localStorage
           return localStorage.getItem(skippedKey) === "1";
         } catch {
           return false;
@@ -9782,15 +9767,55 @@ async function renderDashboard(plan, exams, profile, user = null, weekStartISO =
         const checked = chk.checked;
         try {
           if (checked) {
-            localStorage.setItem(doneKey, "1");
-            localStorage.removeItem(skippedKey); // Rimuovi skipped se viene segnato come fatto
+            // Salva in Firestore e localStorage
+            if (user) {
+              await saveCompletedTask(user.uid, taskId, {
+                dateISO: todayDay.dateISO,
+                weekStartISO: plan.weekStart,
+                examId: t.examId,
+                examName: t.examName,
+                type: t.type,
+                label: t.label,
+                minutes: t.minutes,
+              });
+              // Rimuovi skipped se presente
+              await removeSkippedTask(user.uid, taskId);
+            } else {
+              // Fallback a localStorage se non autenticato
+              localStorage.setItem(doneKey, "1");
+              localStorage.removeItem(skippedKey);
+            }
           } else {
-            localStorage.removeItem(doneKey);
+            // Rimuovi da Firestore e localStorage
+            if (user) {
+              await removeCompletedTask(user.uid, taskId);
+            } else {
+              localStorage.removeItem(doneKey);
+            }
           }
-        } catch {}
+        } catch (err) {
+          console.error("Errore salvataggio task completato:", err);
+          // Fallback a localStorage in caso di errore
+          try {
+            if (checked) {
+              localStorage.setItem(doneKey, "1");
+              localStorage.removeItem(skippedKey);
+            } else {
+              localStorage.removeItem(doneKey);
+            }
+          } catch {}
+        }
         row.classList.toggle("taskDone", checked);
         // Aggiorna il grafico di completamento
-        updateTodayProgress(plan, todayDay);
+        // Ricarica i task completati da Firestore per aggiornare la mappa
+        if (user) {
+          try {
+            completedTasksMap = await loadCompletedTasks(user.uid);
+          } catch (err) {
+            console.error("Errore ricaricamento task completati:", err);
+          }
+        }
+        updateTodayProgress(plan, todayDay, completedTasksMap);
         
         // Aggiorna automaticamente il livello dell'esame se la task è stata completata
         if (checked && user && t?.examId) {
@@ -11542,9 +11567,32 @@ function mountTask() {
       saveState(st);
 
       try {
-        localStorage.setItem(`sp_task_done_${tid}`, "1");
-        localStorage.removeItem(`sp_task_skipped_${tid}`); // Rimuovi skipped se viene segnato come fatto
-      } catch {}
+        // Salva in Firestore e localStorage
+        if (user && payload?.task) {
+          await saveCompletedTask(user.uid, tid, {
+            dateISO: payload.dateISO,
+            weekStartISO: payload.weekStartISO,
+            examId: t.examId,
+            examName: t.examName,
+            type: t.type,
+            label: t.label,
+            minutes: t.minutes,
+          });
+          // Rimuovi skipped se presente
+          await removeSkippedTask(user.uid, tid);
+        } else {
+          // Fallback a localStorage se non autenticato
+          localStorage.setItem(`sp_task_done_${tid}`, "1");
+          localStorage.removeItem(`sp_task_skipped_${tid}`);
+        }
+      } catch (err) {
+        console.error("Errore salvataggio task completato:", err);
+        // Fallback a localStorage in caso di errore
+        try {
+          localStorage.setItem(`sp_task_done_${tid}`, "1");
+          localStorage.removeItem(`sp_task_skipped_${tid}`);
+        } catch {}
+      }
 
       renderTimer();
       
@@ -11603,16 +11651,39 @@ function mountTask() {
       const consequences = await calculateSkipConsequences(t, payload, st);
       
       // Mostra popup con le conseguenze
-      showSkipConsequencesModal(consequences, () => {
+      showSkipConsequencesModal(consequences, async () => {
         // Conferma: salta il task
         st.skipped = true;
         st.done = false;
         saveState(st);
 
         try {
-          localStorage.removeItem(`sp_task_done_${tid}`);
-          localStorage.setItem(`sp_task_skipped_${tid}`, "1");
-        } catch {}
+          // Salva in Firestore e localStorage
+          if (user && payload?.task) {
+            await saveSkippedTask(user.uid, tid, {
+              dateISO: payload.dateISO,
+              weekStartISO: payload.weekStartISO,
+              examId: t.examId,
+              examName: t.examName,
+              type: t.type,
+              label: t.label,
+              minutes: t.minutes,
+            });
+            // Rimuovi completed se presente
+            await removeCompletedTask(user.uid, tid);
+          } else {
+            // Fallback a localStorage se non autenticato
+            localStorage.removeItem(`sp_task_done_${tid}`);
+            localStorage.setItem(`sp_task_skipped_${tid}`, "1");
+          }
+        } catch (err) {
+          console.error("Errore salvataggio task saltato:", err);
+          // Fallback a localStorage in caso di errore
+          try {
+            localStorage.removeItem(`sp_task_done_${tid}`);
+            localStorage.setItem(`sp_task_skipped_${tid}`, "1");
+          } catch {}
+        }
 
         renderTimer();
       });

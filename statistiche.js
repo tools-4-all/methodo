@@ -149,20 +149,34 @@ async function loadAllPlans(uid) {
 }
 
 // ----------------- Calculate Daily Hours -----------------
-function calculateDailyHours(plans) {
+async function calculateDailyHours(plans, uid) {
   const dailyData = new Map(); // dateISO -> { hours, tasks }
   
-  // Prima, crea una mappa di tutti i task done in localStorage per accesso rapido
+  // Carica i task completati da Firestore
   const doneTasksMap = new Map();
-  const sampleTaskIds = []; // Per debug
+  if (uid) {
+    try {
+      const col = collection(db, "users", uid, "completedTasks");
+      const snapshot = await getDocs(col);
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const taskId = data.taskId || docSnap.id;
+        doneTasksMap.set(taskId, true);
+      });
+      console.log("[Statistiche] Task completati caricati da Firestore:", doneTasksMap.size);
+    } catch (e) {
+      console.warn("[Statistiche] Errore caricamento task completati da Firestore:", e);
+    }
+  }
+  
+  // Fallback: carica anche da localStorage (per compatibilità)
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith("sp_task_done_") && localStorage.getItem(key) === "1") {
         const taskId = key.replace("sp_task_done_", "");
-        doneTasksMap.set(taskId, true);
-        if (sampleTaskIds.length < 3) {
-          sampleTaskIds.push(taskId);
+        if (!doneTasksMap.has(taskId)) {
+          doneTasksMap.set(taskId, true);
         }
       }
     }
@@ -170,10 +184,7 @@ function calculateDailyHours(plans) {
     console.warn("[Statistiche] Errore scansionando localStorage:", e);
   }
   
-  console.log("[Statistiche] Task completati in localStorage:", doneTasksMap.size);
-  if (sampleTaskIds.length > 0) {
-    console.log("[Statistiche] Esempio taskId da localStorage:", sampleTaskIds[0].substring(0, 100));
-  }
+  console.log("[Statistiche] Task completati totali (Firestore + localStorage):", doneTasksMap.size);
   console.log("[Statistiche] Piani da analizzare:", plans.length);
   
   // Debug: mostra tutti i taskId completati per confronto
@@ -673,8 +684,8 @@ async function loadAndRenderStatistics(user) {
     // Carica tutti i piani
     const plans = await loadAllPlans(user.uid);
     
-    // Calcola ore giornaliere
-    const dailyData = calculateDailyHours(plans);
+    // Calcola ore giornaliere (carica anche i task completati da Firestore)
+    const dailyData = await calculateDailyHours(plans, user.uid);
     
     // Calcola statistiche
     const stats = calculateStats(dailyData);

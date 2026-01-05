@@ -25,6 +25,16 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Regole per i task completati
+    match /users/{userId}/completedTasks/{taskId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Regole per i task saltati
+    match /users/{userId}/skippedTasks/{taskId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
     // Regole per i referral (solo scrittura da Firebase Functions)
     match /referrals/{referralId} {
       allow read: if request.auth != null;
