@@ -1974,11 +1974,13 @@ function makeTaskId({ weekStartISO, dateISO, t, index }) {
 /**
  * Genera una chiave stabile per un task (senza index e weekStartISO)
  * Usata per preservare lo stato di completamento durante la rigenerazione del piano
+ * Include examId, examName, type, label e minutes per garantire un matching preciso
  */
 function makeStableTaskKey({ dateISO, t }) {
   const raw = [
     dateISO || "",
-    t?.examId || t?.examName || "exam",
+    t?.examId || "",
+    t?.examName || "",
     t?.type || "type",
     t?.label || "label",
     String(t?.minutes || 0),
@@ -9064,8 +9066,9 @@ function mountApp() {
           
           // Salva lo stato di completamento dei task prima di rigenerare
           // Usa una chiave stabile (senza index e weekStartISO) per preservare lo stato
-          const completedTasksMap = new Map(); // stableKey -> true
-          const skippedTasksMap = new Map(); // stableKey -> true
+          // IMPORTANTE: salva SOLO i task che erano effettivamente completati/saltati nel piano corrente
+          const completedTasksMap = new Map(); // stableKey -> { task details }
+          const skippedTasksMap = new Map(); // stableKey -> { task details }
           if (plan.days) {
             for (const day of plan.days) {
               if (day.tasks) {
@@ -9082,15 +9085,24 @@ function mountApp() {
                     t: task,
                   });
                   
-                  // Controlla se il task era completato
+                  // Controlla se il task era completato - SOLO se era effettivamente completato
                   try {
                     const doneKey = `sp_task_done_${oldTaskId}`;
                     if (localStorage.getItem(doneKey) === "1") {
-                      completedTasksMap.set(stableKey, true);
+                      // Salva anche i dettagli del task per un matching più preciso
+                      completedTasksMap.set(stableKey, {
+                        dateISO: day.dateISO,
+                        examId: task.examId,
+                        examName: task.examName,
+                        type: task.type,
+                        label: task.label,
+                        minutes: task.minutes
+                      });
                       console.log("[App] Task completato salvato per ripristino:", {
                         stableKey,
                         dateISO: day.dateISO,
                         examId: task.examId,
+                        examName: task.examName,
                         label: task.label
                       });
                     }
@@ -9098,11 +9110,18 @@ function mountApp() {
                     console.warn("[App] Errore lettura stato completamento:", e);
                   }
                   
-                  // Controlla se il task era saltato
+                  // Controlla se il task era saltato - SOLO se era effettivamente saltato
                   try {
                     const skippedKey = `sp_task_skipped_${oldTaskId}`;
                     if (localStorage.getItem(skippedKey) === "1") {
-                      skippedTasksMap.set(stableKey, true);
+                      skippedTasksMap.set(stableKey, {
+                        dateISO: day.dateISO,
+                        examId: task.examId,
+                        examName: task.examName,
+                        type: task.type,
+                        label: task.label,
+                        minutes: task.minutes
+                      });
                     }
                   } catch (e) {
                     // Ignora errori
@@ -9171,10 +9190,12 @@ function mountApp() {
           }
           
           // Ripristina lo stato di completamento dei task
+          // IMPORTANTE: ripristina SOLO se il task corrisponde esattamente e era effettivamente completato/saltato
           if (completedTasksMap.size > 0 || skippedTasksMap.size > 0) {
             console.log("[App] Ripristino stato completamento task...");
             let restoredCount = 0;
             let skippedRestoredCount = 0;
+            let skippedMismatch = 0;
             
             for (const day of newPlan.days || []) {
               if (day.tasks) {
@@ -9185,40 +9206,78 @@ function mountApp() {
                     t: task,
                   });
                   
-                  // Ripristina stato completato
-                  if (completedTasksMap.has(stableKey)) {
-                    const newTaskId = makeTaskId({
-                      weekStartISO: newPlan.weekStart,
-                      dateISO: day.dateISO,
-                      t: task,
-                      index: i,
-                    });
+                  // Verifica che il task corrisponda esattamente prima di ripristinare
+                  const savedCompleted = completedTasksMap.get(stableKey);
+                  const savedSkipped = skippedTasksMap.get(stableKey);
+                  
+                  // Verifica aggiuntiva: controlla che i dettagli del task corrispondano esattamente
+                  const taskMatches = (saved) => {
+                    if (!saved) return false;
+                    return saved.dateISO === day.dateISO &&
+                           saved.examId === task.examId &&
+                           saved.examName === task.examName &&
+                           saved.type === task.type &&
+                           saved.label === task.label &&
+                           saved.minutes === task.minutes;
+                  };
+                  
+                  const newTaskId = makeTaskId({
+                    weekStartISO: newPlan.weekStart,
+                    dateISO: day.dateISO,
+                    t: task,
+                    index: i,
+                  });
+                  
+                  // Ripristina stato completato solo se corrisponde esattamente
+                  if (savedCompleted && taskMatches(savedCompleted)) {
                     try {
-                      localStorage.setItem(`sp_task_done_${newTaskId}`, "1");
-                      restoredCount++;
-                      console.log("[App] ✓ Stato completato ripristinato:", {
-                        stableKey,
-                        newTaskId,
-                        dateISO: day.dateISO,
-                        examId: task.examId,
-                        label: task.label
-                      });
+                      // Verifica che non sia già completato (evita duplicati)
+                      const existingDoneKey = `sp_task_done_${newTaskId}`;
+                      if (localStorage.getItem(existingDoneKey) !== "1") {
+                        localStorage.setItem(existingDoneKey, "1");
+                        restoredCount++;
+                        console.log("[App] ✓ Stato completato ripristinato:", {
+                          stableKey,
+                          newTaskId,
+                          dateISO: day.dateISO,
+                          examId: task.examId,
+                          examName: task.examName,
+                          label: task.label
+                        });
+                      } else {
+                        console.log("[App] Task già completato, skip ripristino:", {
+                          newTaskId,
+                          dateISO: day.dateISO
+                        });
+                      }
                     } catch (e) {
                       console.warn("[App] Errore ripristino stato completato:", e);
                     }
+                  } else if (savedCompleted) {
+                    // Task con stessa chiave stabile ma dettagli diversi - non ripristinare
+                    skippedMismatch++;
+                    console.log("[App] ⚠️ Task con chiave stabile matchata ma dettagli diversi, skip:", {
+                      stableKey,
+                      saved: savedCompleted,
+                      current: {
+                        dateISO: day.dateISO,
+                        examId: task.examId,
+                        examName: task.examName,
+                        type: task.type,
+                        label: task.label,
+                        minutes: task.minutes
+                      }
+                    });
                   }
                   
-                  // Ripristina stato saltato
-                  if (skippedTasksMap.has(stableKey)) {
-                    const newTaskId = makeTaskId({
-                      weekStartISO: newPlan.weekStart,
-                      dateISO: day.dateISO,
-                      t: task,
-                      index: i,
-                    });
+                  // Ripristina stato saltato solo se corrisponde esattamente
+                  if (savedSkipped && taskMatches(savedSkipped)) {
                     try {
-                      localStorage.setItem(`sp_task_skipped_${newTaskId}`, "1");
-                      skippedRestoredCount++;
+                      const existingSkippedKey = `sp_task_skipped_${newTaskId}`;
+                      if (localStorage.getItem(existingSkippedKey) !== "1") {
+                        localStorage.setItem(existingSkippedKey, "1");
+                        skippedRestoredCount++;
+                      }
                     } catch (e) {
                       console.warn("[App] Errore ripristino stato saltato:", e);
                     }
@@ -9229,7 +9288,10 @@ function mountApp() {
             
             console.log("[App] Stato completamento ripristinato:", {
               completati: restoredCount,
-              saltati: skippedRestoredCount
+              saltati: skippedRestoredCount,
+              mismatch: skippedMismatch,
+              totalCompletatiNelPiano: completedTasksMap.size,
+              totalSaltatiNelPiano: skippedTasksMap.size
             });
           }
           
