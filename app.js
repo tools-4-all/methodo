@@ -1971,6 +1971,26 @@ function makeTaskId({ weekStartISO, dateISO, t, index }) {
   return "t_" + (h >>> 0).toString(16);
 }
 
+/**
+ * Genera una chiave stabile per un task (senza index e weekStartISO)
+ * Usata per preservare lo stato di completamento durante la rigenerazione del piano
+ */
+function makeStableTaskKey({ dateISO, t }) {
+  const raw = [
+    dateISO || "",
+    t?.examId || t?.examName || "exam",
+    t?.type || "type",
+    t?.label || "label",
+    String(t?.minutes || 0),
+  ].join("|");
+  let h = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return "stable_" + (h >>> 0).toString(16);
+}
+
 function openTaskPage(payload) {
   const tid = payload?.taskId;
   if (!tid) {
@@ -9042,6 +9062,59 @@ function mountApp() {
             }
           }
           
+          // Salva lo stato di completamento dei task prima di rigenerare
+          // Usa una chiave stabile (senza index e weekStartISO) per preservare lo stato
+          const completedTasksMap = new Map(); // stableKey -> true
+          const skippedTasksMap = new Map(); // stableKey -> true
+          if (plan.days) {
+            for (const day of plan.days) {
+              if (day.tasks) {
+                for (let i = 0; i < day.tasks.length; i++) {
+                  const task = day.tasks[i];
+                  const oldTaskId = makeTaskId({
+                    weekStartISO: plan.weekStart,
+                    dateISO: day.dateISO,
+                    t: task,
+                    index: i,
+                  });
+                  const stableKey = makeStableTaskKey({
+                    dateISO: day.dateISO,
+                    t: task,
+                  });
+                  
+                  // Controlla se il task era completato
+                  try {
+                    const doneKey = `sp_task_done_${oldTaskId}`;
+                    if (localStorage.getItem(doneKey) === "1") {
+                      completedTasksMap.set(stableKey, true);
+                      console.log("[App] Task completato salvato per ripristino:", {
+                        stableKey,
+                        dateISO: day.dateISO,
+                        examId: task.examId,
+                        label: task.label
+                      });
+                    }
+                  } catch (e) {
+                    console.warn("[App] Errore lettura stato completamento:", e);
+                  }
+                  
+                  // Controlla se il task era saltato
+                  try {
+                    const skippedKey = `sp_task_skipped_${oldTaskId}`;
+                    if (localStorage.getItem(skippedKey) === "1") {
+                      skippedTasksMap.set(stableKey, true);
+                    }
+                  } catch (e) {
+                    // Ignora errori
+                  }
+                }
+              }
+            }
+          }
+          
+          console.log("[App] Task completati da preservare:", completedTasksMap.size);
+          console.log("[App] Task saltati da preservare:", skippedTasksMap.size);
+          
           // Salva i task aggiunti manualmente prima della rigenerazione
           const manualTasks = plan.manualTasks || [];
           
@@ -9095,6 +9168,69 @@ function mountApp() {
             }
             // Ripristina anche l'array manualTasks nel nuovo piano
             newPlan.manualTasks = manualTasks;
+          }
+          
+          // Ripristina lo stato di completamento dei task
+          if (completedTasksMap.size > 0 || skippedTasksMap.size > 0) {
+            console.log("[App] Ripristino stato completamento task...");
+            let restoredCount = 0;
+            let skippedRestoredCount = 0;
+            
+            for (const day of newPlan.days || []) {
+              if (day.tasks) {
+                for (let i = 0; i < day.tasks.length; i++) {
+                  const task = day.tasks[i];
+                  const stableKey = makeStableTaskKey({
+                    dateISO: day.dateISO,
+                    t: task,
+                  });
+                  
+                  // Ripristina stato completato
+                  if (completedTasksMap.has(stableKey)) {
+                    const newTaskId = makeTaskId({
+                      weekStartISO: newPlan.weekStart,
+                      dateISO: day.dateISO,
+                      t: task,
+                      index: i,
+                    });
+                    try {
+                      localStorage.setItem(`sp_task_done_${newTaskId}`, "1");
+                      restoredCount++;
+                      console.log("[App] ✓ Stato completato ripristinato:", {
+                        stableKey,
+                        newTaskId,
+                        dateISO: day.dateISO,
+                        examId: task.examId,
+                        label: task.label
+                      });
+                    } catch (e) {
+                      console.warn("[App] Errore ripristino stato completato:", e);
+                    }
+                  }
+                  
+                  // Ripristina stato saltato
+                  if (skippedTasksMap.has(stableKey)) {
+                    const newTaskId = makeTaskId({
+                      weekStartISO: newPlan.weekStart,
+                      dateISO: day.dateISO,
+                      t: task,
+                      index: i,
+                    });
+                    try {
+                      localStorage.setItem(`sp_task_skipped_${newTaskId}`, "1");
+                      skippedRestoredCount++;
+                    } catch (e) {
+                      console.warn("[App] Errore ripristino stato saltato:", e);
+                    }
+                  }
+                }
+              }
+            }
+            
+            console.log("[App] Stato completamento ripristinato:", {
+              completati: restoredCount,
+              saltati: skippedRestoredCount
+            });
           }
           
           plan = newPlan;
